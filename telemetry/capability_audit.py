@@ -255,10 +255,25 @@ def audit_pdh():
             if pid in p:
                 mine += v
     top.sort(reverse=True)
-    add("PDH GPU Engine counters", "sensor", "Y" if cs else "N", False, ms,
-        f"{len(cs)} engine instances; this process (pid {os.getpid()}) summed engine util {mine:.1f}%; top instance: {top[0][1][-60:] if top else 'n/a'}",
-        "latency_ms = one CollectQueryData over all instances; counter refresh is ~1 s so >1 Hz polling is not useful")
+    n_compute = sum(1 for _, p in top if "engtype_Compute" in p)
+    attributed = mine > 1.0
+    add("PDH GPU Engine counters", "sensor", "Y" if attributed else ("PARTIAL" if cs else "N"), False, ms,
+        f"{len(cs)} engine instances, {n_compute} with a Compute engine type; this process (pid {os.getpid()}) summed engine util {mine:.1f}% "
+        f"while NVML util was ~100%",
+        "latency_ms = one CollectQueryData over all instances; refresh ~1 s. "
+        + ("" if attributed else "CUDA compute is NOT attributed to the process here: per-process fg/bg split cannot rely on PDH."))
     win32pdh.CloseQuery(q)
+    h = nv.nvmlDeviceGetHandleByIndex(0)
+    for label, fn in (("compute", nv.nvmlDeviceGetComputeRunningProcesses), ("graphics", nv.nvmlDeviceGetGraphicsRunningProcesses)):
+        try:
+            with GpuLoad():
+                procs = fn(h)
+            mem = {p.pid: p.usedGpuMemory for p in procs}
+            add(f"NVML per-process {label} list", "sensor", "Y" if procs else "PARTIAL", False, None,
+                f"{len(procs)} processes; this pid listed: {os.getpid() in mem}; usedGpuMemory sample: {list(mem.values())[:3]}",
+                "WDDM often reports usedGpuMemory as N/A or empty lists")
+        except nv.NVMLError as e:
+            add(f"NVML per-process {label} list", "sensor", "N", None, None, None, str(e))
 
 
 # ---------------------------------------------------------------- PresentMon / CPU power
