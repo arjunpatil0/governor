@@ -1,0 +1,8 @@
+fg n 2000 lat p50/p90/p99 ms [0.402 0.609 1.235] max 2.17
+fg gpu_ms p50/p90/p99 [0.084 0.085 0.086]
+arrivals inside a bg slice: 2000 of 2000
+  phase 0-0.5 ms into slice: n=496 lat mean 0.468 p50 0.447 max 1.441  gpu_ms mean 0.084
+  phase 0.5-1 ms into slice: n=450 lat mean 0.461 p50 0.437 max 1.472  gpu_ms mean 0.084
+  phase 1-1.5 ms into slice: n=467 lat mean 0.424 p50 0.387 max 1.890  gpu_ms mean 0.084
+  phase 1.5-2.6 ms into slice: n=585 lat mean 0.391 p50 0.337 max 2.168  gpu_ms mean 0.087
+bg slice ms: with fg completion inside mean 2.336 (n=1548) | without mean 2.033 (n=7261)

@@ -1,0 +1,8 @@
+fma 0.1: p50 0.15 max 5 ms >20ms:0
+fma 1.0: p50 1.63 max 172 ms >20ms:57 | episode starts req 1 (t=+0.00s) len 57 worst 172; gpu_ms>20 reqs: [] ([] ms) | nvml near: [(-0.08, 210, 405, 4, 56), (-0.06, 210, 405, 4, 56), (-0.04, 210, 405, 4, 56), (-0.02, 210, 405, 4, 56)]
+fma 1.0: p50 1.84 max 9 ms >20ms:0
+fma 1.0: p50 1.80 max 7 ms >20ms:0
+mem 0.1: p50 0.80 max 4 ms >20ms:0
+mem 1.0: p50 1.80 max 314 ms >20ms:80 | episode starts req 0 (t=+0.00s) len 80 worst 314; gpu_ms>20 reqs: [0, 1, 2] ([25.0] ms) | nvml near: [(-0.08, 210, 405, 5, 55), (-0.06, 210, 405, 5, 55), (-0.04, 210, 405, 5, 55), (-0.02, 210, 405, 5, 55)]
+mem 1.0: p50 1.97 max 7 ms >20ms:0
+mem 1.0: p50 2.02 max 6 ms >20ms:0
