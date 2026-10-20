@@ -15,12 +15,16 @@ import pynvml as nv
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "telemetry"))
+from nvml_utils import current_event_mask, decode_event_reasons, summarize_temps  # noqa: E402
+from provenance import check_run_provenance, git_state  # noqa: E402
+
 CFG_PATH = ROOT / "experiments" / "w1_downclock.yaml"
 DLL_PATH = ROOT / "workloads" / "background" / "build" / "bench_kernels.dll"
 KINDS = {"mem": 0, "fma": 1}
 FIELDS = ["block", "cell_idx", "kernel", "level", "target_mhz", "work", "gpu_ms", "wall_s", "throughput",
           "energy_j", "epw", "power_counter_w", "power_samples_w", "sm_clock_med", "mem_clock_med",
-          "temp_start_c", "temp_max_c", "event_reasons", "checksum", "flags"]
+          "temp_pre_c", "temp_start_c", "temp_max_c", "event_mask", "event_reasons", "checksum", "flags"]
 
 
 def sha(p):
@@ -43,20 +47,6 @@ def set_clock(level):
         raise RuntimeError(f"clock set {level} failed: {out}")
 
 
-def reasons_fn():
-    return getattr(nv, "nvmlDeviceGetCurrentClocksEventReasons", None) or nv.nvmlDeviceGetCurrentClocksThrottleReasons
-
-
-def reason_names(mask):
-    out = []
-    for n in dir(nv):
-        if n.startswith(("nvmlClocksEventReason", "nvmlClocksThrottleReason")) and not n.endswith("All"):
-            v = getattr(nv, n)
-            if isinstance(v, int) and v and (mask & v) == v:
-                out.append(n.replace("nvmlClocksEventReason", "").replace("nvmlClocksThrottleReason", ""))
-    return "|".join(sorted(set(out))) or "None"
-
-
 class Sampler(threading.Thread):
     """20 Hz NVML sampler over the measured window."""
     def __init__(self, h):
@@ -64,13 +54,13 @@ class Sampler(threading.Thread):
         self.sm, self.mem, self.pw, self.tmp, self.mask = [], [], [], [], 0
 
     def run(self):
-        h, rf = self.h, reasons_fn()
+        h = self.h
         while not self.stop_ev.is_set():
             self.sm.append(nv.nvmlDeviceGetClockInfo(h, nv.NVML_CLOCK_SM))
             self.mem.append(nv.nvmlDeviceGetClockInfo(h, nv.NVML_CLOCK_MEM))
             self.pw.append(nv.nvmlDeviceGetPowerUsage(h) / 1000)
             self.tmp.append(nv.nvmlDeviceGetTemperature(h, nv.NVML_TEMPERATURE_GPU))
-            self.mask |= rf(h)
+            self.mask |= current_event_mask(h)
             time.sleep(0.05)
 
     def finish(self):
@@ -98,6 +88,7 @@ def main():
         sys.exit("Full run needs an Administrator shell (clock locks). Use --smoke to test without admin.")
     for L in levels:
         assert L == "unlocked" or (210 <= L <= 3105 and L % 15 == 0), f"unsupported clock {L}"
+    git_head = check_run_provenance(ROOT, smoke=a.smoke)  # a full run must be on a clean, committed tree
 
     dll = ctypes.CDLL(str(DLL_PATH))
     dll.bench_last_error.restype = ctypes.c_char_p
@@ -109,11 +100,10 @@ def main():
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = ROOT / "data" / "raw" / ("w1_downclock_smoke" if a.smoke else "w1_downclock") / stamp
     out_dir.mkdir(parents=True)
-    git = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-    dirty = bool(subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain"], capture_output=True, text=True).stdout.strip())
+    dirty = bool(git_state(ROOT)[1])
     batt = psutil.sensors_battery()
     meta = dict(utc=stamp, smoke=a.smoke, admin=admin, ac_plugged=None if batt is None else batt.power_plugged,
-                ambient_c=a.ambient_c, yaml_sha=sha(CFG_PATH), dll_sha=sha(DLL_PATH), git_head=git, git_dirty=dirty,
+                ambient_c=a.ambient_c, yaml_sha=sha(CFG_PATH), dll_sha=sha(DLL_PATH), git_head=git_head, git_dirty=dirty,
                 gpu=nv.nvmlDeviceGetName(h), sm_count=sms.value, driver=nv.nvmlSystemGetDriverVersion(),
                 execution_mode="CUDA native kernels via bench_kernels.dll (no CPU fallback)",
                 os=platform.platform(), python=sys.version.split()[0], levels=levels, reps=reps,
@@ -161,12 +151,13 @@ def main():
                 row = dict(block=b, cell_idx=ci, kernel=kernel, level=L, target_mhz="" if L == "unlocked" else L,
                            work=work.value, gpu_ms=gms.value, wall_s=wall.value, throughput=thr,
                            energy_j=energy_j, epw=energy_j / work.value, power_counter_w=pc_w, power_samples_w=ps_w,
-                           sm_clock_med=smed, mem_clock_med=st.median(s.mem), temp_start_c=temp0, temp_max_c=max(s.tmp),
-                           event_reasons=reason_names(s.mask), checksum=cs.value, flags=";".join(flags))
+                           sm_clock_med=smed, mem_clock_med=st.median(s.mem), **summarize_temps(temp0, s.tmp),
+                           event_mask=s.mask, event_reasons="|".join(decode_event_reasons(s.mask)),
+                           checksum=cs.value, flags=";".join(flags))
                 w.writerow(row); f.flush()
                 done = b * len(cells) + ci + 1
                 print(f"[{done}/{len(cells)*reps}] blk{b} {kernel:3s} {str(L):>8s}  {thr:9.1f} {'GB/s' if kernel=='mem' else 'GFLOP/s'}"
-                      f"  {pc_w:5.1f} W  sm {smed:.0f}  {temp0}->{max(s.tmp)}C  {';'.join(flags)}", flush=True)
+                      f"  {pc_w:5.1f} W  sm {smed:.0f}  {row['temp_start_c']}->{row['temp_max_c']}C  {row['event_reasons']}  {';'.join(flags)}", flush=True)
                 set_clock("unlocked")
                 time.sleep(idle)
         print(f"done in {(time.time()-t_run)/60:.1f} min -> {out_dir}")

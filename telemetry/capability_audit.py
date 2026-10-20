@@ -15,6 +15,8 @@ import psutil
 import pynvml as nv
 import torch
 
+from nvml_utils import decode_event_reasons
+
 if not torch.cuda.is_available():
     sys.exit("FATAL: torch.cuda unavailable. Refusing to run: no CPU fallback is allowed.")
 
@@ -78,14 +80,7 @@ def median_clock(h, secs=1.0):
     return st.median(xs)
 
 
-def event_reasons(mask):
-    names = []
-    for n in dir(nv):
-        if n.startswith(("nvmlClocksEventReason", "nvmlClocksThrottleReason")) and not n.endswith("All"):
-            v = getattr(nv, n)
-            if isinstance(v, int) and v and (mask & v) == v:
-                names.append(n.replace("nvmlClocksEventReason", "").replace("nvmlClocksThrottleReason", ""))
-    return sorted(set(names)) or ["None"]
+event_reasons = decode_event_reasons  # shared, unit-tested decoder (telemetry/nvml_utils.py)
 
 
 # ---------------------------------------------------------------- environment
