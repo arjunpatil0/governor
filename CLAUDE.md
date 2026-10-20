@@ -78,3 +78,16 @@ telemetry/ actuators/ workloads/{background,foreground}/ controllers/ experiment
   `*_response.md`. Address [BLOCKER] items before other work.
 - Respond in `reviews/YYYY-MM-DD_<topic>_response.md`, one line per finding: fixed (commit hash) / disputed (why).
 - Reviews are advice, not orders: Arjun decides on disagreements. Never edit a review file; write a response.
+
+## Review follow-up findings (2026-10-20)
+- Per-process GPU split cannot come from the OS: PDH "GPU Engine" does not attribute CUDA compute here. Use our own instrumentation
+  (CUDA events in our background and foreground workloads) for any per-process GPU accounting.
+- CPU Energy Meter (PDH `rapl_package0_pkg` Power) validated against HWiNFO CPU Package Power: load 56.8 W vs 59.7 W (ratio 0.95), idle 7.6 W vs 9.6 W (0.80),
+  assuming mW. Good to roughly +-20%; fine for relative CPU-power comparisons, not for watt-accurate claims. Logs: data/energy_meter_validation_*.
+  (Two collections exist: load 56.8/55.3 W, idle 7.6/9.9 W; HWiNFO values were a single spot reading.)
+- NVML power signals (usage / average / instant) update every ~0.5 s and need ~1.5 s to follow a load step: use windows with >= 3 s of steady state.
+- NVML total energy counter: reading it more often inflates it (~4.2 J per read on this machine) and it has a state-dependent offset vs sampled power.
+  Read it exactly twice per measurement window; treat it as relative. See experiments/w1_downclock_addendum_2026-10-20.md.
+- Throttle reasons: decode with telemetry/nvml_utils.py. `Reliability` (0x400) and `BoardLimit` (0x200) are real on this driver but absent from the CUDA 13.1 nvml.h;
+  unlocked fma is Reliability-limited (~2475 MHz), not power-capped.
+- Full experiment runs are refused on a dirty git tree (telemetry/provenance.py). Commit first. Tests: `python -m pytest tests -q`.

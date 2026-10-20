@@ -58,10 +58,13 @@ def main():
     df = pd.read_csv(path)
     df["level"] = df["level"].astype(str)
     locked = [str(x) for x in CFG["design"]["sm_clock_levels_mhz"] if x != "unlocked"]
-    base = df[df.level == "unlocked"].set_index(["block", "kernel"])[["throughput", "epw"]]
+    # sample-based energy = mean of 20 Hz power samples x wall time (addendum 2026-10-20 sensitivity analysis)
+    df["epw_s"] = df.power_samples_w * df.wall_s / df.work
+    base = df[df.level == "unlocked"].set_index(["block", "kernel"])[["throughput", "epw", "epw_s"]]
     df = df.join(base, on=["block", "kernel"], rsuffix="_unl")
     df["rel_thr"] = df.throughput / df.throughput_unl
     df["rel_epw"] = df.epw / df.epw_unl
+    df["rel_epw_s"] = df.epw_s / df.epw_s_unl
 
     L = [f"# W1 downclock results", "",
          f"Source: `{path}` | run {meta['utc']} | admin {meta['admin']} | AC {meta['ac_plugged']} | ambient {meta['ambient_c']} C | "
@@ -108,6 +111,21 @@ def main():
           "| clock | n | median(rel_epw_mem - rel_epw_fma) | p (Holm) |", "|---|---|---|---|"]
     for (lv, n, med, p, r), pa in zip(h3, a3):
         L.append(f"| {lv} | {n} | {med:+.3f} | {pa:.4f} |")
+
+    # Pre-specified sensitivity (experiments/w1_downclock_addendum_2026-10-20.md): H2 again with sample-based energy.
+    wide_s = df.pivot_table(index=["block", "level"], columns="kernel", values="rel_epw_s")
+    h2s = []
+    for lv in locked:
+        d = (wide_s.xs(lv, level="level")["mem"] - 1.0).dropna()
+        h2s.append((lv, len(d), wide_s.xs(lv, level="level")["mem"].median(), paired_test(d, "less")))
+    a2s = holm([x[3] for x in h2s]); n2s = int((a2s < ALPHA).sum())
+    L += ["", "## Sensitivity: H2 with sample-based energy (mean 20 Hz power x wall time) instead of the energy counter", "",
+          "| clock | n | median rel. energy/work (mem, samples) | p (Holm) | significant |", "|---|---|---|---|---|"]
+    for (lv, n, med, p), pa in zip(h2s, a2s):
+        L.append(f"| {lv} | {n} | {med:.3f} | {pa:.4f} | {'yes' if pa < ALPHA else 'no'} |")
+    agree = (n2 >= 1) == (n2s >= 1)
+    L += ["", f"Counter-based H2: {'supported' if n2 >= 1 else 'not supported'}; sample-based H2: {'supported' if n2s >= 1 else 'not supported'}. "
+              f"**{'Both energy sources agree.' if agree else 'The energy sources DISAGREE: report H2 as inconclusive (see addendum).'}**"]
 
     L += ["", "## Flags (validity checks; cells stay in the data)", ""]
     fl = df[df["flags"].fillna("") != ""][["block", "kernel", "level", "flags"]]
