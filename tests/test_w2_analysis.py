@@ -23,10 +23,17 @@ def _cells(obs_fn, noise=0.01, blocks=10, seed=0):
 
 
 # ---- HA1 -------------------------------------------------------------------------------------------
-def test_ha1_supported_when_wait_follows_prediction_with_a_constant_switch_cost():
-    r = ha1(_cells(lambda p, m, c: p + 0.3))
+def test_ha1_supported_when_wait_follows_prediction():
+    r = ha1(_cells(lambda p, m, c: p))
     assert r["supported"] and r["equivalent"] and r["frac_within25"] >= 0.7
-    assert r["intercept"] == pytest.approx(0.3, abs=0.05)         # the switch cost lands in the intercept, not the slope
+
+
+def test_constant_switch_cost_lands_in_the_intercept_but_fails_the_registered_25pct_rule():
+    # Property of the REGISTERED rule, recorded so it is not a surprise: wait = pred + 0.3 ms keeps the slope ~1 and puts the cost in the
+    # intercept (review finding 1), but cell medians of the small-pred cells are then >25% off, so criterion (ii) fails and HA1 is not supported.
+    r = ha1(_cells(lambda p, m, c: p + 0.3))
+    assert r["equivalent"] and r["intercept"] == pytest.approx(0.3, abs=0.05)
+    assert r["frac_within25"] < 0.7 and not r["supported"]
 
 
 def test_ha1_not_supported_and_classified_preempted_when_wait_is_far_below_prediction():
@@ -43,9 +50,9 @@ def test_ha1_classified_scheduler_capped_when_wait_plateaus_while_prediction_gro
     assert classify_ha1(cells, r) == "scheduler_capped"
 
 
-def test_ha1_classified_other_for_unstructured_failure():
-    rng = np.random.default_rng(9)
-    cells = _cells(lambda p, m, c: rng.uniform(0.0, 4.0), noise=0.0)
+def test_ha1_classified_other_when_wait_is_double_the_prediction():
+    cells = _cells(lambda p, m, c: 2.0 * p)                       # slope 2: fails equivalence, neither preempted nor capped
+    assert not ha1(cells)["supported"]
     assert classify_ha1(cells, ha1(cells)) == "other"
 
 
@@ -55,11 +62,10 @@ def test_classify_returns_supported_when_ha1_holds():
 
 
 def test_ha1_needs_both_conditions():
-    # slope ~1 but 70% rule broken: half the cells are off by 60% in opposite directions
-    cells = _cells(lambda p, m, c: p * (1.6 if (m in (0.25, 0.5, 1, 2) and c == 1.0) or (m in (4, 8) and c == 0.0) else 1.0))
+    # +0.3 ms on the six smallest-m cells: slope stays ~1 (equivalent) but only 12 of 18 cells are within +/-25% (0.667 < 0.7)
+    cells = _cells(lambda p, m, c: p + (0.3 if m <= 0.5 else 0.0), noise=0.005)
     r = ha1(cells)
-    assert r["frac_within25"] < 0.9
-    assert r["supported"] == (r["equivalent"] and r["frac_within25"] >= 0.7)
+    assert r["equivalent"] and r["frac_within25"] < 0.7 and not r["supported"]
 
 
 # ---- HA2 -------------------------------------------------------------------------------------------
@@ -106,11 +112,11 @@ def test_hb1_fails_when_service_slows_more_than_w1_predicts():
 def _misses(miss_fn, blocks=10, seed=4):
     rng = np.random.default_rng(seed)
     return pd.DataFrame([dict(block=b, level=lv, miss_frac=float(np.clip(miss_fn(lv) + rng.normal(0, 0.01), 0, 1)),
-                              service_ms=8.86 * 0.732 / REL["fma"][lv]) for b in range(blocks) for lv in (900, 1200, 1500, 1800)])
+                              service_ms=8.86 / REL["fma"][lv]) for b in range(blocks) for lv in (900, 1200, 1500, 1800)])
 
 
 def test_hb2_requires_significance_only_where_predicted_service_exceeds_budget():
-    ratios = {900: 2.0, 1200: 1.5, 1500: 1.2}                     # service(1800) ~ 12.1 ms against a 16.67 ms budget
+    ratios = {900: 2.0, 1200: 1.5, 1500: 1.2}                     # measured service(1800) = 8.86/0.732 = 12.1 ms against a 16.67 ms budget
     df = _misses(lambda lv: {900: 1.0, 1200: 1.0, 1500: 0.0, 1800: 0.0}[lv])
     r = hb2(df, budget_ms=16.67, pred_ratio=ratios)
     assert r["must_be_significant"] == [900, 1200] and r["supported"]

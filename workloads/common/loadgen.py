@@ -73,3 +73,34 @@ def parse_hags(dxdiag_text, adapter="NVIDIA"):
                 raise ValueError(f"no Enabled flag in {val!r}")
             return {"adapter": card, "line": val, "enabled": en.group(1) == "True"}
     raise ValueError(f"no 'Hardware Scheduling' line for an adapter matching {adapter!r}")
+
+
+def phase_in_slice(arrivals, starts, ends):
+    """For each arrival: (phase in ms since the start of the background slice containing it, inside mask). NaN outside any slice."""
+    a, s, e = np.asarray(arrivals, float), np.asarray(starts, float), np.asarray(ends, float)
+    idx = np.clip(np.searchsorted(s, a, side="right") - 1, 0, len(s) - 1)
+    inside = (a >= s[0]) & (a < e[idx])
+    return np.where(inside, (a - s[idx]) * 1e3, np.nan), inside
+
+
+def slice_stretch(starts, ends, completions):
+    """Background-slice stretch caused by foreground executions (SA2): for slices containing exactly one fg completion,
+    duration minus the median duration of slices containing none. Returns (stretch seconds array, count)."""
+    s, e, c = np.asarray(starts, float), np.asarray(ends, float), np.asarray(completions, float)
+    counts = np.zeros(len(s), int)
+    idx = np.searchsorted(s, c, side="right") - 1
+    for i, x in zip(idx, c):
+        if 0 <= i < len(s) and x < e[i]:
+            counts[i] += 1
+    d = e - s
+    if not (counts == 0).any():
+        return np.array([]), 0
+    out = d[counts == 1] - np.median(d[counts == 0])
+    return out, int(out.size)
+
+
+def duty_gap(duration_s, duty):
+    """Idle time to insert after a busy slice of `duration_s` so that busy / (busy + idle) = duty."""
+    if not 0 < duty <= 1:
+        raise ValueError(f"duty must be in (0, 1], got {duty}")
+    return duration_s * (1.0 / duty - 1.0)
