@@ -1,0 +1,74 @@
+# Pre-registration: W1 downclock sensitivity (memory-bound vs compute-bound)
+# Written and committed BEFORE any measurement data exists. Do not edit after the first run;
+# changes go in a new file (w1_downclock_v2.yaml) with the reason recorded.
+id: w1_downclock
+registered: 2026-10-20
+hardware: RTX 4070 Laptop (36 SMs, cc 8.9, 8188 MiB), driver 616.92, Windows 11 WDDM, AC power
+purpose: >
+  Test the premise behind clock-based power control: lowering the SM clock costs a memory-bound
+  kernel far less throughput than a compute-bound kernel, so energy per unit work falls for
+  memory-bound work. Decode-like workloads are the motivating case.
+
+kernels:
+  mem:
+    description: float4 streaming copy-scale b[i]=a[i]*s+1 over two 256 MiB arrays (>> L2), grid-stride
+    work_unit: GB moved (read + write bytes / 1e9)
+    throughput_unit: GB/s
+  fma:
+    description: 8 independent fmaf chains per thread, 2^20 iterations per launch, 6 blocks/SM x 256 threads
+    work_unit: GFLOP (2 flops per fmaf)
+    throughput_unit: GFLOP/s
+
+design:
+  sm_clock_levels_mhz: [600, 900, 1200, 1500, 1800, unlocked]   # all supported (210-3105 step 15)
+  memory_clock: unlocked          # NOT locked; actual value is logged per rep
+  reps_per_cell: 10               # one replicate = one block containing all 12 cells
+  cells_per_block: 12             # 2 kernels x 6 clock settings
+  block_order_seed: 20261020      # within each block, cell order = seeded random permutation
+  global_warmup_s: 10             # fma kernel, unlocked, discarded
+  preroll_after_lock_s: 1.5       # kernel running at the new clock before the measured window, discarded
+  measure_window_s: 4.0
+  idle_between_s: 2.0
+  start_temp_max_c: 68            # wait up to 60 s for GPU temp <= this before each measurement; flag if not reached
+  energy_source: NVML nvmlDeviceGetTotalEnergyConsumption delta over the measured window (board-level, includes idle floor)
+  also_logged: NVML power samples at 20 Hz (mean), SM/mem clock samples (median), temperature (max), clock event reasons (OR)
+  pairing: ratios are computed within a block against that block's unlocked measurement of the same kernel
+
+outcomes:
+  throughput: work / CUDA-event GPU time
+  energy_per_work: energy_counter_delta_J / work
+  relative_throughput: throughput(level) / throughput(unlocked) within block
+  relative_epw: energy_per_work(level) / energy_per_work(unlocked) within block
+
+hypotheses:
+  H1: >
+    relative_throughput_mem(L) > relative_throughput_fma(L) at each locked level L
+    (memory-bound loses less throughput as the SM clock drops).
+    Test: one-sided paired Wilcoxon signed-rank on d = ratio_mem - ratio_fma across 10 blocks.
+  H2: >
+    relative_epw_mem(L) < 1 for at least one locked level L
+    (energy per unit work falls for memory-bound work).
+    Test: one-sided Wilcoxon signed-rank on (relative_epw_mem - 1) < 0 across 10 blocks.
+  secondary_exploratory:
+    - relative_epw_mem(L) < relative_epw_fma(L) (paired, one-sided)
+    - relative_epw_fma(L) reported without a directional claim (expected U-shaped: static power vs runtime)
+
+analysis:
+  alpha: 0.05
+  multiplicity: Holm across the 5 locked levels, separately for H1 and for H2
+  effect_sizes: median ratios with IQR; matched-pairs rank-biserial correlation
+  reporting: every cell reported, including non-significant; no cells dropped except by validity_checks
+  decision_rule: >
+    H1 supported if significant at >= 4 of 5 levels after Holm; H2 supported if significant at >= 1 level
+    after Holm. Otherwise reported as not supported.
+
+validity_checks:                 # flagged in the results table, cell stays in the data
+  - locked cell median SM clock within +/-3% of target
+  - NVML energy-counter mean power within 15% of mean of 20 Hz power samples
+  - kernel checksum finite and identical across reps of the same kernel
+  - start temperature condition reached (else flagged)
+limitations_acknowledged:
+  - unlocked cell runs under a ~92 W power cap, so its SM clock is not a fixed value (logged)
+  - NVML energy counter has coarse refresh (power value updates ~300 ms); window of 4 s bounds quantisation error
+  - memory clock is left to the driver and could change with SM clock; logged, not controlled
+  - single machine, single driver; no ambient-temperature sensor (manual note per session)

@@ -58,3 +58,16 @@ Experimental conditions: AC power, fixed fan mode, log ambient temp, warm-up.
 
 ## Layout
 telemetry/ actuators/ workloads/{background,foreground}/ controllers/ experiments/ analysis/ data/
+
+## Decisions and verified findings (W1, Oct 2026)
+- PresentMon is DEFERRED to the real-game phase (W9-10). The synthetic frame loop is our own code and logs its own
+  frame timestamps (QueryPerformanceCounter / CUDA events). Do not install or depend on PresentMon before then.
+- Toolchain: nvcc 13.1 does not officially support VS 18 (MSVC 14.50, the only VS installed). Build with
+  workloads/background/build.bat (loads vcvars64, passes -arch=sm_89 -O3 -lineinfo -allow-unsupported-compiler).
+  A trivial kernel built and ran; revisit if host-side STL code misbehaves.
+- pip needs `--use-feature=truststore` on this machine (TLS interception breaks default cert verification).
+- Capability audit (data/capability_audit.md, elevated run): NVML sensors work; clock lock -lgc/-rgc and -lmc work
+  with admin (SM clock lockable 210-3105 MHz, step 15; memory clocks 405/810/6001/7001/8001); NVML power limit is NOT supported
+  (no -pl knob); PDH GPU Engine does not attribute CUDA compute to the process; Energy Meter rapl_package0_pkg works
+  (units unvalidated); LHM/HWiNFO/ryzenadj absent; EcoQoS, job-object CPU cap, priority, affinity work.
+- Pre-registered experiment: experiments/w1_downclock.yaml (committed before any data).
