@@ -1,0 +1,28 @@
+{
+  "utc": "20261020T213210Z",
+  "smoke": false,
+  "admin": true,
+  "ac_plugged": true,
+  "ambient_c": 24.0,
+  "yaml_sha": "1c680f61dc105389",
+  "dll_sha": "529d4673ce437ea9",
+  "git_head": "20ae44a6fca0fcb9ae94f789a85ced2bacdd3d19",
+  "git_dirty": false,
+  "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "sm_count": 36,
+  "driver": "616.92",
+  "execution_mode": "CUDA native kernels via bench_kernels.dll (no CPU fallback)",
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.4",
+  "levels": [
+    600,
+    900,
+    1200,
+    1500,
+    1800,
+    "unlocked"
+  ],
+  "reps": 10,
+  "preroll_s": 1.5,
+  "window_s": 4.0
+}
