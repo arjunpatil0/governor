@@ -18,56 +18,13 @@ sys.path.insert(0, str(ROOT / "telemetry")); sys.path.insert(0, str(ROOT / "work
 from loadgen import gamma_slice_durations, latencies, parse_hags, poisson_arrivals, residual_wait  # noqa: E402
 from provenance import check_run_provenance  # noqa: E402
 
+from w2lib import BPS, W2, calibrate, dbl, units_for  # noqa: E402  (shared wrapper; DLL path lives there)
 DLL = ROOT / "workloads" / "background" / "build" / "w2_kernels.dll"
-BPS = 6   # blocks per SM for full-GPU kernels (same as W1 fma)
 P = ctypes.POINTER
-dbl = lambda a: a.ctypes.data_as(P(ctypes.c_double))
-i32 = lambda a: a.ctypes.data_as(P(ctypes.c_int))
-
-
-class W2:
-    def __init__(self):
-        self.d = ctypes.CDLL(str(DLL))
-        self.d.w2_last_error.restype = ctypes.c_char_p
-        self.d.w2_qpc_now.restype = ctypes.c_double
-        sms = ctypes.c_int()
-        if self.d.w2_init(ctypes.byref(sms)) != 0:
-            sys.exit(f"FATAL w2_init: {self.d.w2_last_error().decode()} (no CPU fallback)")
-        self.sms = sms.value
-
-    def chk(self, rc, what):
-        if rc != 0:
-            sys.exit(f"FATAL {what}: rc={rc} {self.d.w2_last_error().decode()}")
-
-    def bg_until(self, kind, units, t_stop, cap=200_000, bps=BPS):
-        units = np.ascontiguousarray(units, dtype=np.int32)
-        ts, te, g = (np.zeros(cap) for _ in range(3)); n = ctypes.c_int()
-        self.chk(self.d.w2_bg_until(kind, i32(units), len(units), bps, ctypes.c_double(t_stop), dbl(ts), dbl(te), dbl(g), cap, ctypes.byref(n)), "bg_until")
-        return ts[:n.value], te[:n.value], g[:n.value]
-
-    def fg_run(self, kind, arrivals, units, bps=BPS):
-        arrivals = np.ascontiguousarray(arrivals, dtype=np.float64); n = len(arrivals)
-        tl, tc, g = (np.zeros(n) for _ in range(3))
-        self.chk(self.d.w2_fg_run(kind, n, dbl(arrivals), int(units), bps, dbl(tl), dbl(tc), dbl(g)), "fg_run")
-        return tl, tc, g
 
 
 def pct(a, q):
     return float(np.percentile(a, q))
-
-
-def calibrate(w, kind, probe_units):
-    """host duration (ms) of one slice vs units: linear fit a + b*units from constant-unit runs."""
-    xs, ys = [], []
-    for u in probe_units:
-        ts, te, _ = w.bg_until(kind, [u], w.d.w2_qpc_now() + 0.5)
-        xs.append(u); ys.append(float(np.median((te - ts)[3:])) * 1e3)
-    b, a = np.polyfit(xs, ys, 1)
-    return dict(a_ms=float(a), b_ms_per_unit=float(b), probes=dict(zip(map(str, xs), ys)))
-
-
-def units_for(cal, ms):
-    return np.maximum(1, np.rint((np.asarray(ms) - cal["a_ms"]) / cal["b_ms_per_unit"])).astype(np.int32)
 
 
 def role_bg(args):

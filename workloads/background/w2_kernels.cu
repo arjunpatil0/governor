@@ -1,4 +1,4 @@
-﻿// w2_kernels.cu - W2 co-location workloads, built as a DLL and driven from Python (ctypes).
+// w2_kernels.cu - W2 co-location workloads, built as a DLL and driven from Python (ctypes).
 //   bg slices : back-to-back launch+sync of fma (units = loop iterations) or mem (units = 64 KiB chunks) slices, each timestamped
 //   fg frames : requests released at absolute QPC times, latency measured from the SCHEDULED arrival by the caller
 //   decode    : transformer-shaped decode proxy (Llama-3.2-3B shapes: hidden 3072, ffn 8192, 24 heads / 8 kv heads, head_dim 128),
@@ -105,10 +105,11 @@ EXPORT int w2_init(int* sm_count)
 
 // Background: launch+sync slices back to back until QPC time t_stop. units[] is cycled. Per slice: host start (just before
 // launch), host end (just after sync), CUDA-event gpu ms. kind 0 = mem (units = 64 KiB chunks, see launch_unit), 1 = fma (units = iterations;
-// blocks = SMs * blocks_per_sm). Slices done are returned in *n_done (<= cap).
+// blocks = SMs * blocks_per_sm). duty in (0,1]: after each slice spin-wait so busy/(busy+idle) = duty. Slices done are returned in *n_done (<= cap).
 EXPORT int w2_bg_until(int kind, const int* units, int n_units, int blocks_per_sm, double t_stop,
-                       double* t_start, double* t_end, double* gpu_ms, int cap, int* n_done)
+                       double* t_start, double* t_end, double* gpu_ms, int cap, int* n_done, double duty)
 {
+    if (!(duty > 0.0 && duty <= 1.0)) { snprintf(g_err, sizeof g_err, "duty must be in (0,1], got %g", duty); return 2; }
     int i = 0;
     while (i < cap && qpc_now() < t_stop) {
         t_start[i] = qpc_now();
@@ -120,6 +121,10 @@ EXPORT int w2_bg_until(int kind, const int* units, int n_units, int blocks_per_s
         float ms = 0;
         CK(cudaEventElapsedTime(&ms, e0, e1));
         gpu_ms[i] = ms;
+        if (duty < 1.0) {   // idle gap (CPU spin, GPU idle) so that busy / (busy + idle) = duty
+            double until = t_end[i] + (t_end[i] - t_start[i]) * (1.0 / duty - 1.0);
+            while (qpc_now() < until) { YieldProcessor(); }
+        }
         ++i;
     }
     *n_done = i;
