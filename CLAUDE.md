@@ -71,3 +71,10 @@ telemetry/ actuators/ workloads/{background,foreground}/ controllers/ experiment
   (no -pl knob); PDH GPU Engine does not attribute CUDA compute to the process; Energy Meter rapl_package0_pkg works
   (units unvalidated); LHM/HWiNFO/ryzenadj absent; EcoQoS, job-object CPU cap, priority, affinity work.
 - Pre-registered experiment: experiments/w1_downclock.yaml (committed before any data).
+
+## Review protocol (Claude Code <-> cloud reviewer)
+- A separate Claude session reviews this repo read-only and leaves reviews in `reviews/YYYY-MM-DD_<topic>_review.md`.
+- At the start of every session, check `reviews/` for review files that don't yet have a matching
+  `*_response.md`. Address [BLOCKER] items before other work.
+- Respond in `reviews/YYYY-MM-DD_<topic>_response.md`, one line per finding: fixed (commit hash) / disputed (why).
+- Reviews are advice, not orders: Arjun decides on disagreements. Never edit a review file; write a response.
