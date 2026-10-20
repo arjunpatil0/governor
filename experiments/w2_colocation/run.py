@@ -227,6 +227,8 @@ def run_cell(cell, block, idx, h, ctx):
     if part == "C":
         z = load_npz(cdir / "decode.npz"); t = z["t_tok_end"]
         k = t[(t >= t_win0) & (t < t_win1)]
+        if len(t) == 0 or t[0] > t_win0:
+            flags.append("decode_started_late")
         if not int(z["finite"]):
             flags.append("decode_state_not_finite")
         row.update(tokens=int(len(k)), tok_s=float(len(k) / wall), eff_gb_s=float(z["bytes_per_token"] / 1e9 * len(k) / wall))
@@ -281,7 +283,10 @@ def main():
     key = {"A": "experiment_A", "A2": "experiment_A", "B": "experiment_B", "C": "experiment_C"}[a.part]
     blocks = cfg[key]["blocks"]
     T = dict(tmax=cfg["common"]["gpu_start_temp_max_c"], warmup=cfg["common"]["warmup_s"], idle=cfg["common"]["idle_between_cells_s"],
-             lead=6.0 if a.part != "C" else 9.0, preroll=cfg["experiment_C"]["preroll_s"], window=cfg["experiment_C"]["window_s"], child_timeout=90)
+             lead=5.0, preroll=cfg["experiment_C"]["preroll_s"], window=cfg["experiment_C"]["window_s"], child_timeout=90)
+    batt0 = psutil.sensors_battery()
+    if not a.smoke and batt0 is not None and not batt0.power_plugged:
+        sys.exit("Full run refused: the laptop is on battery. The registration (hardware: AC power) requires AC; plug in and retry.")
     if a.smoke:
         NO_CLOCK_CONTROL = not admin
         blocks, T["warmup"], T["preroll"], T["window"], T["idle"] = 1, 0.5, 0.5, 1.5, 0.5

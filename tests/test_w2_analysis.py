@@ -171,3 +171,62 @@ def _phase(slope, n=400, blocks=10, noise=0.05, seed=2):
 def test_sa1_label(slope, label):
     ph, lat, blk = _phase(slope)
     assert sa1_label(ph, lat, blk)["label"] == label
+
+
+# ---- glue: results.csv rows -> inputs of the decision functions
+import json
+
+from w2_analysis import a_cells, b_service_tables, c_rel_thr
+
+
+def _row(block, cell_id, **kw):
+    spec = kw.pop("spec", {})
+    return dict(block=block, cell_id=cell_id, spec=json.dumps(spec), **kw)
+
+
+def test_a_cells_subtracts_the_blocks_own_baseline_and_keeps_only_main_grid_cells():
+    bgspec = lambda m, c, duty=1.0: dict(bg=dict(kind="fma", m_ms=m, cv=c, duty=duty), fg=dict(priority="normal"))
+    df = pd.DataFrame([
+        _row(0, "baseline", spec=dict(bg=None, fg=dict(priority="normal")), lat_mean_ms=0.2, predicted_wait_ms=float("nan")),
+        _row(0, "bg_fma_m2_c0.0", spec=bgspec(2, 0.0), lat_mean_ms=1.2, predicted_wait_ms=1.0),
+        _row(1, "baseline", spec=dict(bg=None, fg=dict(priority="normal")), lat_mean_ms=0.3, predicted_wait_ms=float("nan")),
+        _row(1, "bg_fma_m2_c0.0", spec=bgspec(2, 0.0), lat_mean_ms=1.1, predicted_wait_ms=1.0),
+        _row(0, "sa3_high_m2_c0.0", spec=dict(bg=dict(kind="fma", m_ms=2, cv=0.0, duty=1.0), fg=dict(priority="high")), lat_mean_ms=0.5, predicted_wait_ms=1.0),
+    ])
+    out = a_cells(df)
+    assert {"block", "cell_id", "m_ms", "cv", "obs_ms", "pred_ms"} <= set(out.columns)
+    assert len(out) == 2 and set(out.cell_id) == {"bg_fma_m2_c0.0"}
+    assert out.sort_values("block").obs_ms.tolist() == pytest.approx([1.0, 0.8])
+
+
+def test_b_service_tables_split_background_and_drop_unlocked_for_hb1():
+    spec = lambda bg: dict(fg=dict(frame="fma_60hz", kind="fma"), bg=bg)
+    df = pd.DataFrame([
+        _row(0, "fma_60hz_nobg_1800", sm_mhz=1800, spec=spec(None), fg_gpu_p50_ms=12.1, miss_frac=0.0),
+        _row(0, "fma_60hz_nobg_unlocked", sm_mhz="unlocked", spec=spec(None), fg_gpu_p50_ms=8.9, miss_frac=0.0),
+        _row(0, "fma_60hz_membg_1800", sm_mhz=1800, spec=spec(dict(kind="mem")), fg_gpu_p50_ms=15.0, miss_frac=0.4),
+    ])
+    t = b_service_tables(df)
+    assert set(t["hb1"].columns) >= {"block", "frame", "kind", "level", "service_ms"}
+    assert len(t["hb1"]) == 1 and t["hb1"].iloc[0].level == 1800          # background off, locked levels only
+    assert len(t["hb2_nobg"]) == 1 and len(t["hb2_membg"]) == 1
+
+
+def test_c_rel_thr_is_relative_to_the_blocks_unlocked_cell_of_the_same_config():
+    spec = lambda v, g: dict(decode=dict(variant=v, graph=g))
+    df = pd.DataFrame([
+        _row(0, "int4_graph_1200", sm_mhz=1200, spec=spec("int4", True), tok_s=90.0),
+        _row(0, "int4_graph_unlocked", sm_mhz="unlocked", spec=spec("int4", True), tok_s=100.0),
+        _row(0, "fp16_graph_1200", sm_mhz=1200, spec=spec("fp16", True), tok_s=40.0),
+        _row(0, "fp16_graph_unlocked", sm_mhz="unlocked", spec=spec("fp16", True), tok_s=80.0),
+    ])
+    df["energy_j"], df["tokens"] = 400.0, 360                         # every real C row has these columns
+    out = c_rel_thr(df).set_index(["variant", "level"]).rel_thr
+    assert out[("int4", 1200)] == pytest.approx(0.9) and out[("fp16", 1200)] == pytest.approx(0.5) and out[("int4", "unlocked")] == pytest.approx(1.0)
+
+
+def test_rel_w1_is_parsed_from_the_committed_w1_results_file():
+    from w2_analysis import load_rel_w1
+    rel = load_rel_w1()
+    assert rel["fma"][1200] == pytest.approx(0.488) and rel["fma"][1800] == pytest.approx(0.732)
+    assert rel["mem"][900] == pytest.approx(0.889) and rel["mem"][1500] == pytest.approx(0.997)
