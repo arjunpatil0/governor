@@ -91,3 +91,12 @@ telemetry/ actuators/ workloads/{background,foreground}/ controllers/ experiment
 - Throttle reasons: decode with telemetry/nvml_utils.py. `Reliability` (0x400) and `BoardLimit` (0x200) are real on this driver but absent from the CUDA 13.1 nvml.h;
   unlocked fma is Reliability-limited (~2475 MHz), not power-capped.
 - Full experiment runs are refused on a dirty git tree (telemetry/provenance.py). Commit first. Tests: `python -m pytest tests -q`.
+
+## Research record (mandatory)
+The project must leave a complete, paper-ready trail of reasoning. See journal/README.md and decisions/README.md.
+- After every working session that produces a result, a setback or a change of plan, add a journal entry
+  (`journal/NNNN_YYYY-MM-DD_slug.md`) using the template. Include wrong beliefs and failures; cite commits/data paths.
+- Every choice with real alternatives gets an ADR in `decisions/`. Supersede, never rewrite.
+- Each experiment's trail: pre-registration (yaml) → addenda (if any, before data) → results file → journal entry
+  with interpretation and implications.
+- Journal and ADRs are append-only. Corrections are new entries that link back.
