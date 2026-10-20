@@ -59,3 +59,30 @@ def test_equivalence_is_seeded_and_validates():
         equivalence_slope(x[:5], y[:4], b[:5], seed=1)
     with pytest.raises(ValueError):
         equivalence_slope(x[:5], y[:5], np.zeros(5), seed=1)   # one block: cannot bootstrap over blocks
+
+
+# ---- block-bootstrap OLS with intercept (review finding 1) and a median CI helper
+from w2_stats import bootstrap_median_ci, ols_block_bootstrap
+
+
+def test_ols_reports_intercept_and_its_ci_when_there_is_a_constant_offset():
+    rng = np.random.default_rng(3)
+    x = np.tile(np.linspace(0.1, 4.0, 18), 10)
+    y = 1.0 * x + 0.3 + rng.normal(0, 0.02, x.size)         # slope 1 plus a constant 0.3 switch cost
+    r = ols_block_bootstrap(x, y, np.repeat(np.arange(10), 18), seed=2)
+    assert r["slope"] == pytest.approx(1.0, abs=0.02)
+    assert r["intercept"] == pytest.approx(0.3, abs=0.03)
+    assert r["int_lo"] < r["intercept"] < r["int_hi"]
+
+
+def test_equivalence_slope_still_returns_intercept_keys():
+    x, y, b = _blocks(1.0, 0.02)
+    r = equivalence_slope(x, y, b, seed=1)
+    assert {"intercept", "int_lo", "int_hi"} <= set(r)
+
+
+def test_bootstrap_median_ci_brackets_the_median_and_is_seeded():
+    vals = np.array([1.9, 2.0, 2.1, 2.05, 1.95, 2.02, 1.98, 2.0, 2.03, 1.97])
+    lo, hi = bootstrap_median_ci(vals, seed=5)
+    assert lo <= np.median(vals) <= hi and 1.9 <= lo and hi <= 2.1
+    assert (lo, hi) == bootstrap_median_ci(vals, seed=5)

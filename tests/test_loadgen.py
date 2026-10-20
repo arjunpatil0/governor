@@ -116,3 +116,42 @@ def test_parse_hags_fails_loudly_when_missing():
         parse_hags("Card name: NVIDIA GeForce RTX 4070 Laptop GPU\nDriver Model: WDDM 3.2\n")
     with pytest.raises(ValueError):
         parse_hags(DXDIAG, adapter="Intel")
+
+
+# ---- derived metrics for the secondary analyses (SA1 phase, SA2 slice stretch) and the duty-cycle gap
+from loadgen import duty_gap, phase_in_slice, slice_stretch
+
+
+def test_phase_is_time_since_the_start_of_the_containing_slice():
+    starts, ends = np.array([0.0, 0.002, 0.004]), np.array([0.002, 0.004, 0.006])
+    phase_ms, inside = phase_in_slice(np.array([0.0005, 0.0035, 0.0071]), starts, ends)
+    assert inside.tolist() == [True, True, False]                 # 7.1 ms is after the last slice
+    assert phase_ms[:2] == pytest.approx([0.5, 1.5])
+
+
+def test_arrival_in_an_idle_gap_is_not_inside_a_slice():
+    starts, ends = np.array([0.0, 0.004]), np.array([0.002, 0.006])
+    _, inside = phase_in_slice(np.array([0.003]), starts, ends)
+    assert inside.tolist() == [False]
+
+
+def test_slice_stretch_uses_slices_with_exactly_one_completion():
+    starts = np.array([0.0, 0.003, 0.006, 0.009])
+    ends = starts + np.array([0.002, 0.002, 0.0033, 0.002])       # third slice is 1.3 ms longer
+    stretch_s, n = slice_stretch(starts, ends, completions=np.array([0.007]))
+    assert n == 1 and stretch_s == pytest.approx([0.0013])
+
+
+def test_slice_stretch_ignores_slices_with_two_completions():
+    starts = np.array([0.0, 0.003, 0.006]); ends = starts + 0.002
+    stretch_s, n = slice_stretch(starts, ends, completions=np.array([0.0035, 0.0045]))
+    assert n == 0 and len(stretch_s) == 0
+
+
+def test_duty_gap():
+    assert duty_gap(0.002, 1.0) == 0.0
+    assert duty_gap(0.002, 0.5) == pytest.approx(0.002)
+    assert duty_gap(0.002, 0.25) == pytest.approx(0.006)
+    for bad in (0, -0.1, 1.5):
+        with pytest.raises(ValueError):
+            duty_gap(0.002, bad)
