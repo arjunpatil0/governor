@@ -1,4 +1,5 @@
 """Finding 3 (throttle-reason decoding) and finding 2 (temperature summary) from reviews/2026-10-20_w1_review.md."""
+import os
 import re
 from pathlib import Path
 
@@ -6,7 +7,18 @@ import pytest
 
 from nvml_utils import EVENT_REASONS, decode_event_reasons, summarize_temps
 
-NVML_H = Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\include\nvml.h")
+
+def _find_nvml_h():
+    """CUDA_PATH first, then any installed CUDA toolkit under Program Files."""
+    roots = [os.environ.get("CUDA_PATH", "")]
+    roots += [str(p) for p in Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA").glob("v*")]
+    for r in roots:
+        if r and (Path(r) / "include" / "nvml.h").exists():
+            return Path(r) / "include" / "nvml.h"
+    return Path("nvml.h-not-found")
+
+
+NVML_H = _find_nvml_h()
 
 
 # ---- finding 3: decoding, locked to ground truth observed 2026-10-20 (raw masks + nvidia-smi -q -d PERFORMANCE)
@@ -47,7 +59,7 @@ def test_table_agrees_with_cuda_header_for_documented_reasons():
     # and the table's names for those bits match the header's names (aliases allowed via UserDefinedClocks)
     for name, val in documented.items():
         if name != "UserDefinedClocks":
-            assert EVENT_REASONS[name] == val
+            assert EVENT_REASONS.get(name) == val, f"documented reason {name}={val:#x} is not in EVENT_REASONS"
 
 
 # ---- finding 2: temp_start must be the first window sample so that temp_max >= temp_start always

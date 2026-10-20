@@ -59,7 +59,9 @@ def main():
     df["level"] = df["level"].astype(str)
     locked = [str(x) for x in CFG["design"]["sm_clock_levels_mhz"] if x != "unlocked"]
     # sample-based energy = mean of 20 Hz power samples x wall time (addendum 2026-10-20 sensitivity analysis)
-    df["epw_s"] = df.power_samples_w * df.wall_s / df.work
+    if "power_samples_w" not in df.columns:
+        sys.exit("results.csv has no power_samples_w column; cannot run the pre-specified sample-based sensitivity")
+    df["epw_s"] = (df.power_samples_w * df.wall_s / df.work).where(df.power_samples_w > 0)  # missing/zero samples -> NaN, not inf
     base = df[df.level == "unlocked"].set_index(["block", "kernel"])[["throughput", "epw", "epw_s"]]
     df = df.join(base, on=["block", "kernel"], rsuffix="_unl")
     df["rel_thr"] = df.throughput / df.throughput_unl
@@ -123,9 +125,12 @@ def main():
           "| clock | n | median rel. energy/work (mem, samples) | p (Holm) | significant |", "|---|---|---|---|---|"]
     for (lv, n, med, p), pa in zip(h2s, a2s):
         L.append(f"| {lv} | {n} | {med:.3f} | {pa:.4f} | {'yes' if pa < ALPHA else 'no'} |")
-    agree = (n2 >= 1) == (n2s >= 1)
-    L += ["", f"Counter-based H2: {'supported' if n2 >= 1 else 'not supported'}; sample-based H2: {'supported' if n2s >= 1 else 'not supported'}. "
-              f"**{'Both energy sources agree.' if agree else 'The energy sources DISAGREE: report H2 as inconclusive (see addendum).'}**"]
+    sig_c = {lv for (lv, *_), pa in zip(h2, a2) if pa < ALPHA}
+    sig_s = {lv for (lv, *_), pa in zip(h2s, a2s) if pa < ALPHA}
+    agree = (n2 >= 1) == (n2s >= 1) and sig_c == sig_s
+    L += ["", f"Counter-based H2: {'supported' if n2 >= 1 else 'not supported'} (levels {sorted(sig_c, key=int)}); "
+              f"sample-based H2: {'supported' if n2s >= 1 else 'not supported'} (levels {sorted(sig_s, key=int)}). "
+              f"**{'Both energy sources agree on the decision and on the significant levels.' if agree else 'The energy sources DISAGREE on the decision or the significant levels: report H2 as inconclusive (see addendum). Note the sample-based figure has a known level-dependent lag bias (about -10% at the registered pre-roll), so a disagreement may reflect that bias, not the counter.'}**"]
 
     L += ["", "## Flags (validity checks; cells stay in the data)", ""]
     fl = df[df["flags"].fillna("") != ""][["block", "kernel", "level", "flags"]]

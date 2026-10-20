@@ -1,4 +1,5 @@
 """NVML helpers shared by the audit and the experiment harnesses (pure functions are unit-tested in tests/)."""
+import functools
 
 # Clock-event-reason bits. 0x1..0x100 are documented in the CUDA 13.1 nvml.h (tests parse the header and compare).
 # 0x200 BoardLimit and 0x400 Reliability are NOT in that header: they come from the nvidia-ml-py binding and were
@@ -34,11 +35,19 @@ def decode_event_reasons(mask):
     return sorted(names)
 
 
-def current_event_mask(handle):
-    """Raw clock-event-reason bitmask (new NVML name first, deprecated name as fallback)."""
+@functools.lru_cache(maxsize=1)
+def _event_reasons_fn():
+    """Resolved once (new NVML name first, deprecated name as fallback); a missing binding raises at first use, loudly."""
     import pynvml as nv
-    fn = getattr(nv, "nvmlDeviceGetCurrentClocksEventReasons", None) or nv.nvmlDeviceGetCurrentClocksThrottleReasons
-    return fn(handle)
+    fn = getattr(nv, "nvmlDeviceGetCurrentClocksEventReasons", None) or getattr(nv, "nvmlDeviceGetCurrentClocksThrottleReasons", None)
+    if fn is None:
+        raise RuntimeError("pynvml has neither nvmlDeviceGetCurrentClocksEventReasons nor ...ThrottleReasons")
+    return fn
+
+
+def current_event_mask(handle):
+    """Raw clock-event-reason bitmask."""
+    return _event_reasons_fn()(handle)
 
 
 def summarize_temps(pre_c, window_samples):

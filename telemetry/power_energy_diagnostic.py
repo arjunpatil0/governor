@@ -61,16 +61,21 @@ def main():
     fids = [nv.NVML_FI_DEV_POWER_AVERAGE, nv.NVML_FI_DEV_POWER_INSTANT]
     rows, e_pts, stop, t0 = [], [], threading.Event(), time.perf_counter()
 
+    log_errors = []
+
     def log():
         nxt_e = 0.0
-        while not stop.is_set():
-            now = time.perf_counter() - t0
-            fv = nv.nvmlDeviceGetFieldValues(h, fids)
-            rows.append((now, nv.nvmlDeviceGetPowerUsage(h), fv[0].value.uiVal, fv[1].value.uiVal,
-                         nv.nvmlDeviceGetClockInfo(h, nv.NVML_CLOCK_SM)))
-            if now >= nxt_e:
-                e_pts.append((now, nv.nvmlDeviceGetTotalEnergyConsumption(h))); nxt_e += 1.0
-            time.sleep(1.0 / HZ)
+        try:
+            while not stop.is_set():
+                now = time.perf_counter() - t0
+                fv = nv.nvmlDeviceGetFieldValues(h, fids)
+                rows.append((now, nv.nvmlDeviceGetPowerUsage(h), fv[0].value.uiVal, fv[1].value.uiVal,
+                             nv.nvmlDeviceGetClockInfo(h, nv.NVML_CLOCK_SM)))
+                if now >= nxt_e:  # 1 Hz only: every energy read adds ~4 J of phantom energy
+                    e_pts.append((now, nv.nvmlDeviceGetTotalEnergyConsumption(h))); nxt_e += 1.0
+                time.sleep(1.0 / HZ)
+        except Exception as e:  # noqa: BLE001 - a dead logger must fail the run, not leave an empty array
+            log_errors.append(e)
     th = threading.Thread(target=log, daemon=True); th.start()
     time.sleep(IDLE_PRE)
     t_l0 = time.perf_counter() - t0
@@ -78,6 +83,9 @@ def main():
     t_l1 = time.perf_counter() - t0
     time.sleep(IDLE_POST)
     stop.set(); th.join()
+    if log_errors or not rows:
+        dll.bench_free()
+        sys.exit(f"FATAL: logger thread failed or produced no rows: {log_errors[:1]}")
 
     a = np.array(rows); t, p_api, p_avg, p_inst, sm = a.T
     ep = np.array(e_pts); te = ep[:, 0]; e_rate = np.diff(ep[:, 1]) / 1000.0 / np.diff(te)  # W per 1 s segment (includes ~5 W of read cost)

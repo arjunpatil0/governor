@@ -100,7 +100,7 @@ def main():
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = ROOT / "data" / "raw" / ("w1_downclock_smoke" if a.smoke else "w1_downclock") / stamp
     out_dir.mkdir(parents=True)
-    dirty = bool(git_state(ROOT)[1])
+    dirty = bool(git_state(ROOT)[1]) if a.smoke else False  # a full run passed the clean-tree gate above
     batt = psutil.sensors_battery()
     meta = dict(utc=stamp, smoke=a.smoke, admin=admin, ac_plugged=None if batt is None else batt.power_plugged,
                 ambient_c=a.ambient_c, yaml_sha=sha(CFG_PATH), dll_sha=sha(DLL_PATH), git_head=git_head, git_dirty=dirty,
