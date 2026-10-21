@@ -1,4 +1,4 @@
-# Addendum to w2_colocation.yaml: llama.cpp validation of the decode proxy (decisions by Arjun 2026-10-21 applied; NOT yet committed: registered after B's results are committed)
+# Addendum to w2_colocation.yaml: llama.cpp validation of the decode proxy (decisions by Arjun 2026-10-21 applied; registered after B results were committed)
 Date: 2026-10-21 · To be registered BEFORE any llama.cpp measurement exists, and to run right after Experiment B · Registration: b86d36e · C: f6f61ec, journals 0014/0015
 Fulfils experiment_C.real_engine_validation in the yaml ("one llama.cpp cell (3B, Q4)... design registered in a dated addendum BEFORE it runs. Real CUDA build, no CPU fallback").
 Registered after Experiment B results were committed (c51b499) and before any llama.cpp data or build exists.

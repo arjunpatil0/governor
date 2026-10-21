@@ -6,3 +6,5 @@ __pycache__/
 .coverage
 .pytest_cache/
 workloads/background/build/
+third_party/
+data/llama/*.gguf
