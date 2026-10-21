@@ -22,6 +22,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 for sub in ("telemetry", "workloads/common", "analysis", "experiments/w2_colocation"):
     sys.path.insert(0, str(ROOT / sub))
+from console import disable_quickedit  # noqa: E402
 from design import build_cells, cell_seed, clock_flags, frame_units_for_part, order_block  # noqa: E402
 from loadgen import gamma_slice_durations, latencies, parse_hags, poisson_arrivals, residual_wait  # noqa: E402
 from nvml_utils import current_event_mask, decode_event_reasons  # noqa: E402
@@ -44,8 +45,14 @@ def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()[:16]
 
 
+SMI_TIMEOUT_S = 30
+
+
 def smi(*a):
-    p = subprocess.run(["nvidia-smi", *a], capture_output=True, text=True)
+    try:
+        p = subprocess.run(["nvidia-smi", *a], capture_output=True, text=True, timeout=SMI_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return 124, f"nvidia-smi {' '.join(a)} timed out after {SMI_TIMEOUT_S} s"
     return p.returncode, (p.stdout + p.stderr).strip()
 
 
@@ -277,6 +284,7 @@ def main():
         return child_main(a.child, a.spec)
     if not a.part:
         ap.error("--part is required")
+    disable_quickedit()                                    # a click in the console would pause the run (journal 0023)
 
     global NO_CLOCK_CONTROL
     cfg = yaml.safe_load(CFG_PATH.read_text(encoding="utf-8"))

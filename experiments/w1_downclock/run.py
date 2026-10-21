@@ -31,8 +31,14 @@ def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()[:16]
 
 
+SMI_TIMEOUT_S = 30
+
+
 def smi(*a):
-    p = subprocess.run(["nvidia-smi", *a], capture_output=True, text=True)
+    try:
+        p = subprocess.run(["nvidia-smi", *a], capture_output=True, text=True, timeout=SMI_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return 124, f"nvidia-smi {' '.join(a)} timed out after {SMI_TIMEOUT_S} s"
     return p.returncode, (p.stdout + p.stderr).strip()
 
 

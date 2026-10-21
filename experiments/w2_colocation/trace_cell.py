@@ -76,7 +76,7 @@ def main():
             if p.poll() is None:
                 p.kill()
         if not R.NO_CLOCK_CONTROL:
-            subprocess.run(["nvidia-smi", "-rgc"]); subprocess.run(["nvidia-smi", "-rmc"])
+            R.smi("-rgc"); R.smi("-rmc")
 
 
 if __name__ == "__main__":
