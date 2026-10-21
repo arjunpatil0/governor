@@ -52,16 +52,19 @@ class W2:
         return tl, tc, g
 
     # ---- Experiment G instrumentation (experiments/w2_colocation_addendum_globaltimer_2026-10-22.md); fma kernel only
+    def set_gap_stride(self, stride):
+        self.chk(self.d.w2_set_gap_stride(int(stride)), "set_gap_stride")
+
     def rec_init(self, cap_blocks):
         self.chk(self.d.w2_rec_init(int(cap_blocks)), "rec_init")
 
     def rec_fetch(self):
         n = int(self.d.w2_rec_used())
         u64 = lambda: np.zeros(n, dtype=np.uint64); u32 = lambda: np.zeros(n, dtype=np.uint32)
-        t0, t1, gmax, gbeg = u64(), u64(), u64(), u64(); smid, tag, blk = u32(), u32(), u32()
+        t0, t1, gmax, gbeg = u64(), u64(), u64(), u64(); smid, tag, blk, nreads = u32(), u32(), u32(), u32()
         ptr = lambda a: a.ctypes.data_as(ctypes.c_void_p)
-        self.chk(self.d.w2_rec_fetch(ptr(t0), ptr(t1), ptr(gmax), ptr(gbeg), ptr(smid), ptr(tag), ptr(blk)), "rec_fetch")
-        return dict(t0=t0, t1=t1, gmax=gmax, gbeg=gbeg, smid=smid, tag=tag, blk=blk, dropped=int(self.d.w2_rec_dropped()))
+        self.chk(self.d.w2_rec_fetch(ptr(t0), ptr(t1), ptr(gmax), ptr(gbeg), ptr(smid), ptr(tag), ptr(blk), ptr(nreads)), "rec_fetch")
+        return dict(t0=t0, t1=t1, gmax=gmax, gbeg=gbeg, smid=smid, tag=tag, blk=blk, nreads=nreads, dropped=int(self.d.w2_rec_dropped()))
 
     def bg_until_rec(self, units, t_stop, t_rec0, cap_blocks, cap=200_000, bps=BPS, duty=1.0):
         self.rec_init(cap_blocks)
@@ -89,6 +92,13 @@ class W2:
         qb, qa = np.zeros(n), np.zeros(n); gt = np.zeros(n, dtype=np.uint64)
         self.chk(self.d.w2_gt_sync(n, dbl(qb), dbl(qa), gt.ctypes.data_as(ctypes.c_void_p)), "gt_sync")
         return best_sync(qb, qa, gt)
+
+    def gt_sync3(self, n=200):
+        """(offset_s, round_trip_s, qpc_time_s) of the minimum-round-trip sample."""
+        from w2_timeline import best_sync_t
+        qb, qa = np.zeros(n), np.zeros(n); gt = np.zeros(n, dtype=np.uint64)
+        self.chk(self.d.w2_gt_sync(n, dbl(qb), dbl(qa), gt.ctypes.data_as(ctypes.c_void_p)), "gt_sync")
+        return best_sync_t(qb, qa, gt)
 
     def two_streams_rec(self, units_a, units_b, delay_s):
         self.rec_init(2 * self.sms * BPS)

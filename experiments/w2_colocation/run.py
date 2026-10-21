@@ -119,25 +119,44 @@ def child_main(role, spec_path):
     elif role == "bg":
         units = np.load(spec["units"])
         rec = bool(spec.get("rec"))
-        sync0 = w.gt_sync() if rec else None
+        if rec:
+            while w.now() < spec["t_probe"]:        # both children sync the GPU timer to QPC at the same instant (journal 0029)
+                time.sleep(0.001)
+        sync0 = w.gt_sync3() if rec else None
         while w.now() < spec["t_sync"]:
             time.sleep(0.001)
         if rec:
             ts, te, g, r = w.bg_until_rec(units, spec["t_stop"], t_rec0=spec["t_rec0"], cap_blocks=spec["rec_cap_blocks"], cap=spec["cap"], duty=spec["duty"])
-            save_rec(Path(spec["rec_out"]), r, sync0, w.gt_sync(), w.sms)
+            save_rec(Path(spec["rec_out"]), r, sync0, w.gt_sync3(), w.sms)
         else:
             ts, te, g = w.bg_until(spec["kind"], units, spec["t_stop"], cap=spec["cap"], duty=spec["duty"])
         np.savez_compressed(out, t_start=ts, t_end=te, gpu_ms=g.astype(np.float32))
     elif role == "fg":
         arr = np.load(spec["arrivals"])
         if spec.get("rec"):
-            sync0 = w.gt_sync()
+            while w.now() < spec["t_probe"]:
+                time.sleep(0.001)
+            sync0 = w.gt_sync3()
             cap_blocks = (len(arr) - spec["rec_from"] + 10) * w.sms * 6
             tl, tc, g, r = w.fg_run_rec(spec["kind"], arr, spec["units"], rec_from=spec["rec_from"], cap_blocks=cap_blocks)
-            save_rec(Path(spec["rec_out"]), r, sync0, w.gt_sync(), w.sms)
+            save_rec(Path(spec["rec_out"]), r, sync0, w.gt_sync3(), w.sms)
         else:
             tl, tc, g = w.fg_run(spec["kind"], arr, spec["units"])
         np.savez_compressed(out, arrival=arr, t_launch=tl, t_complete=tc, gpu_ms=g.astype(np.float32))
+    elif role == "ovh":         # Experiment G pre-check (iii), controlled A/B in one process: plain vs recording kernel, alternating, per gap stride
+        out_rows = []
+        w.bg_until(1, [20000], w.now() + 3)
+        for stride in (64, 128, 256, 512):
+            w.set_gap_stride(stride)
+            for units in (1000, 8000, 40000):
+                plain, recd, gaps = [], [], []
+                for _ in range(6):
+                    ts, te, _g = w.bg_until(1, [units], w.now() + 0.25); plain.append(float(np.median(te - ts)) * 1e3)
+                    ts, te, _g, r = w.bg_until_rec([units], w.now() + 0.25, t_rec0=0.0, cap_blocks=800_000); recd.append(float(np.median(te - ts)) * 1e3)
+                    gaps.append(float(np.median((r["t1"] - r["t0"]).astype(np.float64) / np.maximum(r["nreads"], 1))))
+                out_rows.append(dict(stride=stride, units=units, plain_ms=float(np.median(plain)), rec_ms=float(np.median(recd)),
+                                     ratio=float(np.median(np.array(recd) / np.array(plain))), median_read_gap_ns=float(np.median(gaps))))
+        out.write_text(json.dumps(out_rows, indent=1), encoding="utf-8")
     elif role == "gtprobe":     # Experiment G pre-checks (i) timer resolution and (ii) single-process, two-stream timebase
         reads = w.gt_resolution(100_000)
         off, rt = w.gt_sync(500)
@@ -229,7 +248,7 @@ def run_cell(cell, block, idx, h, ctx):
                 units_fg = int(ctx["units_for"](cal["fma"], fg["size_ms"]))
             kid = KIND_ID[fg["kind"]]
             procs.append(spawn("fg", dict(out=str(cdir / "fg.npz"), arrivals=str(cdir / "arrivals.npy"), kind=kid, units=units_fg,
-                                          cpu=FG_CPU, priority=fg["priority"], rec=rec, rec_from=n_warm, rec_out=str(cdir / "fg_rec.npz")), cdir))
+                                          cpu=FG_CPU, priority=fg["priority"], rec=rec, rec_from=n_warm, t_probe=t_sync - 1.0, rec_out=str(cdir / "fg_rec.npz")), cdir))
         else:                                              # part G bgalone: no foreground, a window of T["window"] after the warm-up
             t_win1 = t_win0 + T["window"]
         if bg:
@@ -240,7 +259,7 @@ def run_cell(cell, block, idx, h, ctx):
             cap = int((t_win1 - t_sync + 2) / (0.3 * bg["m_ms"] * 1e-3)) + 1000
             procs.append(spawn("bg", dict(out=str(cdir / "bg.npz"), units=str(cdir / "bg_units.npy"), kind=KIND_ID[bg["kind"]], t_sync=t_sync,
                                           t_stop=t_win1 + 1.0, cap=min(cap, 1_500_000), duty=bg["duty"], cpu=BG_CPU,
-                                          rec=rec, t_rec0=t_win0, rec_cap_blocks=G_BG_REC_BLOCKS, rec_out=str(cdir / "bg_rec.npz")), cdir))
+                                          rec=rec, t_rec0=t_win0, t_probe=t_sync - 1.0, rec_cap_blocks=G_BG_REC_BLOCKS, rec_out=str(cdir / "bg_rec.npz")), cdir))
 
     # measured window: energy counter read exactly twice; 20 Hz samples inside
     while time.perf_counter() < t_win0:
@@ -448,6 +467,9 @@ def main():
             pg = spawn("gtprobe", dict(out=str(out_dir / "gtprobe.npz"), cpu=BG_CPU), out_dir)
             if pg.wait(timeout=180) != 0:
                 raise RuntimeError("gtprobe child failed")
+            po = spawn("ovh", dict(out=str(out_dir / "ovh.json"), cpu=BG_CPU), out_dir)
+            if po.wait(timeout=300) != 0:
+                raise RuntimeError("ovh child failed")
         ctx = dict(cfg_seed=G_SEED if a.part == "G" else 20261021, llama_model_bytes=(llama_meta or {}).get("model_bytes"), timing=T, cal=cal, frame_units=frame_units, out_dir=out_dir, hags=hags, units_for=units_for)
         t_run = time.time()
         for b in range(blocks):

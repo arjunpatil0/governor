@@ -12,18 +12,19 @@ import pandas as pd
 from w2_timeline import block_times_in_window, overhead_check, resolution_ns, unpack_rec
 
 ROOT = Path(__file__).resolve().parents[1]
+FENCE, FENCE_END = "```" + chr(10), chr(10) + "```"
 
 
 def _rec(path):
     z = np.load(path)
-    r = unpack_rec({k: z[k] for k in ("base", "t0_rel", "dur", "gmax", "gbeg_off", "smid", "tag", "blk", "dropped")})
+    r = unpack_rec({k: z[k] for k in ("base", "t0_rel", "dur", "gmax", "gbeg_off", "smid", "tag", "blk", "nreads", "dropped")})
     return r, z["sync0"], z["sync1"]
 
 
 def check_i_ii_a(d):
     z = np.load(d / "gtprobe.npz")
     res = resolution_ns(z["reads"]); reads = z["reads"].astype(np.int64)
-    r = unpack_rec({k: z[k] for k in ("base", "t0_rel", "dur", "gmax", "gbeg_off", "smid", "tag", "blk", "dropped")})
+    r = unpack_rec({k: z[k] for k in ("base", "t0_rel", "dur", "gmax", "gbeg_off", "smid", "tag", "blk", "nreads", "dropped")})
     off = (float(z["off"]) + float(z["off2"])) / 2; drift = abs(float(z["off2"]) - float(z["off"]))
     tol = 2 * max(float(z["rt"]), float(z["rt2"])) + 1e-9 * (res if np.isfinite(res) else 0) + drift + 1e-4
     a_l, a_d, b_l, b_d = z["times"]
@@ -43,15 +44,20 @@ def check_ii_b(d, df):
             continue
         fr, fs0, fs1 = _rec(cd / "fg_rec.npz"); br, bs0, bs1 = _rec(cd / "bg_rec.npz")
         fw = np.load(cd / "fg_window.npz")
-        off_f = (fs0[0] + fs1[0]) / 2; off_b = (bs0[0] + bs1[0]) / 2
+        off_f = (fs0[0] + fs1[0]) / 2
         drift = max(abs(fs1[0] - fs0[0]), abs(bs1[0] - bs0[0]))
         tol = 2 * max(fs0[1], fs1[1], bs0[1], bs1[1]) + drift + 1e-4
         k = fr["tag"].astype(np.int64) - int(fw["idx0"])
         ok = (k >= 0) & (k < len(fw["t_launch"]))
         w = block_times_in_window(fr["t0"][ok], fr["t1"][ok], off_f, fw["t_launch"][k[ok]], fw["t_complete"][k[ok]], tol)
-        rows.append(dict(block=int(r0.block), cell=r0.cell_id, offset_diff_s=float(off_f - off_b), rt_sum_s=float(fs0[1] + bs0[1]),
+        rows.append(dict(block=int(r0.block), cell=r0.cell_id, offset_diff_s=float(fs0[0] - bs0[0]), rt_sum_s=float(fs0[1] + bs0[1]), dt_probe_s=float(abs(fs0[2] - bs0[2])),
                          drift_s=float(drift), fg_blocks=w["n"], fg_outside=w["n_outside"], fg_unmatched=int((~ok).sum()), bg_blocks=len(br["t0"]), bg_dropped=br["dropped"]))
     return pd.DataFrame(rows)
+
+
+def ovh_table(d):
+    f = d / "ovh.json"
+    return pd.DataFrame(json.loads(f.read_text(encoding="utf-8"))) if f.exists() else pd.DataFrame()
 
 
 def check_iii(df):
@@ -75,7 +81,7 @@ def main():
     a = ap.parse_args()
     d = Path(a.dir) if a.dir else sorted((ROOT / "data" / "raw" / "w2_G_precheck").glob("*/results.csv"))[-1].parent
     meta = json.loads((d / "meta.json").read_text(encoding="utf-8")); df = pd.read_csv(d / "results.csv")
-    i = check_i_ii_a(d); b = check_ii_b(d, df); t, m, chk, chk_r2 = check_iii(df)
+    i = check_i_ii_a(d); b = check_ii_b(d, df); t, m, chk, chk_r2 = check_iii(df); ov = ovh_table(d)
     L = ["# Experiment G pre-checks (i)-(iii), smoke-grade", "",
          f"Source `{d.relative_to(ROOT)}` | admin {meta['admin']} | unlocked clocks unless admin | git {meta['git_head'][:8]} dirty {meta.get('git_dirty')} | dll {meta['dll_sha']} | {meta['gpu']} driver {meta['driver']}",
          "NOT a result and NOT the registered acceptance: clocks were not locked (no admin), 3 blocks. The registered pre-check (iii) is re-evaluated on the full G data; this run only shows the instrumentation works and its rough cost.", "",
@@ -85,10 +91,13 @@ def main():
          f"- GPU-timer/QPC offset drift over the test {i['offset_drift_s']*1e6:.1f} us; round trips {i['rt_s'][0]*1e6:.0f} / {i['rt_s'][1]*1e6:.0f} us; tolerance {i['tol_s']*1e6:.0f} us",
          *[f"- stream {'A' if k == 0 else 'B'}: {v['n']} blocks, {v['n_outside']} outside the host launch..done window" for k, v in i["streams"].items()], "",
          "## (ii-b) two processes (fg and bg children): same timebase", "",
-         "Per cell with both recordings: offset difference between the processes vs the sum of the two round trips (equal timebase if the difference is within the round trips + drift), and fg blocks outside their request's host launch..complete window.", "",
-         b.to_markdown(index=False, floatfmt=".6f") if len(b) else "(no cell had both recordings)", "",
-         "## (iii) instrumentation overhead (instrumented vs uninstrumented twin, per block; medians below)", "",
-         t.to_markdown(index=False, floatfmt=".4f"), "",
+         "Per cell with both recordings: the two processes read the GPU timer against QPC at the same instant (dt_probe_s apart); equal timebase if offset_diff_s is within rt_sum_s (the two minimum round trips) plus drift over dt_probe_s; and fg blocks outside their request's host launch..complete window.", "",
+         FENCE + b.to_string(index=False) + FENCE_END if len(b) else "(no cell had both recordings)", "",
+         "## (iii-a) controlled A/B in one process: plain vs recording kernel, alternating 0.25 s runs x 6, by gap-read stride (iterations between %globaltimer reads) and slice size", "",
+         "ratio = median host slice duration (launch..sync) recording / plain. median_read_gap_ns = median over blocks of block duration / reads, the quantity G_thr = 20 x that is built from.", "",
+         (FENCE + ov.round(4).to_string(index=False) + FENCE_END) if len(ov) else "(no ovh.json)", "",
+         "## (iii-b) harness cells: instrumented vs uninstrumented twin (clocks NOT locked here: the fg-alone cells idle at ~210 MHz, so baseline-based numbers are not meaningful at smoke grade; the R_2 on/off columns are)", "",
+         FENCE + t.round(4).to_string(index=False) + FENCE_END, "",
          f"- fg-alone latency p50, instrumented vs not: relative difference {chk['lat_rel_diff']*100:.1f}% (limit 5%)",
          f"- observed wait of R_2 (mean latency minus the same-condition fg-alone mean), instrumented {m.wait_on:.4f} ms vs {m.wait_off:.4f} ms: difference {chk['wait_abs_diff_ms']:.4f} ms (limit 0.03)",
          f"- R_2 latency p50 relative difference {chk_r2['lat_rel_diff']*100:.1f}%; bg mean slice {m.slice_on_ms:.4f} vs {m.slice_off_ms:.4f} ms; fg gpu p50 {m.gpu_on_ms:.4f} vs {m.gpu_off_ms:.4f} ms",

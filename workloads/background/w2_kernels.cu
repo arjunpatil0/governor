@@ -70,7 +70,7 @@ __global__ void fma_kernel(float* out, int iters, float a, float b)
 // uninstrumented fma_kernel above is byte-for-byte what A, A2, B and C ran. Per thread block: %globaltimer at start and end, %smid, and a
 // gap detector: lane 0 of every warp reads %globaltimer every kGapStride loop iterations and keeps the largest gap between consecutive
 // reads (and where it began); the block keeps the largest over its warps. A block descheduled mid-execution shows up as a large gap.
-static const int kGapStride = 64;
+static int g_gap_stride = 64;      // power of two; runtime-settable (w2_set_gap_stride) so the pre-check can measure the cost of the reads
 struct Rec { unsigned long long t0, t1, gmax, gbeg; unsigned int smid, tag, blk, pad; };
 
 __device__ __forceinline__ unsigned long long gtimer_ns()
@@ -86,18 +86,20 @@ __device__ __forceinline__ unsigned int smid_now()
     return s;
 }
 
-__global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec, unsigned int tag)
+__global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec, unsigned int tag, int stride_mask)
 {
     __shared__ unsigned long long s_gmax[kThreads / 32], s_gbeg[kThreads / 32], s_t0[kThreads / 32], s_t1[kThreads / 32];
     const unsigned long long t0 = gtimer_ns();
     const bool lane0 = (threadIdx.x & 31) == 0;
     unsigned long long last = t0, gmax = 0, gbeg = t0;
+    unsigned int nreads = 0;
     float x0 = threadIdx.x * 1e-3f, x1 = x0 + 1e-3f, x2 = x0 + 2e-3f, x3 = x0 + 3e-3f;
     float x4 = x0 + 4e-3f, x5 = x0 + 5e-3f, x6 = x0 + 6e-3f, x7 = x0 + 7e-3f;
     for (int i = 0; i < iters; ++i) {
         x0 = fmaf(x0, a, b); x1 = fmaf(x1, a, b); x2 = fmaf(x2, a, b); x3 = fmaf(x3, a, b);
         x4 = fmaf(x4, a, b); x5 = fmaf(x5, a, b); x6 = fmaf(x6, a, b); x7 = fmaf(x7, a, b);
-        if (lane0 && (i & (kGapStride - 1)) == kGapStride - 1) {
+        if (lane0 && (i & stride_mask) == stride_mask) {
+            ++nreads;
             unsigned long long t = gtimer_ns(), g = t - last;
             if (g > gmax) { gmax = g; gbeg = last; }
             last = t;
@@ -119,7 +121,7 @@ __global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec
             if (s_t1[w] > b1) b1 = s_t1[w];
         }
         Rec r;
-        r.t0 = b0; r.t1 = b1; r.gmax = m; r.gbeg = mb; r.smid = smid_now(); r.tag = tag; r.blk = blockIdx.x; r.pad = 0;
+        r.t0 = b0; r.t1 = b1; r.gmax = m; r.gbeg = mb; r.smid = smid_now(); r.tag = tag; r.blk = blockIdx.x; r.pad = nreads + 1;   // pad = number of gap reads by warp 0's lane 0 (loop reads + the final one)
         rec[blockIdx.x] = r;
     }
 }
@@ -144,7 +146,7 @@ static Rec* rec_take(int blocks)
 static int launch_unit(int kind, int units, int blocks, Rec* rec = nullptr, unsigned int tag = 0, cudaStream_t st = nullptr)
 {
     if (!st) st = g_s;
-    if (kind == 1 && rec) fma_kernel_rec<<<blocks, kThreads, 0, st>>>(dOut, units, 0.9999f, 1e-4f, rec, tag);
+    if (kind == 1 && rec) fma_kernel_rec<<<blocks, kThreads, 0, st>>>(dOut, units, 0.9999f, 1e-4f, rec, tag, g_gap_stride - 1);
     else if (kind == 1) fma_kernel<<<blocks, kThreads, 0, st>>>(dOut, units, 0.9999f, 1e-4f);
     else {   // mem: units = chunks of 4096 float4 (64 KiB read + 64 KiB written); one full pass = kN4/4096 = 4096 chunks
         const int per_pass = (int)(kN4 / 4096);
@@ -268,16 +270,22 @@ EXPORT int w2_rec_init(size_t cap_blocks)
     g_rec_cap = cap_blocks; g_rec_used = 0; g_rec_dropped = 0;
     return 0;
 }
+EXPORT int w2_set_gap_stride(int stride)
+{
+    if (stride < 1 || (stride & (stride - 1))) { snprintf(g_err, sizeof g_err, "gap stride must be a power of two, got %d", stride); return 2; }
+    g_gap_stride = stride;
+    return 0;
+}
 EXPORT size_t w2_rec_used() { return g_rec_used; }
 EXPORT size_t w2_rec_dropped() { return g_rec_dropped; }
 EXPORT int w2_rec_fetch(unsigned long long* t0, unsigned long long* t1, unsigned long long* gmax, unsigned long long* gbeg,
-                        unsigned int* smid, unsigned int* tag, unsigned int* blk)
+                        unsigned int* smid, unsigned int* tag, unsigned int* blk, unsigned int* nreads)
 {
     CK(cudaDeviceSynchronize());
     std::vector<Rec> h(g_rec_used);
     if (g_rec_used) CK(cudaMemcpy(h.data(), dRec, g_rec_used * sizeof(Rec), cudaMemcpyDeviceToHost));
     for (size_t i = 0; i < h.size(); ++i) {
-        t0[i] = h[i].t0; t1[i] = h[i].t1; gmax[i] = h[i].gmax; gbeg[i] = h[i].gbeg; smid[i] = h[i].smid; tag[i] = h[i].tag; blk[i] = h[i].blk;
+        t0[i] = h[i].t0; t1[i] = h[i].t1; gmax[i] = h[i].gmax; gbeg[i] = h[i].gbeg; smid[i] = h[i].smid; tag[i] = h[i].tag; blk[i] = h[i].blk; nreads[i] = h[i].pad;
     }
     return 0;
 }

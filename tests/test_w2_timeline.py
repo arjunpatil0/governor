@@ -48,20 +48,26 @@ def test_pack_and_unpack_rec_roundtrip_and_shrinks():
     t0 = (base + np.sort(rng.integers(0, 5_000_000_000, n))).astype(np.uint64)
     rec = dict(t0=t0, t1=t0 + rng.integers(1000, 900_000, n).astype(np.uint64), gmax=rng.integers(0, 500_000, n).astype(np.uint64),
                gbeg=None, smid=rng.integers(0, 36, n).astype(np.uint32), tag=rng.integers(0, 50, n).astype(np.uint32),
-               blk=rng.integers(0, 216, n).astype(np.uint32), dropped=3)
+               blk=rng.integers(0, 216, n).astype(np.uint32), nreads=rng.integers(1, 500, n).astype(np.uint32), dropped=3)
     rec["gbeg"] = rec["t0"] + (rng.random(n) * (rec["t1"] - rec["t0"])).astype(np.uint64)
     back = unpack_rec(pack_rec(rec))
-    for k in ("t0", "t1", "gmax", "gbeg", "smid", "tag", "blk"):
+    for k in ("t0", "t1", "gmax", "gbeg", "smid", "tag", "blk", "nreads"):
         assert (back[k] == rec[k]).all() and back[k].dtype == rec[k].dtype
     assert back["dropped"] == 3
     packed = pack_rec(rec)
-    assert sum(v.nbytes for v in packed.values() if hasattr(v, "nbytes")) < 0.65 * sum(rec[k].nbytes for k in ("t0", "t1", "gmax", "gbeg", "smid", "tag", "blk"))
+    assert sum(v.nbytes for v in packed.values() if hasattr(v, "nbytes")) < 0.65 * sum(rec[k].nbytes for k in ("t0", "t1", "gmax", "gbeg", "smid", "tag", "blk", "nreads"))
 
 
 def test_pack_rec_rejects_a_block_longer_than_the_32_bit_range():
     from w2_timeline import pack_rec
     rec = dict(t0=np.array([0], dtype=np.uint64), t1=np.array([5_000_000_000], dtype=np.uint64), gmax=np.array([1], dtype=np.uint64),
                gbeg=np.array([0], dtype=np.uint64), smid=np.array([0], dtype=np.uint32), tag=np.array([0], dtype=np.uint32),
-               blk=np.array([0], dtype=np.uint32), dropped=0)
+               blk=np.array([0], dtype=np.uint32), nreads=np.array([1], dtype=np.uint32), dropped=0)
     with pytest.raises(ValueError):
         pack_rec(rec)
+
+
+def test_g_thr_is_20_times_the_median_block_mean_read_gap():
+    from w2_timeline import g_thr_ns
+    rec = dict(t0=np.zeros(3, dtype=np.uint64), t1=np.array([1000, 2000, 90000], dtype=np.uint64), nreads=np.array([100, 100, 100], dtype=np.uint32))
+    assert g_thr_ns(rec) == 20 * 20.0      # block mean gaps 10, 20, 900 ns -> median 20 ns
