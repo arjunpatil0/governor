@@ -1,16 +1,19 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-21 · Phase: W2 (A done; A2 false start fixed, A2 awaiting rerun; part L code not written)
+Updated 2026-10-21 · Phase: W2 (A done; capped-wait addendum registered; A2 awaiting rerun; part L code not written)
 
 ## Just did (commits)
-- Capped-wait addendum registered (post-hoc, exploratory; journal 0022). A2 crash fixed test-first (frame units now loaded for any part with a frame cell; smoke covers every fg stream) and logged (journal 0021). Armoury Crate mode now required via --armoury-mode and stored in meta.json; CLAUDE.md protocol updated. Memory-clock 8101 incident logged.
-- Earlier: ea8546a/081f148 (Experiment A results, journal 0020).
+- Capped-wait addendum registered before A2 data (post-hoc, exploratory, changes no decision rule; journal 0022). Armoury Crate mode recorded: Performance for A2; A/B/C "not recorded; inferred non-Turbo".
+- A2 crash fixed test-first (0a9baae; journal 0021). Experiment A results: ea8546a (journal 0020).
 
 ## Waiting for
-- Arjun: the Armoury Crate mode name used for A/B/C (to put in the A2 command), then Arjun reruns A2 from scratch. I execute nothing while it runs.
+- Arjun to run A2 (command below). I execute nothing while it runs.
 
 ## Decisions needed
-1. Armoury Crate mode name that A/B/C used (one word, e.g. what the app shows). Recommendation: state it exactly as shown.
-2. Reviewer checkpoint on A's results (journal 0020) is still due. Recommendation: send before interpreting A2.
+1. None. The reviewer reviews A and A2 together after A2 (Arjun's decision).
 
 ## Reviewer checkpoint due?
-- Results before interpretation: A (yes). Surprise: yes (A2 harness bug + clock mismatch are process, not science). No design change.
+- Results before interpretation: after A2 (A and A2 together). No design change pending.
+
+## Experiment A2 command (admin PowerShell, AC power, clean tree, Armoury Crate in Performance mode)
+cd C:\Users\arjun\governor
+python experiments\w2_colocation\run.py --part A2 --ambient-c 25 --armoury-mode Performance
