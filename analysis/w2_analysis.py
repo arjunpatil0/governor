@@ -11,6 +11,7 @@ from w2_stats import bootstrap_median_ci, equivalence_slope, find_knee, ols_bloc
 SEED = 20261021
 ALPHA = 0.05
 UNLOCKED_KEY = 10_000          # 'unlocked' sorts above every locked level when comparing knees
+HB_TEST_LEVELS = (900, 1200, 1500)   # HB1/HB2 families; the descriptive 1050 MHz level of the B-levels addendum is outside them
 
 
 def holm(pvals):
@@ -81,7 +82,7 @@ def hb1(df, rel_w1):
     rows = []
     for (frame, kind), g in df.groupby(["frame", "kind"]):
         ref = g[g.level == 1800].set_index("block").service_ms
-        for L in (900, 1200, 1500):
+        for L in HB_TEST_LEVELS:
             s = g[g.level == L].set_index("block").service_ms
             ratio = (s / ref).dropna().to_numpy()
             lo, hi = bootstrap_median_ci(ratio, seed=SEED)
@@ -106,6 +107,14 @@ def hb2(df, budget_ms, pred_ratio):
     sig = {L: bool(a < ALPHA) for L, a in zip(levels, adj)}
     return dict(table=pd.DataFrame(dict(level=levels, p=ps, p_holm=adj, significant=[sig[L] for L in levels])),
                 must_be_significant=must, supported=bool(must) and all(sig[L] for L in must))
+
+
+def interp_service_ratio(rel_w1, kind, level):
+    """Descriptive only (never tested): W1 service-time ratio to 1800 MHz at a level W1 did not measure, by linear interpolation of
+    W1's relative throughput between its neighbouring levels."""
+    lv = sorted(rel_w1[kind]); lo = max(x for x in lv if x <= level); hi = min(x for x in lv if x >= level)
+    rel = rel_w1[kind][lo] if lo == hi else rel_w1[kind][lo] + (level - lo) / (hi - lo) * (rel_w1[kind][hi] - rel_w1[kind][lo])
+    return rel_w1[kind][1800] / rel
 
 
 # ---- HC1 / knees (Experiment C) -------------------------------------------------------------------------------------
@@ -257,13 +266,35 @@ def report_B(run_dir):
         d = t[f"hb2_{bgname}"]
         for frame, g in d[d.kind == "fma"].groupby("frame"):
             budget = 1000.0 / (120 if "120" in frame else 60)
-            ratios = {lv: rel["fma"][1800] / rel["fma"][lv] for lv in (900, 1200, 1500)}
+            ratios = {lv: rel["fma"][1800] / rel["fma"][lv] for lv in HB_TEST_LEVELS}
             r = hb2(g, budget, ratios)
             L += [f"### {frame}, background {bgname}: must be significant at {r['must_be_significant']} -> **{'SUPPORTED' if r['supported'] else 'NOT SUPPORTED'}**", "", _fmt(r["table"]), ""]
+    d1 = t["hb1"][t["hb1"].level.isin([1050, 1800])]
+    rows = []
+    for (frame, kind), g in d1.groupby(["frame", "kind"]):
+        piv = g.pivot_table(index="block", columns="level", values="service_ms")
+        if 1050 in piv and 1800 in piv:
+            rows.append(dict(frame=frame, ratio_1050_vs_1800_median=float((piv[1050] / piv[1800]).median()),
+                             interpolated_w1_prediction=interp_service_ratio(rel, kind, 1050)))
+    if rows:
+        L += ["## Descriptive: 1050 MHz (B-levels addendum; outside HB1/HB2; the W1 value is a linear interpolation, not a measurement)", "", _fmt(pd.DataFrame(rows)), ""]
     L += ["## Descriptive per cell (medians over blocks)", "",
           _fmt(df.groupby(["cell_id"])[["lat_p50_ms", "lat_p99_ms", "fg_gpu_p50_ms", "miss_frac", "power_counter_w", "sm_clock_med"]].median().reset_index())]
     L += _flags_block(df)
     return L, "B"
+
+
+def _fp16_main_finding(d, level=1050):
+    med = d[(d.variant == "fp16") & d.graph].groupby("level")[["rel_thr", "j_per_token"]].median()
+    k, u = med.loc[level], med.loc["unlocked"]
+    i4 = d[(d.variant == "int4") & d.graph].groupby("level").rel_thr.median()
+    return (f"- **Main C finding (fp16 proxy, 14 layers, CUDA graph):** at {level} MHz the proxy keeps {k.rel_thr:.2f} of its unlocked throughput at "
+            f"{k.j_per_token:.3f} J/token against {u.j_per_token:.3f} J/token unlocked ({100 * (1 - k.j_per_token / u.j_per_token):.0f}% lower; board-level energy counter, "
+            f"W1 addendum caveats apply).\n"
+            f"- **Construct validity of the int4 proxy:** HC1 is supported statistically, but the int4 proxy lacks construct validity for Q4 decode: its dequantisation is "
+            f"scalar, and its throughput is close to proportional to the clock (relative throughput {i4[1800]:.3f} at 1800 MHz against 1800/2460 = {1800 / 2460:.3f}). "
+            f"Only the direction (more ALU work per byte raises the knee) is supported; the magnitude does not transfer. "
+            f"**Do not use the int4 knee in any governor claim.** A real engine is measured by the llama.cpp validation addendum.")
 
 
 def report_C(run_dir):
@@ -280,7 +311,9 @@ def report_C(run_dir):
         opt = med.j_per_token.idxmin()
         rows.append(dict(variant=variant, graph=graph, knee_mhz=("never" if knee is None else "unlocked" if knee == UNLOCKED_KEY else knee),
                          energy_optimum=opt, j_per_token_at_opt=float(med.j_per_token.min())))
-    L += [_fmt(pd.DataFrame(rows)), "", "## rel. throughput and J/token by level (medians)", "",
+    main = _fp16_main_finding(d)
+    L += [_fmt(pd.DataFrame(rows)), "", "## Main finding (fp16 proxy, CUDA graph) and the limits of the int4 result", "", main, "",
+          "## rel. throughput and J/token by level (medians)", "",
           _fmt(d.groupby(["variant", "graph", "level"])[["rel_thr", "j_per_token"]].median().reset_index())]
     L += _flags_block(df)
     return L, "C"

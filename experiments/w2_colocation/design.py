@@ -6,7 +6,8 @@ import random
 from pathlib import Path
 
 # Registered in the yaml as prose (experiment_B.clocks); mirrored here and checked by tests/test_w2_design.py.
-B_LEVELS = [900, 1200, 1500, 1800, "unlocked"]
+# 1050 MHz is a descriptive level added by experiments/w2_colocation_addendum_B_levels_2026-10-21.md (outside the HB1/HB2 families).
+B_LEVELS = [900, 1050, 1200, 1500, 1800, "unlocked"]
 MEM_MHZ = 8001
 SM_TOL, MEM_TOL = 0.03, 0.01      # validity_checks in the yaml
 

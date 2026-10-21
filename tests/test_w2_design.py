@@ -10,10 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 CFG = yaml.safe_load((ROOT / "experiments" / "w2_colocation.yaml").read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("part,key", [("A", "experiment_A"), ("B", "experiment_B"), ("C", "experiment_C")])
-def test_cells_per_block_match_registration(part, key):
+# B has 6 more cells than the yaml's 30: the descriptive 1050 MHz level added by experiments/w2_colocation_addendum_B_levels_2026-10-21.md
+@pytest.mark.parametrize("part,key,extra", [("A", "experiment_A", 0), ("B", "experiment_B", 6), ("C", "experiment_C", 0)])
+def test_cells_per_block_match_registration(part, key, extra):
     cells = build_cells(CFG, part)
-    assert len(cells) == CFG[key]["cells_per_block"]
+    assert len(cells) == CFG[key]["cells_per_block"] + extra
     assert len({c["cell_id"] for c in cells}) == len(cells)          # ids unique within a block
 
 
@@ -47,7 +48,7 @@ def test_secondary_contains_priority_control_and_duty_sweep():
 
 def test_B_cross_and_units_from_pilot():
     cells = build_cells(CFG, "B")
-    assert {c["sm_mhz"] for c in cells} == {900, 1200, 1500, 1800, "unlocked"}
+    assert {c["sm_mhz"] for c in cells} == {900, 1050, 1200, 1500, 1800, "unlocked"}     # 1050 = addendum, descriptive only
     assert {c["fg"]["frame"] for c in cells} == {"fma_60hz", "fma_120hz", "mem_60hz"}
     assert {(c["bg"] or {}).get("kind") for c in cells} == {None, "mem"}
     assert all(c["mem_mhz"] == 8001 and c["fg"]["arrivals"] == "periodic" for c in cells)
@@ -100,3 +101,10 @@ def test_clock_flags_empty_samples_is_a_flag():
 def test_frame_units_read_from_pilot_file():
     u = frame_units_from_pilot(ROOT / "data" / "pilot" / "w2" / "20261020T222839Z" / "pilot.json")
     assert u == {"fma_60hz": 185633, "fma_120hz": 92586, "mem_60hz": 15803}
+
+
+def test_1050_is_descriptive_and_outside_the_tested_families():
+    from w2_analysis import HB_TEST_LEVELS, interp_service_ratio, load_rel_w1
+    assert HB_TEST_LEVELS == (900, 1200, 1500)                          # HB1/HB2 families unchanged by the addendum
+    r = interp_service_ratio(load_rel_w1(), "fma", 1050)                # W1 has no 1050 level: linear interpolation 900..1200
+    assert r == pytest.approx(0.732 / (0.366 + 0.5 * (0.488 - 0.366)), rel=1e-3)

@@ -27,6 +27,11 @@ variant  graph knee_mhz  energy_optimum  j_per_token_at_opt
    int4  False unlocked            1350            0.720738
    int4   True unlocked            1500            0.711735
 
+## Main finding (fp16 proxy, CUDA graph) and the limits of the int4 result
+
+- **Main C finding (fp16 proxy, 14 layers, CUDA graph):** at 1050 MHz the proxy keeps 0.96 of its unlocked throughput at 0.535 J/token against 0.861 J/token unlocked (38% lower; board-level energy counter, W1 addendum caveats apply).
+- **Construct validity of the int4 proxy:** HC1 is supported statistically, but the int4 proxy lacks construct validity for Q4 decode: its dequantisation is scalar, and its throughput is close to proportional to the clock (relative throughput 0.743 at 1800 MHz against 1800/2460 = 0.732). Only the direction (more ALU work per byte raises the knee) is supported; the magnitude does not transfer. **Do not use the int4 knee in any governor claim.** A real engine is measured by the llama.cpp validation addendum.
+
 ## rel. throughput and J/token by level (medians)
 
 variant  graph    level  rel_thr  j_per_token
