@@ -1,4 +1,4 @@
-# Addendum to w2_colocation.yaml: Experiment B levels after Experiment C (DRAFT for review, not committed)
+# Addendum to w2_colocation.yaml: Experiment B levels after Experiment C (APPROVED by Arjun 2026-10-21, option 'add 1050 MHz'; journal 0015)
 Date: 2026-10-21 · Written BEFORE any Experiment B data exists · Registration: b86d36e · C results: f6f61ec (data/w2_C_results.md), journal 0014
 
 ## What the registration says
@@ -13,7 +13,7 @@ experiment_B.clocks: "SM level in [900, 1200, 1500, 1800, unlocked]. The knee le
 ## Applying the registered rule literally
 The int4 proxy's knee is "unlocked", which is already a B level. Nothing is appended. B stays at 5 levels, 30 cells per block.
 
-## Proposal (needs Arjun's decision)
+## Decision: adopted as proposed (journal 0015)
 Add **1050 MHz** to B as a descriptive level: the lowest clock at which the memory-bound proxy keeps >= 95% of its throughput, i.e. the clock a governor would choose for a bandwidth-bound background. B's question (what a device-wide lock does to a compute-bound foreground) is then answered at the decision-relevant clock and not only at neighbouring grid points.
 - Not part of any test family: HB1 and HB2 stay on {900, 1200, 1500} against the 1800 MHz reference, Holm families unchanged (so no change in power or in the registered decision rules).
 - Reported descriptively with the same measures (service time ratio to 1800, deadline-miss fraction, latency percentiles marked non-stationary under overload, power saved). For the ratio, the W1 prediction is interpolated between its 900 and 1200 MHz levels (0.366, 0.488), i.e. a relative throughput of about 0.427 and a service ratio to 1800 MHz of about 0.732 / 0.427 = 1.71; this is an interpolation, labelled as such, and is not tested.
