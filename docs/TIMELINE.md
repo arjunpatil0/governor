@@ -46,3 +46,4 @@
 2026-10-22 · journal · Part L (llama.cpp validation) harness code and tests written, non-admin GPU smoke passed; full run not started · [0025](../journal/0025_2026-10-22_part-L-code.md)
 2026-10-22 · review · G draft review (5 items) applied to the unregistered draft; HL3 shared-prefix addendum registered before llama.cpp data · [response](../reviews/2026-10-22_globaltimer_draft_response.md) · [0026](../journal/0026_2026-10-22_g-draft-review-and-hl3.md)
 2026-10-22 · result · Part L llama.cpp validation (90 cells): knee 1500 MHz (intermediate), energy optimum 1050 MHz 0.526 J/token vs 0.915 unlocked, HL3 token ids identical in 10/10 blocks (min shared prefix 345) · [0027](../journal/0027_2026-10-22_part-L-results.md)
+2026-10-22 · docs · session-1 transcript committed; private GitHub remote origin created and pushed · [transcript](transcripts/2026-10-22_session-1.md)

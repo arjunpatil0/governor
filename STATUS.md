@@ -11,7 +11,7 @@ Updated 2026-10-22 · Phase: W2 (L results in; reviewer checkpoint due; G draft 
 
 ## Decisions needed
 1. Register the G draft as is (14 cells x 10 blocks, ~55 min estimated)? Recommendation: wait for the reviewer's read of part L first, then register; I would not change the draft because of L.
-2. Arjun: /export the transcript to docs/transcripts and tell me the path; create the private GitHub repo (`gh repo create governor --private --source . --push`) so I can push each session.
+2. None open: transcript committed (docs/transcripts/2026-10-22_session-1.md), GitHub remote set (origin = arjunpatil0/governor, private), pushed.
 
 ## Reviewer checkpoint due?
 - Yes: part L results (journal 0027, data/w2_L_results.md). G draft registration pending.
