@@ -227,18 +227,26 @@ def l_knee(d, n_boot=2000, seed=SEED, ci=0.90):
     return dict(knee=knee_of(d), ci_lo=float(lo), ci_hi=float(hi))
 
 
-def hl3_sequences(seqs):
-    """HL3: within a block, greedy token ids must agree over the common prefix of the block's cells (lengths differ with the clock).
-    seqs: {(block, level): [token ids]}. Returns the blocks that disagree."""
+def hl3_sequences(seqs, min_shared=64):
+    """HL3: within a block, greedy token ids must agree with the block's longest sequence over each cell's own length (lengths differ with the clock).
+    seqs: {(block, level): [token ids]}. Returns per-cell shared-prefix length (tokens agreeing with the reference before the first mismatch, or the
+    cell's full length), blocks that disagree, and blocks that cannot be judged (a cell shorter than min_shared, review 2026-10-22 item 5)."""
     by = {}
-    for (b, _lv), s in seqs.items():
-        by.setdefault(b, []).append(list(s))
-    bad = []
-    for b, ss in by.items():
-        n = min(len(s) for s in ss)
-        if any(s[:n] != ss[0][:n] for s in ss):
+    for (b, lv), s in seqs.items():
+        by.setdefault(b, {})[lv] = list(s)
+    shared, bad, inconclusive = {}, [], []
+    for b, cells in by.items():
+        ref = max(cells.values(), key=len)
+        agree = True
+        for lv, s in cells.items():
+            n = next((i for i, (x, y) in enumerate(zip(s, ref)) if x != y), len(s))
+            shared[(b, lv)] = n
+            agree &= (n == len(s))
+        if not agree:
             bad.append(b)
-    return dict(bad_blocks=sorted(bad, key=str), n_blocks=len(by))
+        elif min(len(s) for s in cells.values()) < min_shared:
+            inconclusive.append(b)
+    return dict(bad_blocks=sorted(bad, key=str), inconclusive_blocks=sorted(inconclusive, key=str), shared_prefix=shared, n_blocks=len(by))
 
 
 def report_L(run_dir):
@@ -261,7 +269,8 @@ def report_L(run_dir):
         f"- energy optimum (lowest median J/token): {opt.level} MHz at {opt.j_per_token:.4f} J/token; unlocked: {med[med.level == 'unlocked'].j_per_token.iloc[0]:.4f} J/token",
         f"- relative throughput at 1050 MHz (the C fp16 knee): {med[med.level == 1050].rel_thr.iloc[0]:.3f}; at 1800 MHz: {med[med.level == 1800].rel_thr.iloc[0]:.3f}", "",
         "## HL3 correctness: identical greedy token ids within every block (over the common prefix)", "",
-        f"- blocks compared: {h3['n_blocks']}; blocks with differing sequences: {h3['bad_blocks'] or 'none'}", "",
+        f"- blocks compared: {h3['n_blocks']}; blocks with differing sequences: {h3['bad_blocks'] or 'none'}; blocks where a cell shares fewer than 64 tokens (check does not count): {h3['inconclusive_blocks'] or 'none'}",
+        f"- shared-prefix length per cell (min / median / max): {min(h3['shared_prefix'].values())} / {int(np.median(list(h3['shared_prefix'].values())))} / {max(h3['shared_prefix'].values())}", "",
         "## Relative throughput and J/token by level (medians over blocks)", "", _fmt(med)]
     L += _flags_block(df)
     return L, "L"

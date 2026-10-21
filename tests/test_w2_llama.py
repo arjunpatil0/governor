@@ -42,10 +42,12 @@ def test_window_tokens_counts_only_tokens_ending_inside_the_window_and_flags_lat
 
 def test_hl3_token_sequences_must_agree_on_their_common_prefix_within_a_block():
     from w2_analysis import hl3_sequences
-    ok = hl3_sequences({("b0", 600): [1, 2, 3, 4], ("b0", 1800): [1, 2, 3, 4, 5, 6], ("b1", 600): [9, 8], ("b1", 1800): [9, 8, 7]})
-    assert ok["bad_blocks"] == []
-    bad = hl3_sequences({("b0", 600): [1, 2, 3], ("b0", 1800): [1, 9, 3, 4]})
-    assert bad["bad_blocks"] == ["b0"]
+    long = list(range(100))
+    ok = hl3_sequences({("b0", 600): long[:70], ("b0", 1800): long, ("b1", 600): [9, 8], ("b1", 1800): [9, 8, 7]})
+    assert ok["bad_blocks"] == [] and ok["inconclusive_blocks"] == ["b1"]       # b1: shared prefix 2 < 64 tokens -> does not count
+    assert ok["shared_prefix"][("b0", 600)] == 70 and ok["shared_prefix"][("b0", 1800)] == 100
+    bad = hl3_sequences({("b0", 600): long[:80], ("b0", 1800): long[:40] + [999] + long[41:]})
+    assert bad["bad_blocks"] == ["b0"] and bad["shared_prefix"][("b0", 600)] == 40      # reference = the block's longest sequence
 
 
 def test_l_rel_thr_and_j_per_token():

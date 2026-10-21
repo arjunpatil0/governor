@@ -1,0 +1,5 @@
+# 0026 — G draft review applied (gap detector, sliced-span q, uninstrumented replication) and the HL3 shared-prefix rule
+Date: 2026-10-22 · Phase: W2 · Author: Claude Code · Review: reviews/2026-10-22_globaltimer_draft_review.md · Response: reviews/2026-10-22_globaltimer_draft_response.md
+- The Experiment G draft (experiments/w2_colocation_addendum_globaltimer_2026-10-22_DRAFT.md) now carries review changes 1-3; it is committed as a draft and is NOT REGISTERED. One deviation from the review's arithmetic: 14 cells per block (140 total, about 55 min as an estimate), because the sliced-span definition needs the 1 ms and 4 ms fg-alone service times (T1_alone, T4_alone).
+- HL3 refinement registered before any llama.cpp data as experiments/w2_colocation_addendum_llamacpp_hl3_2026-10-22.md; analysis `hl3_sequences` now returns per-cell shared-prefix lengths and "inconclusive" blocks (any cell < 64 tokens); report_L prints both. Test-first (RED then GREEN); suite 127 passed.
+- The llama.cpp validation run (part L, 90 cells, about 50 min estimated) is next, started by Arjun.
