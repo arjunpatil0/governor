@@ -95,15 +95,26 @@ __global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec
     unsigned int nreads = 0;
     float x0 = threadIdx.x * 1e-3f, x1 = x0 + 1e-3f, x2 = x0 + 2e-3f, x3 = x0 + 3e-3f;
     float x4 = x0 + 4e-3f, x5 = x0 + 5e-3f, x6 = x0 + 6e-3f, x7 = x0 + 7e-3f;
-    for (int i = 0; i < iters; ++i) {
-        x0 = fmaf(x0, a, b); x1 = fmaf(x1, a, b); x2 = fmaf(x2, a, b); x3 = fmaf(x3, a, b);
-        x4 = fmaf(x4, a, b); x5 = fmaf(x5, a, b); x6 = fmaf(x6, a, b); x7 = fmaf(x7, a, b);
-        if (lane0 && (i & stride_mask) == stride_mask) {
+    // chunked loop: the FMA body stays branch-free (a branch inside it costs ~1.6x by breaking the scheduling of the 8 chains); %globaltimer
+    // is read between chunks of `stride` iterations, then once more after the remainder.
+    const int stride = stride_mask + 1;
+    int done = 0;
+    while (done + stride <= iters) {
+        for (int j = 0; j < stride; ++j) {
+            x0 = fmaf(x0, a, b); x1 = fmaf(x1, a, b); x2 = fmaf(x2, a, b); x3 = fmaf(x3, a, b);
+            x4 = fmaf(x4, a, b); x5 = fmaf(x5, a, b); x6 = fmaf(x6, a, b); x7 = fmaf(x7, a, b);
+        }
+        done += stride;
+        if (lane0) {
             ++nreads;
             unsigned long long t = gtimer_ns(), g = t - last;
             if (g > gmax) { gmax = g; gbeg = last; }
             last = t;
         }
+    }
+    for (; done < iters; ++done) {
+        x0 = fmaf(x0, a, b); x1 = fmaf(x1, a, b); x2 = fmaf(x2, a, b); x3 = fmaf(x3, a, b);
+        x4 = fmaf(x4, a, b); x5 = fmaf(x5, a, b); x6 = fmaf(x6, a, b); x7 = fmaf(x7, a, b);
     }
     out[blockIdx.x * blockDim.x + threadIdx.x] = x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7;
     if (lane0) {
