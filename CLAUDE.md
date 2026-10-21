@@ -100,3 +100,19 @@ The project must leave a complete, paper-ready trail of reasoning. See journal/R
 - Each experiment's trail: pre-registration (yaml) → addenda (if any, before data) → results file → journal entry
   with interpretation and implications.
 - Journal and ADRs are append-only. Corrections are new entries that link back.
+
+## Coordination and documentation rules (Arjun, 2026-10-21)
+COORDINATION
+- Every time I stop, overwrite `STATUS.md` with: phase; what I just did (commit hashes); what I am waiting for; decisions needed from Arjun
+  (numbered, one line each, with my recommendation); whether a reviewer checkpoint is due (pre-registration before commit / results before
+  interpretation / design change / surprise). Commit it so the tree stays clean.
+- When Arjun says "check reviews", read `reviews/` for files without a matching `*_response.md` and respond.
+- Keep chat replies short: point to STATUS.md and list only the decisions.
+DOCUMENTATION
+1. Every crash, failed build, aborted run or wrong turn gets a journal entry with its log path, however small.
+2. Maintain `docs/TIMELINE.md`: one line per event (date · type [journal/ADR/review/prereg/result/incident] · summary · link). Backfilled from journal 0001.
+3. Maintain `docs/CONCEPTS.md`: plain-language explanation of each concept when it first matters (residual wait, roofline, knee, slack reclamation,
+   Holm, equivalence test, time-slicing, construct validity, ...), linked to the journal entry where it came up. Written for Arjun to study.
+4. End of every session: `/export` to `docs/transcripts/YYYY-MM-DD_session-N.md` and commit.
+5. At each phase end, add `docs/PAPER_MAP.md` entries: claim -> evidence (results file, journal, commit).
+6. Private GitHub repo for governor; push after every session (Arjun sets up the remote; see STATUS.md).

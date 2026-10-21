@@ -8,3 +8,4 @@ __pycache__/
 workloads/background/build/
 third_party/
 data/llama/*.gguf
+workloads/background/*.obj
