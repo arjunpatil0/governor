@@ -33,6 +33,7 @@ def test_fg_run_rec_records_every_block_of_the_requested_requests(w):
     tl, tc, g, rec = w.fg_run_rec(1, arr, 2000, rec_from=10, cap_blocks=100000)
     blocks = w.sms * 6
     assert len(rec["t0"]) == 20 * blocks and rec["dropped"] == 0
+    assert (rec["gbeg"] >= rec["t0"]).all() and (rec["gbeg"] + rec["gmax"] <= rec["t1"]).all()   # gap lies inside the block's own span
     assert (rec["t1"] >= rec["t0"]).all() and (rec["smid"] < w.sms).all() and (rec["gmax"] <= rec["t1"] - rec["t0"]).all()
     assert set(np.unique(rec["tag"])) == set(range(10, 30)) and set(np.unique(rec["blk"])) == set(range(blocks))
     # every recorded block lies inside its request's host launch..complete window (+ round trip)

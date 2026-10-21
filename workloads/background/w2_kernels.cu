@@ -88,7 +88,7 @@ __device__ __forceinline__ unsigned int smid_now()
 
 __global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec, unsigned int tag)
 {
-    __shared__ unsigned long long s_gmax[kThreads / 32], s_gbeg[kThreads / 32];
+    __shared__ unsigned long long s_gmax[kThreads / 32], s_gbeg[kThreads / 32], s_t0[kThreads / 32], s_t1[kThreads / 32];
     const unsigned long long t0 = gtimer_ns();
     const bool lane0 = (threadIdx.x & 31) == 0;
     unsigned long long last = t0, gmax = 0, gbeg = t0;
@@ -107,14 +107,19 @@ __global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec
     if (lane0) {
         unsigned long long t = gtimer_ns(), g = t - last;
         if (g > gmax) { gmax = g; gbeg = last; }
-        s_gmax[threadIdx.x >> 5] = gmax; s_gbeg[threadIdx.x >> 5] = gbeg;
+        s_gmax[threadIdx.x >> 5] = gmax; s_gbeg[threadIdx.x >> 5] = gbeg; s_t0[threadIdx.x >> 5] = t0; s_t1[threadIdx.x >> 5] = t;
     }
     __syncthreads();
     if (threadIdx.x == 0) {
-        unsigned long long m = 0, mb = t0;
-        for (int w = 0; w < kThreads / 32; ++w) if (s_gmax[w] > m) { m = s_gmax[w]; mb = s_gbeg[w]; }
+        // block start = earliest warp start, block end = latest warp end (warps of a block do not start at the same instant)
+        unsigned long long m = 0, mb = s_t0[0], b0 = s_t0[0], b1 = s_t1[0];
+        for (int w = 0; w < kThreads / 32; ++w) {
+            if (s_gmax[w] > m) { m = s_gmax[w]; mb = s_gbeg[w]; }
+            if (s_t0[w] < b0) b0 = s_t0[w];
+            if (s_t1[w] > b1) b1 = s_t1[w];
+        }
         Rec r;
-        r.t0 = t0; r.t1 = gtimer_ns(); r.gmax = m; r.gbeg = mb; r.smid = smid_now(); r.tag = tag; r.blk = blockIdx.x; r.pad = 0;
+        r.t0 = b0; r.t1 = b1; r.gmax = m; r.gbeg = mb; r.smid = smid_now(); r.tag = tag; r.blk = blockIdx.x; r.pad = 0;
         rec[blockIdx.x] = r;
     }
 }
