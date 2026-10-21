@@ -106,7 +106,8 @@ def hb2(df, budget_ms, pred_ratio):
     must = [L for L in levels if svc1800 * pred_ratio[L] > budget_ms]
     sig = {L: bool(a < ALPHA) for L, a in zip(levels, adj)}
     return dict(table=pd.DataFrame(dict(level=levels, p=ps, p_holm=adj, significant=[sig[L] for L in levels])),
-                must_be_significant=must, supported=bool(must) and all(sig[L] for L in must))
+                must_be_significant=must, supported=bool(must) and all(sig[L] for L in must),
+                reference_at_ceiling=bool(ref.miss_frac.median() >= 0.99))
 
 
 def interp_service_ratio(rel_w1, kind, level):
@@ -256,6 +257,24 @@ def report_A(run_dir):
     return L, "A"
 
 
+def b_per_cell(df):
+    """Per-cell medians over blocks with the completed fraction beside the latency percentiles (percentiles cover completed frames only;
+    review 2026-10-21_w2_B_review finding 4)."""
+    return df.groupby("cell_id")[["frac_completed", "lat_p50_ms", "lat_p99_ms", "fg_gpu_p50_ms", "miss_frac", "power_counter_w", "sm_clock_med"]].median().reset_index()
+
+
+def deadline_aware(df, prefix):
+    """Descriptive slack reclamation: for cells `<prefix>_<level>`, median power/miss/p99 per level, power saved vs unlocked, and the
+    lowest-power level with zero median misses (attrs['best_level']). Never a tested claim."""
+    g = df[df.cell_id.str.startswith(prefix + "_")].copy()
+    g["level"] = g.cell_id.str[len(prefix) + 1:]
+    t = g.groupby("level")[["miss_frac", "power_counter_w", "lat_p99_ms"]].median()
+    t["power_saved_vs_unlocked"] = 1 - t.power_counter_w / t.power_counter_w["unlocked"]
+    ok = t[t.miss_frac == 0]
+    t = t.reset_index(); t.attrs["best_level"] = str(ok.power_counter_w.idxmin()) if len(ok) else None
+    return t
+
+
 def report_B(run_dir):
     df = pd.read_csv(run_dir / "results.csv"); rel = load_rel_w1(); t = b_service_tables(df)
     h1 = hb1(t["hb1"], rel)
@@ -268,7 +287,7 @@ def report_B(run_dir):
             budget = 1000.0 / (120 if "120" in frame else 60)
             ratios = {lv: rel["fma"][1800] / rel["fma"][lv] for lv in HB_TEST_LEVELS}
             r = hb2(g, budget, ratios)
-            L += [f"### {frame}, background {bgname}: must be significant at {r['must_be_significant']} -> **{'SUPPORTED' if r['supported'] else 'NOT SUPPORTED'}**", "", _fmt(r["table"]), ""]
+            L += [f"### {frame}, background {bgname}: must be significant at {r['must_be_significant']} -> **{'SUPPORTED' if r['supported'] else 'NOT SUPPORTED'}**{' (UNINFORMATIVE: ceiling, the 1800 MHz reference already misses ~100% of frames, so no level can be worse; the verdict above is the registered rule applied as written)' if r['reference_at_ceiling'] else ''}", "", _fmt(r["table"]), ""]
     d1 = t["hb1"][t["hb1"].level.isin([1050, 1800])]
     rows = []
     for (frame, kind), g in d1.groupby(["frame", "kind"]):
@@ -278,8 +297,14 @@ def report_B(run_dir):
                              interpolated_w1_prediction=interp_service_ratio(rel, kind, 1050)))
     if rows:
         L += ["## Descriptive: 1050 MHz (B-levels addendum; outside HB1/HB2; the W1 value is a linear interpolation, not a measurement)", "", _fmt(pd.DataFrame(rows)), ""]
+    L += ["## Descriptive: deadline-aware clock locking (slack reclamation; not a tested claim)", ""]
+    for pre in ("fma_60hz_nobg", "fma_120hz_nobg", "mem_60hz_nobg"):
+        d = deadline_aware(df, pre)
+        L += [f"### {pre}: lowest-power level with zero misses = {d.attrs['best_level']}", "", _fmt(d), ""]
     L += ["## Descriptive per cell (medians over blocks)", "",
-          _fmt(df.groupby(["cell_id"])[["lat_p50_ms", "lat_p99_ms", "fg_gpu_p50_ms", "miss_frac", "power_counter_w", "sm_clock_med"]].median().reset_index())]
+          "frac_completed is the fraction of frames finished inside the window; latency percentiles cover COMPLETED frames only (survivorship bias in overloaded cells). "
+          "fg_gpu_p50_ms is a cudaEvent interval and, while the context is time-sliced, may include switched-out time (see the Nsight Systems trace note); do not read it as service time in co-run cells.", "",
+          _fmt(b_per_cell(df))]
     L += _flags_block(df)
     return L, "B"
 

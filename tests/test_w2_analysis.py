@@ -230,3 +230,33 @@ def test_rel_w1_is_parsed_from_the_committed_w1_results_file():
     rel = load_rel_w1()
     assert rel["fma"][1200] == pytest.approx(0.488) and rel["fma"][1800] == pytest.approx(0.732)
     assert rel["mem"][900] == pytest.approx(0.889) and rel["mem"][1500] == pytest.approx(0.997)
+
+
+# ---- B report labelling (review 2026-10-21_w2_B_review findings 1, 4, 6) -------------------------------------
+def _b_df(ref_miss):
+    rows = []
+    for b in range(10):
+        for lv in (900, 1200, 1500, 1800):
+            rows.append(dict(block=b, level=lv, miss_frac=ref_miss if lv == 1800 else 1.0, service_ms=10.0))
+    return pd.DataFrame(rows)
+
+
+def test_hb2_flags_reference_at_ceiling():
+    assert hb2(_b_df(1.0), 16.7, {900: 2.0})["reference_at_ceiling"] is True
+    assert hb2(_b_df(0.0), 16.7, {900: 2.0})["reference_at_ceiling"] is False
+
+
+def test_b_per_cell_shows_completed_fraction_next_to_percentiles():
+    from w2_analysis import b_per_cell
+    df = pd.DataFrame(dict(cell_id=["x"] * 3, frac_completed=[0.2, 0.4, 0.3], lat_p50_ms=[1., 2., 3.], lat_p99_ms=[2., 3., 4.],
+                           fg_gpu_p50_ms=[1., 1., 1.], miss_frac=[1., 1., 1.], power_counter_w=[5., 5., 5.], sm_clock_med=[900.] * 3))
+    t = b_per_cell(df)
+    assert list(t.columns[:2]) == ["cell_id", "frac_completed"] and t.frac_completed.iloc[0] == pytest.approx(0.3)
+
+
+def test_deadline_aware_picks_lowest_power_level_with_zero_misses():
+    from w2_analysis import deadline_aware
+    df = pd.DataFrame([dict(cell_id=f"f_nobg_{lv}", miss_frac=m, power_counter_w=w, lat_p99_ms=p)
+                       for lv, m, w, p in [("unlocked", 0, 56., 9.), (1800, 0, 38., 12.), (1500, 0, 32., 15.), (1200, 1, 26., 600.)]])
+    t = deadline_aware(df, "f_nobg")
+    assert t.attrs["best_level"] == "1500" and t.set_index("level").power_saved_vs_unlocked["1500"] == pytest.approx(1 - 32 / 56)
