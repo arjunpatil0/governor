@@ -1,17 +1,16 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-22 · Phase: W2 (A and A2 done and analysed; reviewer checkpoint due; part L code not written)
+Updated 2026-10-22 · Phase: W2 (A, A2 re-analysed after review; globaltimer addendum DRAFTED, uncommitted; part L code next)
 
 ## Just did (commits)
-- A2 analysed (journal 0023): SA1 phase-independent; SA2 k = 0.395 (s0 0.30 ms); SA3 no priority effect; SA4: fg 4 ms slowdown above 1+d, fg 9 ms overloaded at duty >= 0.5; exploratory tau = 0.260 ms (re-description of A's own cells, not an independent test; the curve also has a dip near 0.6 ms the model does not describe). Sensitivity without the 9 Chrome-window cells changes nothing material. Stall cells: latency and clocks normal, power lower.
-- Incidents logged (Chrome, two QuickEdit stalls, analysis path bug). run.py hardened test-first: QuickEdit disabled at start, 30 s timeout on every nvidia-smi call. Full suite 110 passed.
-- Earlier: Experiment A results (journal 0020), capped-wait addendum (journal 0022).
+- Review answered (reviews/2026-10-22_w2_A_A2_response.md, journal 0024), existing data only: (1) SA2 k corrected 0.395 -> 0.983 (s0 0.243 ms) with the alone-service regressor, so the "k far from 1" half of the globaltimer trigger was an artefact (journal 0023's reading is corrected, not edited); (2) re-binning against the unstretched slice end removes the sparse bins and the 0.6 ms dip but a ~0.45 ms ripple remains, tau 0.19 ms (observed-end axis: 0.26); (3) A's thermal sensitivity: HA1 unchanged, HA2 NOT SUPPORTED in all versions (3/6 -> 1/6 is lost power with 6 block pairs, not a reversal). A bug in ha2's handling of missing cells (NaN counted as significant) was found and fixed test-first. Suite: 114 passed.
+- DRAFT (uncommitted): experiments/w2_colocation_addendum_globaltimer_2026-10-22_DRAFT.md, scope (a)-(c), predictions P1-P8 before data. Not registered.
 
 ## Waiting for
-- Reviewer: A + A2 together (journals 0020 and 0023, data/w2_A_results.md, data/w2_A_secondary_results.md). I execute nothing until Arjun decides.
+- Arjun/reviewer to review the draft addendum. I execute nothing during experiments. Next I write part L (llama.cpp) code and tests only.
 
 ## Decisions needed
-1. The pre-stated globaltimer trigger is MET (SA2 k = 0.395 far from 1; SA4 fg4 slowdown above 1+d). Write the globaltimer addendum now? Recommendation: wait for the reviewer to see A and A2 first; they may want a different diagnostic.
-2. Start part L (llama.cpp) code and tests now (nothing executing during runs)? Recommendation: yes.
+1. Approve the globaltimer addendum draft (commit it, then I build the instrumented kernels test-first)? Recommendation: approve after the reviewer reads it; the open points are the cell list (9 cells x 10 blocks, about 35 min) and the P4 range for q (0.5-0.9 ms).
+2. Next experiment order after part L code: Experiment G (globaltimer) before the llama.cpp validation run, or the reverse? Recommendation: G first (its result decides which mechanism the validation interprets against).
 
 ## Reviewer checkpoint due?
-- Results before interpretation: YES (A2, together with A). Surprise: yes (k far below 1; dip in the wait curve near 0.6 ms). Design change: none yet (possible globaltimer addendum).
+- Design change: YES (the globaltimer addendum, before it is committed). Results before interpretation: A and A2 reviewed; the three re-analyses are in journal 0024. Surprise: the ripple on the wait curve.

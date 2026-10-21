@@ -287,3 +287,44 @@ def test_cells_overlapping_a_window_by_time_span():
     spans = {"a": (0.0, 10.0), "b": (10.5, 20.0), "c": (30.0, 40.0)}
     assert cells_overlapping(spans, 15.0, 31.0) == ["b", "c"]
     assert cells_overlapping(spans, 10.1, 10.4) == []
+
+
+# ---- review 2026-10-22 findings 1-3 ----------------------------------------------------------------------------------------------
+def test_alone_service_map_uses_same_block_alone_cells_only():
+    from w2_analysis import alone_service_map
+    import json
+    mk = lambda blk, size, bg, v: dict(block=blk, spec=json.dumps(dict(fg=dict(size_ms=size, priority="normal"), bg=bg)), fg_gpu_p50_ms=v)
+    df = pd.DataFrame([mk(0, 1, None, 0.99), mk(1, 1, None, 1.01), mk(0, 1, dict(m_ms=2), 2.2), mk(0, 4, None, 3.99)])
+    assert alone_service_map(df) == {(1, 0): 0.99, (1, 1): 1.01, (4, 0): 3.99}
+
+
+def test_unstretched_end_is_start_plus_median_duration_of_slices_without_fg_completion():
+    from w2_analysis import unstretched_end
+    s = np.array([0.0, 1.0, 2.0, 3.0]); e = np.array([0.5, 1.5, 2.8, 3.5])      # durations 0.5, 0.5, 0.8 (stretched), 0.5
+    comp = np.array([2.4])                                                       # one fg completion inside slice 2
+    assert unstretched_end(s, e, comp) == pytest.approx(s + 0.5)
+
+
+def test_report_A_thermal_sensitivity_drops_flagged_cells_and_keeps_baselines():
+    from w2_analysis import drop_flagged_bg_cells
+    df = pd.DataFrame(dict(block=[0, 0, 1, 1], cell_id=["baseline", "bg_fma_m1_c0.0", "baseline", "bg_fma_m1_c0.0"],
+                           flags=["start_temp_not_reached", "", "", "start_temp_not_reached"]))
+    out = drop_flagged_bg_cells(df, "start_temp_not_reached")
+    assert list(zip(out.block, out.cell_id)) == [(0, "baseline"), (0, "bg_fma_m1_c0.0"), (1, "baseline")]
+
+
+def test_ha2_ignores_incomplete_blocks_instead_of_producing_nan_p_values():
+    """Bug found in the thermal sensitivity (journal 0024): a block missing one cv cell gave NaN, Holm turned NaN into 'significant'."""
+    rows = []
+    rng = np.random.default_rng(0)
+    for m in (0.25, 0.5, 1, 2, 4, 8):
+        for b in range(10):
+            for cv in (0.0, 0.5, 1.0):
+                if m == 0.5 and b < 3 and cv == 1.0:
+                    continue                                       # a flagged cell dropped
+                rows.append(dict(block=b, cell_id=f"c{m}{cv}", m_ms=m, cv=cv, obs_ms=0.3 + rng.normal(0, 0.01), pred_ms=1.0))
+    h = ha2(pd.DataFrame(rows))
+    t = h["table"]
+    assert t.p.notna().all() and t.p_holm.notna().all()
+    assert int(t[t.m_ms == 0.5].n.iloc[0]) == 7                    # only complete pairs count
+    assert h["n_sig"] <= 1                                         # pure noise must not be 'significant'

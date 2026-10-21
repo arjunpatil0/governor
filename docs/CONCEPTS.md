@@ -65,3 +65,9 @@ Running the registered analysis twice, once on all data and once without cells y
 
 ## Post-hoc (exploratory) hypothesis
 A hypothesis formed after seeing the data. It can suggest what to test next but cannot confirm itself on the same data: it was built to fit them. Here, tau was suggested by A's medians, so re-fitting it on A's own cells describes A rather than tests it. [0022](../journal/0022_2026-10-21_a2-addendum-and-armoury-mode-record.md), [0023](../journal/0023_2026-10-22_a2-incidents-and-results.md).
+
+## Regressor artefact
+If the x-variable in a regression is itself distorted by the effect you are studying, the slope is wrong. SA2 first used the foreground's service time measured WHILE sharing the GPU (inflated by the sharing), which made the slope look like 0.4; using the alone service time gives 0.98. Always ask: was x measured under the same conditions as y? [0024](../journal/0024_2026-10-22_review-reanalysis.md).
+
+## Statistical power and the smallest possible p-value
+A rank test on n paired blocks cannot give a one-sided p below 1/2^n. With 6 pairs the floor is 0.0156, and after multiplying by 6 for Holm it is 0.094, so no result there can ever be called significant. Dropping data can turn "significant" into "not significant" without the effect changing: that is lost power, not a reversal. [0024](../journal/0024_2026-10-22_review-reanalysis.md).

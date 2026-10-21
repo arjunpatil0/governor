@@ -58,7 +58,8 @@ def ha2(cells):
     rows = []
     for m, g in cells.groupby("m_ms"):
         w = g.pivot_table(index="block", columns="cv", values="obs_ms")
-        rows.append(dict(m_ms=m, n=len(w), median_diff=float((w[1.0] - w[0.0]).median()), p=_wilcoxon_greater(w[1.0] - w[0.0])))
+        d = (w[1.0] - w[0.0]).dropna()                      # complete block pairs only (a dropped/flagged cell removes its block from this m)
+        rows.append(dict(m_ms=m, n=len(d), median_diff=float(d.median()) if len(d) else float("nan"), p=_wilcoxon_greater(d) if len(d) else 1.0))
     t = pd.DataFrame(rows)
     t["p_holm"] = holm(t.p); t["significant"] = t.p_holm < ALPHA
     n = int(t.significant.sum())
@@ -241,11 +242,21 @@ def _flags_block(df):
     return ["", f"## Flags (cells stay in the data): {len(fl)} of {len(df)}", "", fl.to_string(index=False) if len(fl) else "none"]
 
 
-def report_A(run_dir):
+def report_A(run_dir, mode="registered"):
+    """mode: registered (all cells) | thermal (drop non-baseline cells flagged start_temp_not_reached) | thermal_blocks (also drop blocks whose baseline is flagged)."""
     df = pd.read_csv(run_dir / "results.csv")
+    n_all = len(df)
+    if mode != "registered":
+        if mode == "thermal_blocks":
+            bad = df[(df.cell_id == "baseline") & df["flags"].fillna("").astype(str).str.contains("start_temp_not_reached")].block.unique()
+            df = df[~df.block.isin(bad)]
+        df = drop_flagged_bg_cells(df, "start_temp_not_reached")
     cells = a_cells(df)
     r = ha1(cells); cls = classify_ha1(cells, r); h2 = ha2(cells)
-    L = _md_head(run_dir, "W2 Experiment A: residual-wait model") + [
+    title = {"registered": "W2 Experiment A: residual-wait model | REGISTERED ANALYSIS (all cells)",
+             "thermal": f"W2 Experiment A | SENSITIVITY: excluding {n_all - len(df)} non-baseline cells flagged start_temp_not_reached (baselines kept; registered rules unchanged)",
+             "thermal_blocks": f"W2 Experiment A | SENSITIVITY: excluding start_temp_not_reached cells and every block whose baseline was flagged ({n_all - len(df)} cells dropped; registered rules unchanged)"}[mode]
+    L = _md_head(run_dir, title) + [
         f"Blocks: {df.block.nunique()}, cells per block: {df.groupby('block').size().iloc[0]}.", "",
         "## HA1", "", f"- slope {r['slope']:.3f}, 90% block-bootstrap CI [{r['ci_lo']:.3f}, {r['ci_hi']:.3f}] (equivalence bounds [0.8, 1.25]): equivalent = {r['equivalent']}",
         f"- intercept {r['intercept']:.3f} ms, 90% CI [{r['int_lo']:.3f}, {r['int_hi']:.3f}]",
@@ -380,6 +391,35 @@ def fit_capped_wait(r_ms, wait_ms, blocks, n_boot=2000, seed=SEED, ci=0.90):
     return dict(tau=float(tau), offset=float(off), tau_lo=float(lo), tau_hi=float(hi))
 
 
+def alone_service_map(df):
+    """(fg size_ms, block) -> fg_gpu_p50_ms of the same block's fg-alone (no background, normal priority) cell. Regressor for SA2 (review 2026-10-22 finding 1)."""
+    out = {}
+    for _, r in df.iterrows():
+        sp = json.loads(r.spec)
+        if sp["bg"] is None and sp["fg"]["priority"] == "normal":
+            out[(sp["fg"]["size_ms"], int(r.block))] = float(r.fg_gpu_p50_ms)
+    return out
+
+
+def unstretched_end(starts, ends, completions):
+    """Per-slice end the slice would have had without fg interference: start + median duration of the cell's slices that contain no fg completion
+    (review 2026-10-22 finding 2)."""
+    s, e, c = np.asarray(starts, float), np.asarray(ends, float), np.asarray(completions, float)
+    has = np.zeros(len(s), bool)
+    idx = np.searchsorted(s, c, side="right") - 1
+    for i, x in zip(idx, c):
+        if 0 <= i < len(s) and x < e[i]:
+            has[i] = True
+    med = np.median((e - s)[~has]) if (~has).any() else np.median(e - s)
+    return s + med
+
+
+def drop_flagged_bg_cells(df, flag):
+    """Thermal sensitivity (review 2026-10-22 finding 3): drop non-baseline cells carrying `flag`; baseline cells stay (blocks need their baseline)."""
+    f = df["flags"].fillna("").astype(str).str.contains(flag)
+    return df[~(f & (df.cell_id != "baseline"))].reset_index(drop=True)
+
+
 def cells_overlapping(spans, t_lo, t_hi):
     """Cell ids whose [start, end] time span overlaps [t_lo, t_hi] (sorted by start)."""
     return [k for k, (a, b) in sorted(spans.items(), key=lambda kv: kv[1][0]) if a <= t_hi and b >= t_lo]
@@ -398,16 +438,22 @@ def _cell_dir_name(r):
     return f"b{int(r.block):02d}_{int(r.cell_idx):02d}_{r.cell_id}"
 
 
-def _tte_points(cd, base_ms):
-    """Per fg request landing inside a bg slice: (time to the slice's end in ms, wait = latency - block baseline latency in ms)."""
+def _tte_points(cd, base_ms, unstretched=False):
+    """Per fg request landing inside a bg slice: (time to the slice's end in ms, wait = latency - block baseline latency in ms).
+    unstretched=True measures against start + the cell's median no-fg-completion slice duration instead of the observed end; requests that land
+    after that (in the stretch tail) have negative time-to-end and are dropped from the points (their count is not returned)."""
     with np.load(cd / "fg_window.npz") as fgz, np.load(cd / "bg_window.npz") as bgz:
         a, s_, e_ = fgz["arrival"], bgz["t_start"], bgz["t_end"]
         idx = np.clip(np.searchsorted(s_, a, side="right") - 1, 0, len(s_) - 1)
         inside = (a >= s_[0]) & (a < e_[idx])
-        return (e_[idx] - a)[inside] * 1e3, ((fgz["t_complete"] - fgz["arrival"]) * 1e3)[inside] - base_ms
+        end = unstretched_end(s_, e_, fgz["t_complete"]) if unstretched else e_
+        r = (end[idx] - a) * 1e3
+        w = (fgz["t_complete"] - fgz["arrival"]) * 1e3 - base_ms
+        keep = inside & (r >= 0)
+        return r[keep], w[keep]
 
 
-def _tau_section(a_dir, dfa, run_dir, df2):
+def _tau_section(a_dir, dfa, run_dir, df2, unstretched=False):
     """EXPLORATORY, POST-HOC (addendum capped_wait_2026-10-21): wait vs time-to-slice-end. A's SA1 cells (c=0, m in 2,4,8) as registered; the
     A2 HIGH-priority c=0 cells are shown beside them as a different condition. NOTE: the SA1 cells are the same A cells whose medians gave tau ~0.3."""
     base = dfa[dfa.cell_id == "baseline"].set_index("block").lat_mean_ms
@@ -416,12 +462,12 @@ def _tau_section(a_dir, dfa, run_dir, df2):
         for _, r in dd.iterrows():
             sp = json.loads(r.spec)
             if sel(r, sp):
-                rr, ww = _tte_points(_cell_dir(src, r), base[int(r.block)])
+                rr, ww = _tte_points(_cell_dir(src, r), base[int(r.block)], unstretched)
                 out.append((sp["bg"]["m_ms"], rr, ww, int(r.block)))
         return out
     A_ = collect(a_dir, dfa, lambda r, sp: r.part == "A" and sp["bg"] is not None and sp["bg"]["cv"] == 0 and sp["bg"]["m_ms"] in (2, 4, 8) and sp["fg"]["priority"] == "normal")
     H_ = collect(run_dir, df2, lambda r, sp: r.cell_id.startswith("sa3_high_") and sp["bg"]["cv"] == 0)
-    L = ["", "## EXPLORATORY / POST-HOC: capped-wait model (addendum experiments/w2_colocation_addendum_capped_wait_2026-10-21.md; changes no decision rule)",
+    L = ["", "## EXPLORATORY / POST-HOC" + (" (x-axis = time to the UNSTRETCHED slice end, review 2026-10-22 finding 2; requests landing after it are dropped)" if unstretched else " (x-axis = time to the OBSERVED slice end, as first reported)") + ": capped-wait model (addendum experiments/w2_colocation_addendum_capped_wait_2026-10-21.md; changes no decision rule)",
          "Model: wait = offset + min(time-to-slice-end, tau). A's estimate from constant-slice medians: tau = 0.308 ms (least squares, six points, no CI).",
          "CAVEAT: the registered SA1 cells below are A's own cells, the same data that suggested tau; this is a re-description of that data at request level, "
          "not an independent test. The A2 high-priority cells are a different condition (priority), shown for comparison only.", ""]
@@ -493,6 +539,7 @@ def report_A2(run_dir, a_dir, exclude_flags=()):
             sm_ = sa1_label(np.concatenate([x[1] for x in sel]), np.concatenate([x[2] for x in sel]), np.concatenate([[x[3]] * len(x[1]) for x in sel]))
             L.append(f"- m = {m} ms: slope {sm_['slope']:.3f}, CI [{sm_['ci_lo']:.3f}, {sm_['ci_hi']:.3f}] -> {sm_['label']}")
     pts = []                                      # SA2: fg sizes 0.1 (A run), 1 and 4 ms (A2 run), c = 0, duty 1, normal priority
+    alone = {**alone_service_map(dfa), **alone_service_map(df2)}
     for src, dd in ((a_dir, dfa), (run_dir, df2)):
         for _, r in dd.iterrows():
             sp = json.loads(r.spec)
@@ -501,11 +548,16 @@ def report_A2(run_dir, a_dir, exclude_flags=()):
             with np.load(_cell_dir(src, r) / "fg_window.npz") as fgz, np.load(_cell_dir(src, r) / "bg_window.npz") as bgz:
                 st, n = slice_stretch(bgz["t_start"], bgz["t_end"], fgz["t_complete"])
             if n >= 5:
-                pts.append((r.fg_gpu_p50_ms, float(np.mean(st) * 1e3), int(r.block)))
+                pts.append((r.fg_gpu_p50_ms, alone.get((sp["fg"]["size_ms"], int(r.block)), np.nan), float(np.mean(st) * 1e3), int(r.block)))
     L += ["", "## SA2 slice stretch = s0 + k * fg service time", ""]
     if len(pts) >= 6:
-        x, y, b = zip(*pts); o = ols_block_bootstrap(np.array(x), np.array(y), np.array(b), seed=SEED)
-        L.append(f"- s0 (constant switch cost) = {o['intercept']:.3f} ms, 90% CI [{o['int_lo']:.3f}, {o['int_hi']:.3f}]; k = {o['slope']:.3f}, 90% CI [{o['ci_lo']:.3f}, {o['ci_hi']:.3f}] ({len(pts)} cell-blocks)")
+        xc, xa, y, b = (np.array(v) for v in zip(*pts))
+        o = ols_block_bootstrap(xc, y, b, seed=SEED)
+        L.append(f"- (a) AS FIRST RUN, regressor = the CO-RUN cell's fg_gpu_p50_ms (inflated under time-slicing, journal 0016/0019): s0 = {o['intercept']:.3f} ms, 90% CI [{o['int_lo']:.3f}, {o['int_hi']:.3f}]; k = {o['slope']:.3f}, 90% CI [{o['ci_lo']:.3f}, {o['ci_hi']:.3f}] ({len(pts)} cell-blocks)")
+        ok = ~np.isnan(xa)
+        o2 = ols_block_bootstrap(xa[ok], y[ok], b[ok], seed=SEED)
+        L.append(f"- (b) CORRECTED (review 2026-10-22 finding 1), regressor = the same block's fg-ALONE fg_gpu_p50_ms of that size: s0 = {o2['intercept']:.3f} ms, 90% CI [{o2['int_lo']:.3f}, {o2['int_hi']:.3f}]; k = {o2['slope']:.3f}, 90% CI [{o2['ci_lo']:.3f}, {o2['ci_hi']:.3f}] ({int(ok.sum())} cell-blocks; alone service per size: "
+                 + ", ".join(f"{sz} ms: {np.median([v for (z, _), v in alone.items() if z == sz]):.3f}" for sz in (0.1, 1, 4)) + ")")
     else:
         L.append("- not enough cells with >= 5 single-completion slices")
     hi = a_cells(df2, priority="high", baseline_df=dfa); no = a_cells(dfa)
@@ -526,7 +578,7 @@ def report_A2(run_dir, a_dir, exclude_flags=()):
     L += [_fmt(med.sort_values(["fg_ms", "m_ms", "duty"])), "",
           "Cells with frac_completed < 0.99 or slowdown > 10 are OVERLOADED (a backlog builds up; a completed fraction of 1.0 can still hide a long queue): their latency and slowdown are artefacts of the window length, not service times.",
           "Reference for 4 and 9 ms foreground: equal sharing predicts slowdown ~ 1 + duty (rough; descriptive only)."]
-    L += _tau_section(a_dir, dfa, run_dir, df2)
+    L += _tau_section(a_dir, dfa, run_dir, df2) + _tau_section(a_dir, dfa, run_dir, df2, unstretched=True)
     if not exclude_flags:
         L += _stall_check(run_dir, df2, inc)
     L += _flags_block(df2)
@@ -544,6 +596,8 @@ def main():
     run_dir = Path(a.dir) if a.dir else _newest(a.part)
     if a.part == "A":
         L, tag = report_A(run_dir)
+        for mode in ("thermal", "thermal_blocks"):
+            L += ["", "---", ""] + report_A(run_dir, mode)[0]
     elif a.part == "B":
         L, tag = report_B(run_dir)
     elif a.part == "C":

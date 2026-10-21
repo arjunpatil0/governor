@@ -12,7 +12,8 @@ HAGS: DriverSupportState:Stable Enabled:True. Execution mode: CUDA native kernel
 
 ## SA2 slice stretch = s0 + k * fg service time
 
-- s0 (constant switch cost) = 0.298 ms, 90% CI [0.295, 0.300]; k = 0.395, 90% CI [0.391, 0.399] (100 cell-blocks)
+- (a) AS FIRST RUN, regressor = the CO-RUN cell's fg_gpu_p50_ms (inflated under time-slicing, journal 0016/0019): s0 = 0.298 ms, 90% CI [0.295, 0.300]; k = 0.395, 90% CI [0.391, 0.399] (100 cell-blocks)
+- (b) CORRECTED (review 2026-10-22 finding 1), regressor = the same block's fg-ALONE fg_gpu_p50_ms of that size: s0 = 0.243 ms, 90% CI [0.240, 0.245]; k = 0.983, 90% CI [0.974, 0.992] (100 cell-blocks; alone service per size: 0.1 ms: 0.087, 1 ms: 0.989, 4 ms: 3.986)
 
 ## SA3 priority control (fg HIGH minus NORMAL, observed wait, paired by block index across the two runs; no decision rule)
 
@@ -44,7 +45,7 @@ duty_fg9_d0.75    9.0     2  0.75  2221.450237 3278.459987        0.770000      
 Cells with frac_completed < 0.99 or slowdown > 10 are OVERLOADED (a backlog builds up; a completed fraction of 1.0 can still hide a long queue): their latency and slowdown are artefacts of the window length, not service times.
 Reference for 4 and 9 ms foreground: equal sharing predicts slowdown ~ 1 + duty (rough; descriptive only).
 
-## EXPLORATORY / POST-HOC: capped-wait model (addendum experiments/w2_colocation_addendum_capped_wait_2026-10-21.md; changes no decision rule)
+## EXPLORATORY / POST-HOC (x-axis = time to the OBSERVED slice end, as first reported): capped-wait model (addendum experiments/w2_colocation_addendum_capped_wait_2026-10-21.md; changes no decision rule)
 Model: wait = offset + min(time-to-slice-end, tau). A's estimate from constant-slice medians: tau = 0.308 ms (least squares, six points, no CI).
 CAVEAT: the registered SA1 cells below are A's own cells, the same data that suggested tau; this is a re-description of that data at request level, not an independent test. The A2 high-priority cells are a different condition (priority), shown for comparison only.
 
@@ -140,6 +141,96 @@ CAVEAT: the registered SA1 cells below are A's own cells, the same data that sug
 9.00 9.50  157      0.398098
 
 
+## EXPLORATORY / POST-HOC (x-axis = time to the UNSTRETCHED slice end, review 2026-10-22 finding 2; requests landing after it are dropped): capped-wait model (addendum experiments/w2_colocation_addendum_capped_wait_2026-10-21.md; changes no decision rule)
+Model: wait = offset + min(time-to-slice-end, tau). A's estimate from constant-slice medians: tau = 0.308 ms (least squares, six points, no CI).
+CAVEAT: the registered SA1 cells below are A's own cells, the same data that suggested tau; this is a re-description of that data at request level, not an independent test. The A2 high-priority cells are a different condition (priority), shown for comparison only.
+
+- A SA1 cells (normal priority; c=0, m in 2,4,8): n = 56704 requests; fitted tau = 0.190 ms, 90% block-bootstrap CI [0.180, 0.200]; offset = 0.111 ms
+    - m = 2 ms: tau = 0.200 [0.190, 0.220], offset 0.101
+    - m = 4 ms: tau = 0.180 [0.170, 0.200], offset 0.121
+    - m = 8 ms: tau = 0.130 [0.100, 0.160], offset 0.172
+
+  Binned curve (A SA1 cells (normal priority; c=0, m in 2,4,8)); lo/hi = time-to-slice-end bin in ms:
+
+  lo   hi    n  mean_wait_ms
+0.00 0.05  781      0.185808
+0.05 0.10  814      0.203039
+0.10 0.15  859      0.204378
+0.15 0.20  827      0.237424
+0.20 0.25  783      0.274001
+0.25 0.30  841      0.289947
+0.30 0.35  814      0.299553
+0.35 0.40  824      0.214344
+0.40 0.45  855      0.261186
+0.45 0.50  838      0.259198
+0.50 0.55  817      0.269264
+0.55 0.60  806      0.299088
+0.60 0.65  848      0.320874
+0.65 0.70  887      0.364019
+0.70 0.75  800      0.347013
+0.75 0.80  779      0.253971
+0.80 0.85  771      0.231517
+0.85 0.90  803      0.264516
+0.90 0.95  837      0.268776
+0.95 1.00  801      0.284883
+1.00 1.50 8367      0.305436
+1.50 2.00 8291      0.311493
+2.00 2.50 3533      0.289383
+2.50 3.00 3518      0.301842
+3.00 3.50 3546      0.309961
+3.50 4.00 3569      0.315360
+4.00 4.50 1204      0.298595
+4.50 5.00 1188      0.305039
+5.00 5.50 1212      0.323646
+5.50 6.00 1279      0.317820
+6.00 6.50 1185      0.306531
+6.50 7.00 1127      0.310651
+7.00 7.50 1171      0.314629
+7.50 8.00 1129      0.327681
+
+- A2 sa3_high cells (HIGH priority; c=0, m in 2,8): n = 37762 requests; fitted tau = 0.200 ms, 90% block-bootstrap CI [0.190, 0.210]; offset = 0.099 ms
+    - m = 2 ms: tau = 0.210 [0.190, 0.220], offset 0.088
+    - m = 8 ms: tau = 0.150 [0.130, 0.160], offset 0.150
+
+  Binned curve (A2 sa3_high cells (HIGH priority; c=0, m in 2,8)); lo/hi = time-to-slice-end bin in ms:
+
+  lo   hi    n  mean_wait_ms
+0.00 0.05  546      0.170285
+0.05 0.10  577      0.207486
+0.10 0.15  592      0.195356
+0.15 0.20  586      0.233897
+0.20 0.25  588      0.271361
+0.25 0.30  570      0.312075
+0.30 0.35  612      0.322441
+0.35 0.40  574      0.192797
+0.40 0.45  562      0.239291
+0.45 0.50  577      0.270839
+0.50 0.55  655      0.271066
+0.55 0.60  599      0.285916
+0.60 0.65  598      0.326509
+0.65 0.70  598      0.349660
+0.70 0.75  590      0.377425
+0.75 0.80  581      0.230357
+0.80 0.85  595      0.220498
+0.85 0.90  574      0.258162
+0.90 0.95  553      0.292016
+0.95 1.00  598      0.286534
+1.00 1.50 5951      0.299830
+1.50 2.00 6042      0.314673
+2.00 2.50 1163      0.282968
+2.50 3.00 1170      0.286952
+3.00 3.50 1170      0.302039
+3.50 4.00 1149      0.298295
+4.00 4.50 1185      0.301208
+4.50 5.00 1201      0.311604
+5.00 5.50 1177      0.320884
+5.50 6.00 1201      0.296286
+6.00 6.50 1136      0.305861
+6.50 7.00 1174      0.303989
+7.00 7.50 1169      0.312734
+7.50 8.00 1148      0.323622
+
+
 ## Stall check (journal 0023): first three cells after each console-QuickEdit stall vs the same cell in the other 9 blocks; rank 0 = below all 9 others
 
                    cell  after_stall  temp_pre_c  temp_pre_c_others_median  lat_mean_ms  lat_mean_ms_others_median  lat_mean_ms_rank_of_9  lat_p99_ms  lat_p99_ms_others_median  frac_completed  power_counter_w  power_counter_w_others_median  power_counter_w_rank_of_9  sm_clock_med  mem_clock_med
@@ -217,7 +308,8 @@ HAGS: DriverSupportState:Stable Enabled:True. Execution mode: CUDA native kernel
 
 ## SA2 slice stretch = s0 + k * fg service time
 
-- s0 (constant switch cost) = 0.291 ms, 90% CI [0.281, 0.299]; k = 0.395, 90% CI [0.391, 0.399] (98 cell-blocks)
+- (a) AS FIRST RUN, regressor = the CO-RUN cell's fg_gpu_p50_ms (inflated under time-slicing, journal 0016/0019): s0 = 0.291 ms, 90% CI [0.281, 0.299]; k = 0.395, 90% CI [0.391, 0.399] (98 cell-blocks)
+- (b) CORRECTED (review 2026-10-22 finding 1), regressor = the same block's fg-ALONE fg_gpu_p50_ms of that size: s0 = 0.231 ms, 90% CI [0.217, 0.243]; k = 0.984, 90% CI [0.974, 0.995] (94 cell-blocks; alone service per size: 0.1 ms: 0.087, 1 ms: 0.989, 4 ms: 3.986)
 
 ## SA3 priority control (fg HIGH minus NORMAL, observed wait, paired by block index across the two runs; no decision rule)
 
@@ -249,7 +341,7 @@ duty_fg9_d0.75    9.0     2  0.75  2221.450237 3278.459987        0.770000      
 Cells with frac_completed < 0.99 or slowdown > 10 are OVERLOADED (a backlog builds up; a completed fraction of 1.0 can still hide a long queue): their latency and slowdown are artefacts of the window length, not service times.
 Reference for 4 and 9 ms foreground: equal sharing predicts slowdown ~ 1 + duty (rough; descriptive only).
 
-## EXPLORATORY / POST-HOC: capped-wait model (addendum experiments/w2_colocation_addendum_capped_wait_2026-10-21.md; changes no decision rule)
+## EXPLORATORY / POST-HOC (x-axis = time to the OBSERVED slice end, as first reported): capped-wait model (addendum experiments/w2_colocation_addendum_capped_wait_2026-10-21.md; changes no decision rule)
 Model: wait = offset + min(time-to-slice-end, tau). A's estimate from constant-slice medians: tau = 0.308 ms (least squares, six points, no CI).
 CAVEAT: the registered SA1 cells below are A's own cells, the same data that suggested tau; this is a re-description of that data at request level, not an independent test. The A2 high-priority cells are a different condition (priority), shown for comparison only.
 
@@ -343,6 +435,96 @@ CAVEAT: the registered SA1 cells below are A's own cells, the same data that sug
 8.00 8.50 1053      0.316864
 8.50 9.00  564      0.354181
 9.00 9.50  157      0.398098
+
+
+## EXPLORATORY / POST-HOC (x-axis = time to the UNSTRETCHED slice end, review 2026-10-22 finding 2; requests landing after it are dropped): capped-wait model (addendum experiments/w2_colocation_addendum_capped_wait_2026-10-21.md; changes no decision rule)
+Model: wait = offset + min(time-to-slice-end, tau). A's estimate from constant-slice medians: tau = 0.308 ms (least squares, six points, no CI).
+CAVEAT: the registered SA1 cells below are A's own cells, the same data that suggested tau; this is a re-description of that data at request level, not an independent test. The A2 high-priority cells are a different condition (priority), shown for comparison only.
+
+- A SA1 cells (normal priority; c=0, m in 2,4,8): n = 56704 requests; fitted tau = 0.190 ms, 90% block-bootstrap CI [0.180, 0.200]; offset = 0.111 ms
+    - m = 2 ms: tau = 0.200 [0.190, 0.220], offset 0.101
+    - m = 4 ms: tau = 0.180 [0.170, 0.200], offset 0.121
+    - m = 8 ms: tau = 0.130 [0.100, 0.160], offset 0.172
+
+  Binned curve (A SA1 cells (normal priority; c=0, m in 2,4,8)); lo/hi = time-to-slice-end bin in ms:
+
+  lo   hi    n  mean_wait_ms
+0.00 0.05  781      0.185808
+0.05 0.10  814      0.203039
+0.10 0.15  859      0.204378
+0.15 0.20  827      0.237424
+0.20 0.25  783      0.274001
+0.25 0.30  841      0.289947
+0.30 0.35  814      0.299553
+0.35 0.40  824      0.214344
+0.40 0.45  855      0.261186
+0.45 0.50  838      0.259198
+0.50 0.55  817      0.269264
+0.55 0.60  806      0.299088
+0.60 0.65  848      0.320874
+0.65 0.70  887      0.364019
+0.70 0.75  800      0.347013
+0.75 0.80  779      0.253971
+0.80 0.85  771      0.231517
+0.85 0.90  803      0.264516
+0.90 0.95  837      0.268776
+0.95 1.00  801      0.284883
+1.00 1.50 8367      0.305436
+1.50 2.00 8291      0.311493
+2.00 2.50 3533      0.289383
+2.50 3.00 3518      0.301842
+3.00 3.50 3546      0.309961
+3.50 4.00 3569      0.315360
+4.00 4.50 1204      0.298595
+4.50 5.00 1188      0.305039
+5.00 5.50 1212      0.323646
+5.50 6.00 1279      0.317820
+6.00 6.50 1185      0.306531
+6.50 7.00 1127      0.310651
+7.00 7.50 1171      0.314629
+7.50 8.00 1129      0.327681
+
+- A2 sa3_high cells (HIGH priority; c=0, m in 2,8): n = 35882 requests; fitted tau = 0.200 ms, 90% block-bootstrap CI [0.190, 0.210]; offset = 0.098 ms
+    - m = 2 ms: tau = 0.210 [0.190, 0.220], offset 0.085
+    - m = 8 ms: tau = 0.150 [0.130, 0.160], offset 0.150
+
+  Binned curve (A2 sa3_high cells (HIGH priority; c=0, m in 2,8)); lo/hi = time-to-slice-end bin in ms:
+
+  lo   hi    n  mean_wait_ms
+0.00 0.05  517      0.170828
+0.05 0.10  531      0.204478
+0.10 0.15  548      0.192851
+0.15 0.20  540      0.232462
+0.20 0.25  536      0.264111
+0.25 0.30  517      0.306785
+0.30 0.35  556      0.320153
+0.35 0.40  536      0.189107
+0.40 0.45  526      0.238912
+0.45 0.50  531      0.268193
+0.50 0.55  595      0.268472
+0.55 0.60  548      0.283177
+0.60 0.65  549      0.326210
+0.65 0.70  547      0.347109
+0.70 0.75  542      0.372368
+0.75 0.80  542      0.222646
+0.80 0.85  547      0.223488
+0.85 0.90  525      0.257997
+0.90 0.95  510      0.288490
+0.95 1.00  553      0.288587
+1.00 1.50 5486      0.297604
+1.50 2.00 5556      0.312006
+2.00 2.50 1163      0.282968
+2.50 3.00 1170      0.286952
+3.00 3.50 1170      0.302039
+3.50 4.00 1149      0.298295
+4.00 4.50 1185      0.301208
+4.50 5.00 1201      0.311604
+5.00 5.50 1177      0.320884
+5.50 6.00 1201      0.296286
+6.00 6.50 1136      0.305861
+6.50 7.00 1174      0.303989
+7.00 7.50 1169      0.312734
+7.50 8.00 1148      0.323622
 
 
 ## Flags (cells stay in the data): 28 of 181
