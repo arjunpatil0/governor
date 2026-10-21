@@ -11,7 +11,7 @@ Updated 2026-10-21 · Phase: W2 (B done and committed; llama.cpp driver ready; E
 
 ## Decisions needed
 1. After the traces: go-ahead to implement llama.cpp part `L` (code/tests only, nothing executing during experiments)? Recommendation: yes, between your runs.
-2. Experiment A (19 cells x 10 blocks) next: `python experiments\w2_colocationun.py --part A --ambient-c 25` once traces are done. Recommendation: A before L.
+2. Experiment A (19 cells x 10 blocks) next: `python experiments\w2_colocation\run.py --part A --ambient-c 25` once traces are done. Recommendation: A before L.
 
 ## Reviewer checkpoint due?
 - Surprise: yes, mild. The trace attempt contradicted the "overloaded fg never finishes" hypothesis (it finished; exit hung). Finding 3 stays open until a trace exists.
