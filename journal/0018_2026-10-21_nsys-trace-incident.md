@@ -1,0 +1,12 @@
+# 0018 — Incident: first Nsight Systems trace attempt (fma60_membg_1800) timed out
+Date: 2026-10-21 · Phase: W2 (B review finding 3) · Author: Claude Code (run by Arjun, admin shell)
+## What happened
+Arjun ran `nsys profile -t cuda,nvtx,wddm ... trace_cell.py --level 1800`. trace_cell.py raised `subprocess.TimeoutExpired` (p.wait(timeout=120) on a child). Arjun stopped it with Ctrl+C, reset clocks with `nvidia-smi -rgc` / `-rmc`, and did not run the unlocked trace. I only have Arjun's description of the traceback, not the text. Partial output: data/nsys/fma60_membg_1800/ (arrivals.npy, bg_units.npy, fg.npz, bg.npz, fg.log, bg.log (both logs empty), specs). No `.nsys-rep` file exists anywhere, and `nsys.exe` (PID 18764) was still in the process list afterwards.
+## What the partial output shows (I checked it; this contradicts the first hypothesis)
+- The hypothesis was that the fg child never completes because the cell is overloaded. Not so: both children WROTE their outputs about 11 s after launch (fg.npz: 240/240 frames, last completion 5.97 s after the first arrival; bg.npz: 1736 slices over 4.99 s).
+- So the children finished their work and then did not EXIT (or the parent's wait never returned) until the 120 s timeout. The most likely cause is a hang at process exit under nsys with WDDM tracing (CUDA context teardown). That is a hypothesis; I did not isolate it.
+- Tracing changes the measurement itself: in this partial run fg gpu_ms median is 30.8 ms (untraced B cell at 1800: 12.1 ms), median latency 1.78 s. The trace is for explaining the mechanism qualitatively; nothing from a traced run is a result.
+## Fix (test-first: tests/test_trace_cell.py RED on the missing helper, GREEN after)
+trace_cell.py now ends on a fixed window (arrival span + lead + 15 s), polls for the output files, kills a child that has written its output but not exited after a 5 s grace (`killed_after_output`) or has no output at the deadline (`killed_deadline`), records the statuses in trace_cell_status.json, and kills any child and resets clocks in a `finally` block. Smoke test without nsys and without clock control: both children `exited`, 10.6 s.
+## Lesson
+Waiting on child exit is not the same as waiting on child output; a harness that must survive a tracer should key on the output file and a fixed window. (The main harness run.py still waits on exit with a timeout; it has worked in 1080 cells without tracing, so it is unchanged.)

@@ -18,6 +18,28 @@ from design import frame_units_from_pilot                    # noqa: E402
 from loadgen import gamma_slice_durations                    # noqa: E402
 from w2lib import units_for                                  # noqa: E402
 
+def wait_or_kill(procs, outs, deadline_s, grace_s=5.0):
+    """Wait on a fixed window (not on request completion). A child that has written its output file but not exited within grace_s is killed
+    ('killed_after_output': the nsys/WDDM exit hang of journal 0018); a child with no output at the deadline is killed ('killed_deadline')."""
+    t0 = time.time(); seen = {}
+    while time.time() - t0 < deadline_s:
+        now = time.time()
+        for i, (p, o) in enumerate(zip(procs, outs)):
+            if i not in seen and Path(o).exists():
+                seen[i] = now
+        if all(p.poll() is not None or (i in seen and now - seen[i] > grace_s) for i, p in enumerate(procs)):
+            break
+        time.sleep(0.2)
+    st = []
+    for i, (p, o) in enumerate(zip(procs, outs)):
+        if p.poll() is not None:
+            st.append("exited" if Path(o).exists() else f"died_rc{p.returncode}")
+            continue
+        p.kill(); p.wait(timeout=30)
+        st.append("killed_after_output" if Path(o).exists() else "killed_deadline")
+    return st
+
+
 CAL = R.ROOT / "data" / "raw" / "w2_B" / "20261021T105205Z" / "calibration.json"
 
 
@@ -31,6 +53,7 @@ def main():
     out = Path(a.out) / f"fma60_membg_{lv}"; out.mkdir(parents=True, exist_ok=True)
     cal = json.loads(CAL.read_text(encoding="utf-8"))
     units_fg = frame_units_from_pilot(R.PILOT)["fma_60hz"]
+    procs = []
     try:
         R.set_mem(8001); R.set_sm(lv)
         t_sync = time.perf_counter() + 5.0
@@ -42,10 +65,14 @@ def main():
         t_stop = arr[-1] + 1.0
         procs = [R.spawn("fg", dict(out=str(out / "fg.npz"), arrivals=str(out / "arrivals.npy"), kind=R.KIND_ID["fma"], units=units_fg, cpu=R.FG_CPU, priority="normal"), out),
                  R.spawn("bg", dict(out=str(out / "bg.npz"), units=str(out / "bg_units.npy"), kind=R.KIND_ID["mem"], t_sync=t_sync, t_stop=t_stop, cap=200000, duty=1.0, cpu=R.BG_CPU), out)]
-        for p in procs:
-            p.wait(timeout=120)
-        print("done", [p.returncode for p in procs])
+        # fixed window: the arrival span plus the start lead, a grace for the last frames, then kill (under overload the fg queue may never drain)
+        st = wait_or_kill(procs, [out / "fg.npz", out / "bg.npz"], deadline_s=5.0 + (a.seconds + 1) + 15.0)
+        (out / "trace_cell_status.json").write_text(json.dumps(dict(level=str(lv), children=dict(fg=st[0], bg=st[1]))), encoding="utf-8")
+        print("done", st)
     finally:
+        for p in procs:
+            if p.poll() is None:
+                p.kill()
         if not R.NO_CLOCK_CONTROL:
             subprocess.run(["nvidia-smi", "-rgc"]); subprocess.run(["nvidia-smi", "-rmc"])
 

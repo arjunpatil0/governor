@@ -2,18 +2,16 @@
 Updated 2026-10-21 · Phase: W2 (B done and committed; llama.cpp driver ready; Experiments A/A2 pending)
 
 ## Just did (commits)
-- B results + raw data + journal 0016: c51b499; B report fixes (completed fraction, ceiling label, deadline-aware table) + B review committed: 9872221
-- llama.cpp addendum registered: 8e5b490; source build of v0.7.0 OK; driver + tests + sanity check (101.0 vs 104.6 tok/s, -3.5%, pass): ecea182
-- trace_cell.py for the Nsight trace: 1701500; journal 0017 + B response (finding 3 pending): 29e7984
-- Coordination/documentation rules in CLAUDE.md, .obj gitignored: deeedbd; docs/TIMELINE.md + docs/CONCEPTS.md: next commit
+- Earlier: B c51b499, B report fixes 9872221, llama.cpp addendum 8e5b490, driver + sanity check ecea182, rules deeedbd, docs 0ae2e11.
+- Nsight trace incident 0018: partial output inspected (children finished in ~11 s; they did not EXIT), trace_cell.py fixed test-first (fixed window, kill hung children, clocks reset in finally), smoke-tested without nsys. Commit: see git log (this commit).
 
 ## Waiting for
-- Arjun's two Nsight Systems traces (`-t cuda,nvtx,wddm`) in data/nsys/ (fma60_membg_1800, fma60_membg_unlocked). data/nsys does not exist yet (checked after the rules commit). I will check that each contains BOTH the foreground and background processes, then explain fg_gpu_ms.
+- Arjun to rerun the two traces (commands below). Per your rule: no parallel work during experiments; I do nothing that executes while they run.
+- `nsys.exe` PID 18764 from the aborted run is still running: stop it first (`taskkill /PID 18764 /F`) and check `nvidia-smi -q -d CLOCK | findstr /i "SM"` shows clocks released.
 
 ## Decisions needed
-1. GitHub: install GitHub CLI (`winget install GitHub.cli`) and run `gh auth login` yourself in your shell, or create an empty private repo "governor" on github.com and give me nothing but the URL. Recommendation: gh route (`gh repo create governor --private --source . --push`); I do not have `gh` and will not handle credentials.
-2. After the traces: go-ahead to implement llama.cpp part `L` (test-first) before Experiment A? Recommendation: yes, A is the most decision-relevant run, so run A first (needs only your admin shell) while I build part L.
-3. docs/TIMELINE.md and docs/CONCEPTS.md exist (backfilled, 16 concepts). Say if you want a different CONCEPTS format. Recommendation: keep.
+1. After the traces: go-ahead to implement llama.cpp part `L` (code/tests only, nothing executing during experiments)? Recommendation: yes, between your runs.
+2. Experiment A (19 cells x 10 blocks) next: `python experiments\w2_colocationun.py --part A --ambient-c 25` once traces are done. Recommendation: A before L.
 
 ## Reviewer checkpoint due?
-- Design change: no. Results before interpretation: B's results were reviewed (response written). Pre-registration before commit: none pending. Surprise: the fg_gpu_ms pattern under co-run (finding 3) is open until the traces are read.
+- Surprise: yes, mild. The trace attempt contradicted the "overloaded fg never finishes" hypothesis (it finished; exit hung). Finding 3 stays open until a trace exists.
