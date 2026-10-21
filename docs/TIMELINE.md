@@ -37,3 +37,5 @@
 2026-10-21 · result · fg_gpu_ms defined from code; 1800-vs-unlocked inflation pattern unexplained; co-run service times not interpreted · [0019](../journal/0019_2026-10-21_nsys-traces-and-fg-gpu-ms.md)
 2026-10-21 · review · Traces review (4 items): globaltimer diagnostic deferred with a pre-stated trigger; response written · [response](../reviews/2026-10-21_w2_traces_response.md)
 2026-10-21 · result · Experiment A (190 cells): HA1 not supported, classified preempted_or_concurrent; HA2 not supported (3/6) · commit ea8546a · [0020](../journal/0020_2026-10-21_experiment-a-results.md)
+2026-10-21 · incident · A2 crashed after 3 cells (frame_units not loaded for A2); fixed test-first; partial run kept as a false start (data/raw/w2_A2/20261021T174039Z) · [0021](../journal/0021_2026-10-21_a2-false-start-and-armoury-mode.md)
+2026-10-21 · incident · A2 cells flagged mem clock 8101 vs 8001 (suspected Armoury Crate Turbo); --armoury-mode now required and logged · [0021](../journal/0021_2026-10-21_a2-false-start-and-armoury-mode.md)

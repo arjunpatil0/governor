@@ -54,7 +54,7 @@ W1 capability audit -> W2-3 characterisation (validate residual-wait model, deco
 (telemetry daemon, controllable bg runtime, fg harness, greedy/static/PI) -> W6-8 learned controller ->
 W9-10 real scenarios (game + LLM agent; captions/chatbot + image gen), ablations, dataset+harness release, report.
 Foreground order: synthetic deadline frame loop -> AI foreground w/ SLO -> real game benchmark.
-Experimental conditions: AC power, fixed fan mode, log ambient temp, warm-up.
+Experimental conditions: AC power, fixed fan mode, log ambient temp, warm-up. Run protocol: before every full run Arjun states the Armoury Crate mode (it can change the GPU memory clock: Turbo gave 8101 vs the locked 8001, journal 0021); it is passed as `--armoury-mode <mode>` and stored in meta.json. The mode must be the same across runs that are compared.
 
 ## Layout
 telemetry/ actuators/ workloads/{background,foreground}/ controllers/ experiments/ analysis/ data/

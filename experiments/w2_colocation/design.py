@@ -105,3 +105,10 @@ def frame_units_from_pilot(path):
     """Frame kernel units are fixed from the pilot (sized at the unlocked clock; yaml experiment_B.foreground_frames)."""
     p4 = json.loads(Path(path).read_text(encoding="utf-8"))["P4_frames"]
     return {k.lower(): v["units"] for k, v in p4.items() if k.lower() in FRAMES}
+
+
+def frame_units_for_part(part, cells, pilot_path):
+    """Frame units for every part whose cells use a named frame (B and A2's 9 ms stream); None when no cell does."""
+    if not any(c.get("fg") and c["fg"].get("frame") for c in cells):
+        return None
+    return frame_units_from_pilot(pilot_path)

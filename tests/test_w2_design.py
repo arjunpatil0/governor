@@ -108,3 +108,18 @@ def test_1050_is_descriptive_and_outside_the_tested_families():
     assert HB_TEST_LEVELS == (900, 1200, 1500)                          # HB1/HB2 families unchanged by the addendum
     r = interp_service_ratio(load_rel_w1(), "fma", 1050)                # W1 has no 1050 level: linear interpolation 900..1200
     assert r == pytest.approx(0.732 / (0.366 + 0.5 * (0.488 - 0.366)), rel=1e-3)
+
+
+@pytest.mark.parametrize("part", ["A", "A2", "B", "C"])
+def test_frame_units_loaded_for_every_part_whose_cells_use_a_frame(part):
+    """Incident (journal 0021): A2 has a 9 ms frame cell but run.py loaded frame units only for B -> TypeError after 3 cells."""
+    from design import frame_units_for_part
+    pilot = ROOT / "data" / "pilot" / "w2" / "20261020T222839Z" / "pilot.json"
+    units = frame_units_for_part(part, build_cells(CFG, part), pilot)
+    uses_frame = any(c.get("fg") and c["fg"].get("frame") for c in build_cells(CFG, part))
+    if uses_frame:
+        for c in build_cells(CFG, part):
+            if c.get("fg") and c["fg"].get("frame"):
+                assert units[c["fg"]["frame"]] > 0
+    else:
+        assert units is None

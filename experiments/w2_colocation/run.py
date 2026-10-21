@@ -22,7 +22,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 for sub in ("telemetry", "workloads/common", "analysis", "experiments/w2_colocation"):
     sys.path.insert(0, str(ROOT / sub))
-from design import build_cells, cell_seed, clock_flags, frame_units_from_pilot, order_block  # noqa: E402
+from design import build_cells, cell_seed, clock_flags, frame_units_for_part, order_block  # noqa: E402
 from loadgen import gamma_slice_durations, latencies, parse_hags, poisson_arrivals, residual_wait  # noqa: E402
 from nvml_utils import current_event_mask, decode_event_reasons  # noqa: E402
 from provenance import check_run_provenance, git_state  # noqa: E402
@@ -270,6 +270,7 @@ def main():
     ap.add_argument("--part", choices=["A", "A2", "B", "C"])
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--ambient-c", type=float, default=None)
+    ap.add_argument("--armoury-mode", default=None, help="Armoury Crate mode (e.g. Silent/Performance/Turbo/Manual); required for full runs, not detectable (journal 0021)")
     ap.add_argument("--child"); ap.add_argument("--spec")
     a = ap.parse_args()
     if a.child:
@@ -290,9 +291,11 @@ def main():
     if a.smoke:
         NO_CLOCK_CONTROL = not admin
         blocks, T["warmup"], T["preroll"], T["window"], T["idle"] = 1, 0.5, 0.5, 1.5, 0.5
-        print("SMOKE: one block, first 3 cells, short windows. Not a result.")
+        print("SMOKE: one block, first 3 cells plus one per other fg stream, short windows. Not a result.")
     elif not admin:
         sys.exit("Full run needs an Administrator shell (clock locks). Use --smoke to test without admin.")
+    if not a.smoke and not a.armoury_mode:
+        sys.exit("Full run refused: pass --armoury-mode <the Armoury Crate mode now active> (it changes the GPU memory clock; journal 0021).")
     git_head = check_run_provenance(ROOT, smoke=a.smoke)
     dll = ROOT / "workloads" / "background" / "build" / "w2_kernels.dll"
     if not dll.exists():
@@ -318,7 +321,7 @@ def main():
     out_dir = ROOT / "data" / "raw" / (f"w2_{a.part}_smoke" if a.smoke else f"w2_{a.part}") / stamp
     out_dir.mkdir(parents=True)
     batt = psutil.sensors_battery()
-    meta = dict(utc=stamp, part=a.part, smoke=a.smoke, admin=admin, ac_plugged=None if batt is None else batt.power_plugged, ambient_c=a.ambient_c,
+    meta = dict(utc=stamp, part=a.part, smoke=a.smoke, admin=admin, ac_plugged=None if batt is None else batt.power_plugged, ambient_c=a.ambient_c, armoury_mode=a.armoury_mode,
                 yaml_sha=sha(CFG_PATH), dll_sha=sha(dll), git_head=git_head, git_dirty=bool(git_state(ROOT)[1]) if a.smoke else False,
                 gpu=nv.nvmlDeviceGetName(h), driver=nv.nvmlSystemGetDriverVersion(), hags=hags,
                 execution_mode="CUDA native kernels via w2_kernels.dll (no CPU fallback)", os=platform.platform(), python=sys.version.split()[0],
@@ -342,15 +345,20 @@ def main():
                 raise RuntimeError("calibration child failed")
             cal = json.loads(calp.read_text(encoding="utf-8"))
             print("calibration:", {k: (round(v["a_ms"], 4), round(v["b_ms_per_unit"], 7)) for k, v in cal.items()})
-        if a.part == "B":
-            frame_units = frame_units_from_pilot(PILOT)
-        ctx = dict(cfg_seed=20261021, timing=T, cal=cal, frame_units=frame_units, out_dir=out_dir, hags=hags, units_for=units_for)
         base_cells = build_cells(cfg, "A" if a.part == "A" else a.part)
+        frame_units = frame_units_for_part(a.part, base_cells, PILOT)
+        ctx = dict(cfg_seed=20261021, timing=T, cal=cal, frame_units=frame_units, out_dir=out_dir, hags=hags, units_for=units_for)
         t_run = time.time()
         for b in range(blocks):
             order = order_block(base_cells, ctx["cfg_seed"], b)
-            if a.smoke:
-                order = order[:3]
+            if a.smoke:                                    # first 3 cells + the first cell of every other fg stream (journal 0021: the 9 ms frame cell was the 4th)
+                sigf = lambda c: (c["fg"]["size_ms"], c["fg"].get("frame")) if c.get("fg") else None
+                pick = order[:3]
+                seen = {sigf(c) for c in pick}
+                for c in order[3:]:
+                    if sigf(c) not in seen:
+                        pick.append(c); seen.add(sigf(c))
+                order = pick
             for i, cell in enumerate(order):
                 row = run_cell(cell, b, i, h, ctx)
                 wr.writerow(row); f.flush()

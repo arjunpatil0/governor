@@ -1,20 +1,16 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-21 · Phase: W2 (A done and analysed; A2 pending; llama.cpp part L code not written)
+Updated 2026-10-21 · Phase: W2 (A done; A2 false start fixed, A2 awaiting rerun; part L code not written)
 
 ## Just did (commits)
-- Experiment A analysed (journal 0020): HA1 NOT SUPPORTED (slope 0.013, CI [0.013, 0.013]; 17% of cells within +/-25%), classified preempted_or_concurrent by the pre-registered ordered rule; HA2 NOT SUPPORTED (3/6 significant). Observed added wait 0.15-0.30 ms regardless of slice length 0.25-8 ms; predicted 0.13-8.5 ms. 39/190 cells flagged start_temp_not_reached (kept). Results + raw data committed (see git log).
-- Earlier: 4a6fcd4 (traces review response), b349750 (journal 0019), c51b499 (B).
+- A2 crash fixed test-first (frame units now loaded for any part with a frame cell; smoke covers every fg stream) and logged (journal 0021). Armoury Crate mode now required via --armoury-mode and stored in meta.json; CLAUDE.md protocol updated. Memory-clock 8101 incident logged.
+- Earlier: ea8546a/081f148 (Experiment A results, journal 0020).
 
 ## Waiting for
-- Arjun's go-ahead / reviewer pass on A's results, and Arjun to run A2. I execute nothing while it runs.
+- Arjun: the Armoury Crate mode name used for A/B/C (to put in the A2 command), then Arjun reruns A2 from scratch. I execute nothing while it runs.
 
 ## Decisions needed
-1. Run A2 next, before any interpretation of A? Recommendation: yes (A2's SA1 phase-independence and SA2 stretch are the pre-registered characterisation of exactly this outcome).
-2. Reviewer checkpoint: A's results are in; interpretation is deliberately minimal (no mechanism). Recommendation: have the reviewer read journal 0020 and data/w2_A_results.md before A2 or in parallel with it.
+1. Armoury Crate mode name that A/B/C used (one word, e.g. what the app shows). Recommendation: state it exactly as shown.
+2. Reviewer checkpoint on A's results (journal 0020) is still due. Recommendation: send before interpreting A2.
 
 ## Reviewer checkpoint due?
-- Results before interpretation: YES (A). Surprise: yes (model off by up to 28x at m=8). Pre-registration/design change: none.
-
-## Experiment A2 command (admin PowerShell, AC power, clean tree)
-cd C:\Users\arjun\governor
-python experiments\w2_colocation\run.py --part A2 --ambient-c 25
+- Results before interpretation: A (yes). Surprise: yes (A2 harness bug + clock mismatch are process, not science). No design change.
