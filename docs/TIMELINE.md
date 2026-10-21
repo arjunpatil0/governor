@@ -36,4 +36,4 @@
 2026-10-21 · incident · Nsight agent lost on first unlocked attempt; retry succeeded; kernel/DMA data absent from traces (children killed; HAGS) · [0019](../journal/0019_2026-10-21_nsys-traces-and-fg-gpu-ms.md)
 2026-10-21 · result · fg_gpu_ms defined from code; 1800-vs-unlocked inflation pattern unexplained; co-run service times not interpreted · [0019](../journal/0019_2026-10-21_nsys-traces-and-fg-gpu-ms.md)
 2026-10-21 · review · Traces review (4 items): globaltimer diagnostic deferred with a pre-stated trigger; response written · [response](../reviews/2026-10-21_w2_traces_response.md)
-2026-10-21 · result · Experiment A (190 cells): HA1 not supported, classified preempted_or_concurrent; HA2 not supported (3/6) · commit pending · [0020](../journal/0020_2026-10-21_experiment-a-results.md)
+2026-10-21 · result · Experiment A (190 cells): HA1 not supported, classified preempted_or_concurrent; HA2 not supported (3/6) · commit ea8546a · [0020](../journal/0020_2026-10-21_experiment-a-results.md)
