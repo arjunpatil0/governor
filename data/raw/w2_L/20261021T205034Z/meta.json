@@ -1,0 +1,44 @@
+{
+  "utc": "20261021T205034Z",
+  "part": "L",
+  "smoke": false,
+  "admin": true,
+  "ac_plugged": true,
+  "ambient_c": 25.0,
+  "armoury_mode": "Performance",
+  "yaml_sha": "e1df18ccd6898bd9",
+  "dll_sha": "aa73f2b11a6ccb41",
+  "git_head": "55851e1eb84d27f3c9f748d2fc7c0e95d46978f6",
+  "git_dirty": false,
+  "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "driver": "616.92",
+  "hags": {
+    "adapter": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "line": "DriverSupportState:Stable Enabled:True",
+    "enabled": true
+  },
+  "execution_mode": "llama.cpp CUDA build, all layers offloaded (checked per cell from the driver log; a cell with any CPU layer aborts the run)",
+  "llama": {
+    "commit": "620d2225cc436ab0b001e3200e590e3b286ef9ab",
+    "build_path": "source build (third_party/build_llama.bat, CUDA sm_89)",
+    "model": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+    "model_bytes": 2019377696,
+    "model_sha256": "6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff",
+    "prompt_sha256": "c835e382d32c8a62a0f2c69acc0ea909db71fcd710ac9ccad06af3dd001628eb",
+    "driver_exe_sha": "67627630f8cae538",
+    "cpu_affinity": "none (the +/-5% sanity check was also unpinned)"
+  },
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.4",
+  "blocks": 10,
+  "timing": {
+    "tmax": 68,
+    "warmup": 2.0,
+    "idle": 2.0,
+    "lead": 5.0,
+    "lead_llama": 25.0,
+    "preroll": 1.5,
+    "window": 4.0,
+    "child_timeout": 90
+  }
+}

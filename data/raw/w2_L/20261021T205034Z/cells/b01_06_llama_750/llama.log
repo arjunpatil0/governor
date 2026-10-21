@@ -1,0 +1,2 @@
+EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712
+DONE tokens=420 t_first=413948.694183 t_last=413954.280801 ctx_end=932
