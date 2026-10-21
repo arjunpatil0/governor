@@ -9,8 +9,8 @@ Updated 2026-10-21 · Phase: W2 (B done; traces read; Experiments A and A2 pendi
 - Arjun to run Experiment A (command below). I execute nothing while it runs.
 
 ## Decisions needed
-1. Kernel-side %globaltimer diagnostic for the fg_gpu_ms pattern (needs an addendum before it runs)? Recommendation: skip for now; A and A2 are more decision-relevant.
-2. After A: run A2 (`--part A2`), then I write llama.cpp part `L` code and tests while nothing runs. Recommendation: yes.
+1. (Decided: deferred.) Kernel-side %globaltimer diagnostic. Pre-stated trigger (reviewer): if SA4's fg slowdown vs duty does not track the 1 + d reference, or SA2's k is far from 1, register the globaltimer addendum before running it.
+2. (Decided: yes.) After A: run A2 (`--part A2`), then I write llama.cpp part `L` code and tests while nothing runs. Recommendation: yes.
 
 ## Reviewer checkpoint due?
 - Surprise: yes (HAGS hides context switches from the OS trace; the fg_gpu_ms pattern is unexplained). Results before interpretation: A's results when done. Pre-registration/design change: none pending.

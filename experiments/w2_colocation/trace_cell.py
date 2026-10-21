@@ -1,6 +1,8 @@
 r"""Descriptive Nsight Systems trace of one B cell (fma_60hz + memory background), review 2026-10-21_w2_B_review finding 3.
 Run under nsys from an Administrator shell (clock locks need admin), e.g.
   nsys profile -t cuda,osrt --force-overwrite true -o data/nsys/fma60_membg_1800 python experiments\w2_colocation\trace_cell.py --level 1800
+Known gap (review 2026-10-21_w2_traces_review, finding 2): the children are killed after writing output, so CUPTI never flushes and the trace has no kernel table;
+a future trace should call cudaProfilerStop() (or cuptiActivityFlushAll) in each child right after writing its output, before the hang-prone exit. Not implemented.
 Reuses run.py's fg and bg children, the B run's calibration.json and the pilot frame size; nothing here is a hypothesis test."""
 import argparse
 import json
