@@ -190,6 +190,7 @@ def c_rel_thr(df):
     s = _specs(df)
     d = pd.DataFrame(dict(block=df.block, variant=s.map(lambda x: x["decode"]["variant"]), graph=s.map(lambda x: bool(x["decode"]["graph"])),
                           level=df.sm_mhz.map(_level), tok_s=df.tok_s, energy_j=df.energy_j, tokens=df.tokens))
+    d["power_w"] = df.power_counter_w.values if "power_counter_w" in df else np.nan
     ref = d[d.level == "unlocked"].set_index(["block", "variant", "graph"]).tok_s
     d["rel_thr"] = d.tok_s.values / d.set_index(["block", "variant", "graph"]).index.map(ref).values
     d["j_per_token"] = d.energy_j / d.tokens
@@ -200,6 +201,7 @@ def c_rel_thr(df):
 def l_rel_thr(df):
     """Relative throughput vs the same block's unlocked cell; J/token = energy-counter delta / tokens in the window."""
     d = pd.DataFrame(dict(block=df.block, level=df.sm_mhz.map(_level), tok_s=df.tok_s, energy_j=df.energy_j, tokens=df.tokens))
+    d["power_w"] = df.power_counter_w.values if "power_counter_w" in df else np.nan
     ref = d[d.level == "unlocked"].set_index("block").tok_s
     d["rel_thr"] = d.tok_s.values / d.block.map(ref).values
     d["j_per_token"] = d.energy_j / d.tokens
@@ -253,6 +255,8 @@ def report_L(run_dir):
     df = pd.read_csv(run_dir / "results.csv"); d = l_rel_thr(df)
     k = l_knee(d)
     med = d.groupby("level")[["rel_thr", "j_per_token"]].median().reset_index()
+    pt = d.groupby("level").agg(tok_s_median=("tok_s", "median"), power_w_median=("power_w", "median")).reset_index()
+    pt["rel_thr"] = med.rel_thr.values; pt["j_per_token"] = med.j_per_token.values
     opt = med.loc[med.j_per_token.idxmin()]
     seqs = {}
     for _, r in df.iterrows():
@@ -271,7 +275,11 @@ def report_L(run_dir):
         "## HL3 correctness: identical greedy token ids within every block (over the common prefix)", "",
         f"- blocks compared: {h3['n_blocks']}; blocks with differing sequences: {h3['bad_blocks'] or 'none'}; blocks where a cell shares fewer than 64 tokens (check does not count): {h3['inconclusive_blocks'] or 'none'}",
         f"- shared-prefix length per cell (min / median / max): {min(h3['shared_prefix'].values())} / {int(np.median(list(h3['shared_prefix'].values())))} / {max(h3['shared_prefix'].values())}", "",
-        "## Relative throughput and J/token by level (medians over blocks)", "", _fmt(med)]
+        "## Throughput, board power and J/token by level (medians over blocks; power = board counter, W1 caveats)", "", _fmt(pt), "",
+        "## Proxy lesson (interpretation, from review 2026-10-22_w2_L_and_G_review.md items 2-3; the numbers above are the data)", "",
+        "- The fp16 proxy (C) put the knee at 1050 MHz; the real engine needs 1500 MHz (reviewer's explanation, not tested here: Q4_K_M dequantisation adds compute per byte read). A proxy can bracket a real engine but not replace it: the clock must be measured on the actual workload (or predicted by a model learned per workload), which is the case for the learned component (ADR-0002). One engine, one model, one GPU.", "",
+        "## Resolved items", "",
+        "- Clock-event reason `Reliability` appears in exactly the 10 llama_unlocked cells and in no locked cell: the same unlocked-limit behaviour as W1 (journal 0005). This item is resolved, not a fault.", ""]
     L += _flags_block(df)
     return L, "L"
 

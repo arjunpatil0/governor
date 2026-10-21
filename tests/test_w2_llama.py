@@ -90,8 +90,17 @@ def test_report_L_end_to_end_on_a_synthetic_run_dir(tmp_path):
             cdir = tmp_path / "cells" / f"b{b:02d}_{i:02d}_llama_{lv}"
             cdir.mkdir(parents=True)
             pd.DataFrame(dict(t_tok_end=np.arange(tok) * 0.01, token=[7, 8, 9, 10] * (tok // 4) + [1] * (tok % 4))).to_csv(cdir / "llama_tokens.csv", index=False)
-            rows.append(dict(block=b, cell_idx=i, cell_id=f"llama_{lv}", sm_mhz=lv, tok_s=tok / 4.0, tokens=tok, energy_j=tok * 0.2, flags=""))
+            rows.append(dict(block=b, cell_idx=i, cell_id=f"llama_{lv}", sm_mhz=lv, tok_s=tok / 4.0, tokens=tok, energy_j=tok * 0.2, power_counter_w=50.0, flags=""))
     pd.DataFrame(rows).to_csv(tmp_path / "results.csv", index=False)
     lines, tag = report_L(tmp_path)
     text = "\n".join(lines)
     assert tag == "L" and "knee 1350 MHz" in text and "intermediate" in text and "blocks with differing sequences: none" in text
+
+
+def test_report_L_has_power_and_tok_s_table_and_proxy_lesson(tmp_path):
+    test_report_L_end_to_end_on_a_synthetic_run_dir(tmp_path)
+    from w2_analysis import report_L
+    text = chr(10).join(report_L(tmp_path)[0])
+    assert "tok_s_median" in text and "power_w_median" in text
+    assert "Proxy lesson" in text and "measured on the actual workload" in text
+    assert "Reliability" in text and "resolved" in text
