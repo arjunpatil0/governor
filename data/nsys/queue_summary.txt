@@ -1,0 +1,8 @@
+pid 16420: 3D queue packets 1409  preempted-flag 0  submit->stop ms med/p90/max [5.00000e-02 1.32100e+01 3.73725e+03]  submit period ms med 0.00  active 3.77s
+pid 35064: 3D queue packets 17821  preempted-flag 0  submit->stop ms med/p90/max [1.60000e-01 6.17100e+01 3.86962e+03]  submit period ms med 0.00  active 3.87s
+packets of 16420 overlapping an in-flight packet of 35064: 1409/1409;   of 35064 overlapping 16420: 2793/17821
+WDDM_HW_QUEUE_EVENTS rows: 24 (queue creation only); CUDA kernel activity table present: False; DMA packets owned by our pids: see journal 0019
+pid 2108: 3D queue packets 1779  preempted-flag 0  submit->stop ms med/p90/max [4.00000e-02 1.15000e+01 3.62573e+03]  submit period ms med 0.00  active 3.67s
+pid 9876: 3D queue packets 20339  preempted-flag 0  submit->stop ms med/p90/max [7.00000e-02 6.15600e+01 3.88736e+03]  submit period ms med 0.00  active 3.89s
+packets of 2108 overlapping an in-flight packet of 9876: 1779/1779;   of 9876 overlapping 2108: 1775/20339
+WDDM_HW_QUEUE_EVENTS rows: 24 (queue creation only); CUDA kernel activity table present: False; DMA packets owned by our pids: see journal 0019

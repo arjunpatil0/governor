@@ -9,3 +9,5 @@ workloads/background/build/
 third_party/
 data/llama/*.gguf
 workloads/background/*.obj
+data/nsys/*.nsys-rep
+data/nsys/*.sqlite

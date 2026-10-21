@@ -33,3 +33,5 @@
 2026-10-21 · review · B review (6 findings), response written; finding 3 pending the Nsight trace · commit 29e7984 · [0017](../journal/0017_2026-10-21_b-review-and-llama-driver.md)
 2026-10-21 · result · llama.cpp driver sanity check: 101.0 vs 104.6 tok/s (-3.5%, pass) · commit ecea182 · [sanity](../data/llama/sanity_check.md)
 2026-10-21 · incident · Nsight trace 1 timed out: children wrote outputs in ~11 s but did not exit under nsys/WDDM; no .nsys-rep; partial output in data/nsys/ · [0018](../journal/0018_2026-10-21_nsys-trace-incident.md)
+2026-10-21 · incident · Nsight agent lost on first unlocked attempt; retry succeeded; kernel/DMA data absent from traces (children killed; HAGS) · [0019](../journal/0019_2026-10-21_nsys-traces-and-fg-gpu-ms.md)
+2026-10-21 · result · fg_gpu_ms defined from code; 1800-vs-unlocked inflation pattern unexplained; co-run service times not interpreted · [0019](../journal/0019_2026-10-21_nsys-traces-and-fg-gpu-ms.md)

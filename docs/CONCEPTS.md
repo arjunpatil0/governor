@@ -50,3 +50,6 @@ An idle GPU runs at a low clock (210 MHz) and takes time to ramp when work arriv
 
 ## NVML energy counter
 The GPU's own cumulative energy reading. Reading it too often inflates it, so it is read exactly twice per window. It is board-level (the whole card), good for comparing conditions, not for absolute watts. [ADR-0006](../decisions/ADR-0006_energy-measurement.md).
+
+## CUDA event interval (fg_gpu_ms) under time-slicing
+A CUDA event is a timestamp the GPU takes when it reaches that point in a stream. The difference between two events is GPU-timeline time between them, not time my kernel computed: if the GPU is switched to another program in between, that time is counted; time spent waiting before the first event is not. Alone it equals service time; co-run it is ambiguous. [0019](../journal/0019_2026-10-21_nsys-traces-and-fg-gpu-ms.md).
