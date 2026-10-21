@@ -1,0 +1,36 @@
+{
+  "utc": "20261021T223730Z",
+  "part": "G",
+  "smoke": true,
+  "precheck": true,
+  "admin": false,
+  "ac_plugged": true,
+  "ambient_c": 25.0,
+  "armoury_mode": "Performance",
+  "yaml_sha": "e1df18ccd6898bd9",
+  "dll_sha": "2662e340fcd300af",
+  "git_head": "c10364b9b39bb1b4d54fee31152bc56b66291743",
+  "git_dirty": false,
+  "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "driver": "616.92",
+  "hags": {
+    "adapter": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "line": "DriverSupportState:Stable Enabled:True",
+    "enabled": true
+  },
+  "execution_mode": "CUDA native kernels via w2_kernels.dll (no CPU fallback)",
+  "llama": null,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.4",
+  "blocks": 3,
+  "timing": {
+    "tmax": 68,
+    "warmup": 2.0,
+    "idle": 2.0,
+    "lead": 5.0,
+    "lead_llama": 25.0,
+    "preroll": 1.5,
+    "window": 4.0,
+    "child_timeout": 90
+  }
+}

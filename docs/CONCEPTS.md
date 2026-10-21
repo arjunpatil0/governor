@@ -71,3 +71,12 @@ If the x-variable in a regression is itself distorted by the effect you are stud
 
 ## Statistical power and the smallest possible p-value
 A rank test on n paired blocks cannot give a one-sided p below 1/2^n. With 6 pairs the floor is 0.0156, and after multiplying by 6 for Holm it is 0.094, so no result there can ever be called significant. Dropping data can turn "significant" into "not significant" without the effect changing: that is lost power, not a reversal. [0024](../journal/0024_2026-10-22_review-reanalysis.md).
+
+## %globaltimer and %smid
+Two PTX special registers a kernel can read. %globaltimer is a nanosecond-scale GPU timer (on this RTX 4070 Laptop it advances in steps of 1024 ns, measured in the G pre-check); %smid is the id of the SM the block runs on. Reading them at the start and end of every thread block gives the on-GPU timeline of a kernel, which Nsight and the host cannot show for time-sliced contexts.
+
+## Gap detector
+Inside the instrumented kernel one thread per warp reads %globaltimer every 64 loop iterations and keeps the largest gap between consecutive reads. A thread block that is descheduled mid-execution (context switch to another process) shows up as one gap far larger than the usual 2 microsecond gap. The threshold is 20 x the typical gap measured in a bg-alone cell (registered rule).
+
+## Instrumentation overhead pre-check
+Before interpreting a timeline you check that recording it did not change the thing recorded. G's first recording kernel was 1.6x slower because a branch inside the FMA loop broke its instruction scheduling; moving the timer read outside the inner loop brought the cost to 0.4% (journal 0029).
