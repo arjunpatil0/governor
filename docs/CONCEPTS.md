@@ -53,3 +53,6 @@ The GPU's own cumulative energy reading. Reading it too often inflates it, so it
 
 ## CUDA event interval (fg_gpu_ms) under time-slicing
 A CUDA event is a timestamp the GPU takes when it reaches that point in a stream. The difference between two events is GPU-timeline time between them, not time my kernel computed: if the GPU is switched to another program in between, that time is counted; time spent waiting before the first event is not. Alone it equals service time; co-run it is ambiguous. [0019](../journal/0019_2026-10-21_nsys-traces-and-fg-gpu-ms.md).
+
+## Wait saturation vs the residual-wait prediction
+The model said a request arriving during a long background slice must wait out the rest of it (mean about E[S^2]/(2E[S]), 4 ms for 8 ms slices). Measured, the added wait stayed at about 0.15-0.30 ms for slices from 0.25 to 8 ms. Whatever the GPU does, it does not make the foreground sit through the whole slice. This says what the wait is NOT; it does not yet say why (preemption, concurrency or a scheduler cap all fit a flat curve; A2 is designed to narrow that). [0020](../journal/0020_2026-10-21_experiment-a-results.md).

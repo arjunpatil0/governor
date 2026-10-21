@@ -1,20 +1,20 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-21 · Phase: W2 (B done; traces read; Experiments A and A2 pending; llama.cpp driver ready, part L not written)
+Updated 2026-10-21 · Phase: W2 (A done and analysed; A2 pending; llama.cpp part L code not written)
 
 ## Just did (commits)
-- Traces read (journal 0019, commit b349750): both processes appear in both traces; the OS trace cannot show our context switches (HAGS ON; no kernel table because the children were killed); fg_gpu_ms defined from the code; the 1800-vs-unlocked pattern stays unexplained and co-run service times stay uninterpreted. Nsight agent failure logged as an incident. Large .nsys-rep/.sqlite gitignored (38/41 MB; sqlite 0.7-0.8 GB).
-- Earlier: 09c6d92 (incident 0018, trace_cell.py fix), 429cb66, 0ae2e11 (docs), deeedbd (rules), ecea182 (llama driver + sanity check), c51b499 (B).
+- Experiment A analysed (journal 0020): HA1 NOT SUPPORTED (slope 0.013, CI [0.013, 0.013]; 17% of cells within +/-25%), classified preempted_or_concurrent by the pre-registered ordered rule; HA2 NOT SUPPORTED (3/6 significant). Observed added wait 0.15-0.30 ms regardless of slice length 0.25-8 ms; predicted 0.13-8.5 ms. 39/190 cells flagged start_temp_not_reached (kept). Results + raw data committed (see git log).
+- Earlier: 4a6fcd4 (traces review response), b349750 (journal 0019), c51b499 (B).
 
 ## Waiting for
-- Arjun to run Experiment A (command below). I execute nothing while it runs.
+- Arjun's go-ahead / reviewer pass on A's results, and Arjun to run A2. I execute nothing while it runs.
 
 ## Decisions needed
-1. (Decided: deferred.) Kernel-side %globaltimer diagnostic. Pre-stated trigger (reviewer): if SA4's fg slowdown vs duty does not track the 1 + d reference, or SA2's k is far from 1, register the globaltimer addendum before running it.
-2. (Decided: yes.) After A: run A2 (`--part A2`), then I write llama.cpp part `L` code and tests while nothing runs. Recommendation: yes.
+1. Run A2 next, before any interpretation of A? Recommendation: yes (A2's SA1 phase-independence and SA2 stretch are the pre-registered characterisation of exactly this outcome).
+2. Reviewer checkpoint: A's results are in; interpretation is deliberately minimal (no mechanism). Recommendation: have the reviewer read journal 0020 and data/w2_A_results.md before A2 or in parallel with it.
 
 ## Reviewer checkpoint due?
-- Surprise: yes (HAGS hides context switches from the OS trace; the fg_gpu_ms pattern is unexplained). Results before interpretation: A's results when done. Pre-registration/design change: none pending.
+- Results before interpretation: YES (A). Surprise: yes (model off by up to 28x at m=8). Pre-registration/design change: none.
 
-## Experiment A command (admin PowerShell, AC power, clean tree)
+## Experiment A2 command (admin PowerShell, AC power, clean tree)
 cd C:\Users\arjun\governor
-python experiments\w2_colocation\run.py --part A --ambient-c 25
+python experiments\w2_colocation\run.py --part A2 --ambient-c 25
