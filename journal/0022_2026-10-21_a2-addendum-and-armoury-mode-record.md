@@ -1,0 +1,5 @@
+# 0022 — Armoury Crate mode record and the capped-wait addendum (before A2)
+Date: 2026-10-21 · Phase: W2 · Author: Claude Code
+- **Armoury Crate mode (Arjun):** A2 runs in Performance mode. For A, B and C it was **not recorded; inferred non-Turbo because every A/B/C cell held 8001 MHz memory clock while Turbo produced 8101** (verified in results.csv, journal 0021). This is an inference, not a measurement of the mode.
+- **Addendum registered before A2 data:** experiments/w2_colocation_addendum_capped_wait_2026-10-21.md, a post-hoc, exploratory capped-wait model (fg wait = min(time remaining in slice, tau) + switch cost). Changes no decision rule. I recomputed A's c=0 medians from the raw CSV (0.153/0.226/0.255/0.287/0.297/0.298 ms for m = 0.25..8; reviewer quoted 0.294 at m=4) and the model values at tau = 0.3 (0.125/0.210/0.255/0.278/0.289/0.294); least-squares tau = 0.308 ms over six points; the model undershoots at m = 0.25 (0.125 vs 0.153).
+- The reviewer will review A and A2 together after A2.

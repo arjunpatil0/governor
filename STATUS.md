@@ -2,7 +2,7 @@
 Updated 2026-10-21 · Phase: W2 (A done; A2 false start fixed, A2 awaiting rerun; part L code not written)
 
 ## Just did (commits)
-- A2 crash fixed test-first (frame units now loaded for any part with a frame cell; smoke covers every fg stream) and logged (journal 0021). Armoury Crate mode now required via --armoury-mode and stored in meta.json; CLAUDE.md protocol updated. Memory-clock 8101 incident logged.
+- Capped-wait addendum registered (post-hoc, exploratory; journal 0022). A2 crash fixed test-first (frame units now loaded for any part with a frame cell; smoke covers every fg stream) and logged (journal 0021). Armoury Crate mode now required via --armoury-mode and stored in meta.json; CLAUDE.md protocol updated. Memory-clock 8101 incident logged.
 - Earlier: ea8546a/081f148 (Experiment A results, journal 0020).
 
 ## Waiting for
