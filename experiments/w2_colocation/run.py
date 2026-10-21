@@ -481,7 +481,7 @@ def main():
                 for c in order[3:]:
                     if sigf(c) not in seen:
                         pick.append(c); seen.add(sigf(c))
-                order = pick
+                order = order if a.part == "G" else pick       # part G smoke runs all 14 cells so every code path of the full run is exercised
             for i, cell in enumerate(order):
                 row = run_cell(cell, b, i, h, ctx)
                 wr.writerow(row); f.flush()

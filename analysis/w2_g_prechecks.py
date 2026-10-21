@@ -98,10 +98,9 @@ def main():
          (FENCE + ov.round(4).to_string(index=False) + FENCE_END) if len(ov) else "(no ovh.json)", "",
          "## (iii-b) harness cells: instrumented vs uninstrumented twin (clocks NOT locked here: the fg-alone cells idle at ~210 MHz, so baseline-based numbers are not meaningful at smoke grade; the R_2 on/off columns are)", "",
          FENCE + t.round(4).to_string(index=False) + FENCE_END, "",
-         f"- fg-alone latency p50, instrumented vs not: relative difference {chk['lat_rel_diff']*100:.1f}% (limit 5%)",
-         f"- observed wait of R_2 (mean latency minus the same-condition fg-alone mean), instrumented {m.wait_on:.4f} ms vs {m.wait_off:.4f} ms: difference {chk['wait_abs_diff_ms']:.4f} ms (limit 0.03)",
-         f"- R_2 latency p50 relative difference {chk_r2['lat_rel_diff']*100:.1f}%; bg mean slice {m.slice_on_ms:.4f} vs {m.slice_off_ms:.4f} ms; fg gpu p50 {m.gpu_on_ms:.4f} vs {m.gpu_off_ms:.4f} ms",
-         f"- acceptance at smoke grade: **{'PASS' if chk['pass'] else 'FAIL'}** (fg-alone latency and R_2 wait)", ""]
+         f"- R_2 latency p50, instrumented vs not (busy GPU, so clocks are comparable): relative difference {chk_r2['lat_rel_diff']*100:.1f}% (limit 5%); bg mean slice {m.slice_on_ms:.4f} vs {m.slice_off_ms:.4f} ms",
+         f"- fg-alone latency criterion and the R_2 observed-wait criterion (within 0.03 ms) need locked clocks: here the fg-alone cells idle at ~210 MHz, so the baseline-based wait differs by {chk['wait_abs_diff_ms']:.3f} ms and the fg-alone p50 by {chk['lat_rel_diff']*100:.1f}% for clock-state reasons, not instrumentation. NOT EVALUATED at smoke grade; to be evaluated on the full G data (R_m vs R_m_off per block); see STATUS decision 1 about the fg-alone twin", "",
+         f"- smoke-grade verdict: (iii-a) recording/plain slice ratio at stride 64 = {ov[ov.stride == 64].ratio.min():.3f}-{ov[ov.stride == 64].ratio.max():.3f}; R_2 on/off p50 within {chk_r2['lat_rel_diff']*100:.1f}% -> the instrumentation cost is small in the controlled tests; the registered acceptance is still open", ""]
     out = ROOT / "data" / "w2_G_prechecks.md"
     out.write_text("\n".join(L), encoding="utf-8"); print("\n".join(L)); print("written:", out)
 
