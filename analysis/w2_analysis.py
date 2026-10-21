@@ -196,6 +196,77 @@ def c_rel_thr(df):
     return d.reset_index(drop=True)
 
 
+# ---- part L: llama.cpp validation (addendum 2026-10-21) ------------------------------------------------------------------
+def l_rel_thr(df):
+    """Relative throughput vs the same block's unlocked cell; J/token = energy-counter delta / tokens in the window."""
+    d = pd.DataFrame(dict(block=df.block, level=df.sm_mhz.map(_level), tok_s=df.tok_s, energy_j=df.energy_j, tokens=df.tokens))
+    ref = d[d.level == "unlocked"].set_index("block").tok_s
+    d["rel_thr"] = d.tok_s.values / d.block.map(ref).values
+    d["j_per_token"] = d.energy_j / d.tokens
+    return d.reset_index(drop=True)
+
+
+def classify_llama_knee(knee):
+    """HL1: fp16-proxy-like if knee <= 1200 MHz, intermediate if <= 1800, int4-proxy-like if above 1800 or unlocked/never."""
+    if knee is None or knee == "unlocked" or knee == UNLOCKED_KEY:
+        return "int4-proxy-like"
+    return "fp16-proxy-like" if knee <= 1200 else "intermediate" if knee <= 1800 else "int4-proxy-like"
+
+
+def l_knee(d, n_boot=2000, seed=SEED, ci=0.90):
+    """Knee (lowest level with median-over-blocks rel_thr >= 0.95) and a 90% block-bootstrap CI; 10000 (UNLOCKED_KEY) = knee at/above unlocked."""
+    def knee_of(frame):
+        med = frame.groupby("level").rel_thr.median()
+        k = find_knee({_lvl(lv): v for lv, v in med.items()})
+        return UNLOCKED_KEY if k is None else k
+    blocks = d.block.unique(); rng = np.random.default_rng(seed); ks = []
+    by = {b: d[d.block == b] for b in blocks}
+    for _ in range(n_boot):
+        ks.append(knee_of(pd.concat([by[b] for b in rng.choice(blocks, len(blocks))])))
+    lo, hi = np.percentile(ks, [50 * (1 - ci), 100 - 50 * (1 - ci)])
+    return dict(knee=knee_of(d), ci_lo=float(lo), ci_hi=float(hi))
+
+
+def hl3_sequences(seqs):
+    """HL3: within a block, greedy token ids must agree over the common prefix of the block's cells (lengths differ with the clock).
+    seqs: {(block, level): [token ids]}. Returns the blocks that disagree."""
+    by = {}
+    for (b, _lv), s in seqs.items():
+        by.setdefault(b, []).append(list(s))
+    bad = []
+    for b, ss in by.items():
+        n = min(len(s) for s in ss)
+        if any(s[:n] != ss[0][:n] for s in ss):
+            bad.append(b)
+    return dict(bad_blocks=sorted(bad, key=str), n_blocks=len(by))
+
+
+def report_L(run_dir):
+    df = pd.read_csv(run_dir / "results.csv"); d = l_rel_thr(df)
+    k = l_knee(d)
+    med = d.groupby("level")[["rel_thr", "j_per_token"]].median().reset_index()
+    opt = med.loc[med.j_per_token.idxmin()]
+    seqs = {}
+    for _, r in df.iterrows():
+        f = _cell_dir(run_dir, r) / "llama_tokens.csv"
+        if f.exists():
+            seqs[(int(r.block), _level(r.sm_mhz))] = pd.read_csv(f).token.tolist()
+    h3 = hl3_sequences(seqs)
+    kn = lambda x: "unlocked" if x >= UNLOCKED_KEY else int(x)
+    L = _md_head(run_dir, "W2 llama.cpp validation (part L): decode clock knee of a real engine") + [
+        "Engine: llama.cpp pinned commit 620d2225cc436ab0b001e3200e590e3b286ef9ab (v0.7.0), CUDA sm_89, Llama-3.2-3B-Instruct Q4_K_M, batch 1, greedy, context ~512 + decode. One engine, one model, one quantisation.", "",
+        "## HL1 knee (lowest level with median relative throughput >= 0.95; 90% block-bootstrap CI)", "",
+        f"- knee {kn(k['knee'])} MHz, 90% CI [{kn(k['ci_lo'])}, {kn(k['ci_hi'])}] -> **{classify_llama_knee(k['knee'])}** (fp16 proxy knee 1050 MHz; int4 proxy: unlocked)", "",
+        "## HL2 energy optimum and retained throughput", "",
+        f"- energy optimum (lowest median J/token): {opt.level} MHz at {opt.j_per_token:.4f} J/token; unlocked: {med[med.level == 'unlocked'].j_per_token.iloc[0]:.4f} J/token",
+        f"- relative throughput at 1050 MHz (the C fp16 knee): {med[med.level == 1050].rel_thr.iloc[0]:.3f}; at 1800 MHz: {med[med.level == 1800].rel_thr.iloc[0]:.3f}", "",
+        "## HL3 correctness: identical greedy token ids within every block (over the common prefix)", "",
+        f"- blocks compared: {h3['n_blocks']}; blocks with differing sequences: {h3['bad_blocks'] or 'none'}", "",
+        "## Relative throughput and J/token by level (medians over blocks)", "", _fmt(med)]
+    L += _flags_block(df)
+    return L, "L"
+
+
 # ---- command-line driver ---------------------------------------------------------------------------------------------
 import re  # noqa: E402
 import sys  # noqa: E402
@@ -590,7 +661,7 @@ def report_A2(run_dir, a_dir, exclude_flags=()):
 def main():
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--part", required=True, choices=["A", "A2", "B", "C"])
+    ap.add_argument("--part", required=True, choices=["A", "A2", "B", "C", "L"])
     ap.add_argument("--dir"); ap.add_argument("--dir-A", dest="dir_a")
     a = ap.parse_args()
     run_dir = Path(a.dir) if a.dir else _newest(a.part)
@@ -602,6 +673,8 @@ def main():
         L, tag = report_B(run_dir)
     elif a.part == "C":
         L, tag = report_C(run_dir)
+    elif a.part == "L":
+        L, tag = report_L(run_dir)
     else:
         a_dir = Path(a.dir_a) if a.dir_a else _newest("A")
         L, tag = report_A2(run_dir, a_dir)

@@ -10,7 +10,7 @@ Smoke test without admin (one block, a few cells, short windows, no clock contro
 The parent process holds NVML only and never creates a CUDA context; CUDA work runs in child processes (calibration, background,
 foreground, decode) that share one QPC timeline. Clock resets run in a finally block. No CPU fallback anywhere.
 """
-import argparse, csv, ctypes, hashlib, json, platform, subprocess, sys, threading, time
+import argparse, csv, ctypes, hashlib, json, os, platform, subprocess, sys, threading, time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -23,12 +23,16 @@ ROOT = Path(__file__).resolve().parents[2]
 for sub in ("telemetry", "workloads/common", "analysis", "experiments/w2_colocation"):
     sys.path.insert(0, str(ROOT / sub))
 from console import disable_quickedit  # noqa: E402
+from llama_cell import parse_exec_mode, window_tokens  # noqa: E402
 from design import build_cells, cell_seed, clock_flags, frame_units_for_part, order_block  # noqa: E402
 from loadgen import gamma_slice_durations, latencies, parse_hags, poisson_arrivals, residual_wait  # noqa: E402
 from nvml_utils import current_event_mask, decode_event_reasons  # noqa: E402
 from provenance import check_run_provenance, git_state  # noqa: E402
 
 CFG_PATH = ROOT / "experiments" / "w2_colocation.yaml"
+LLAMA_EXE = ROOT / "workloads" / "background" / "llama_decode_bench.exe"
+LLAMA_BIN = ROOT / "third_party" / "llama.cpp" / "build" / "bin"
+LLAMA_DIR = ROOT / "data" / "llama"
 PILOT = ROOT / "data" / "pilot" / "w2" / "20261020T222839Z" / "pilot.json"
 FG_CPU, BG_CPU = 4, 8
 KIND_ID = {"mem": 0, "fma": 1}
@@ -163,12 +167,19 @@ def run_cell(cell, block, idx, h, ctx):
         flags.append("start_temp_not_reached")
     set_sm(cell["sm_mhz"])
     fg, bg = cell["fg"], cell["bg"]
-    t_sync = time.perf_counter() + T["lead"]
+    t_sync = time.perf_counter() + (T["lead_llama"] if part == "L" else T["lead"])      # part L: model load + 512-token prefill happen before t_sync
     procs, row = [], dict(block=block, cell_idx=idx, part=part, cell_id=cell["cell_id"], sm_mhz=cell["sm_mhz"], mem_mhz=cell["mem_mhz"],
                           seed=seed, spec=json.dumps({k: v for k, v in cell.items() if k not in ("part", "cell_id")}))
     cal = ctx["cal"]
 
-    if part == "C":
+    if part == "L":
+        t_win0 = t_sync + T["preroll"]; t_win1 = t_win0 + T["window"]
+        env = dict(os.environ, PATH=str(LLAMA_BIN) + os.pathsep + os.environ["PATH"])
+        log = open(cdir / "llama.log", "w")
+        procs.append(subprocess.Popen([str(LLAMA_EXE), str(LLAMA_DIR / cell["llama"]["model"]), str(LLAMA_DIR / "prompt.txt"), str(cdir / "llama_tokens.csv"),
+                                       repr(t_sync), repr(t_win1 + 0.1), str(cell["llama"]["n_prompt"])], stdout=log, stderr=subprocess.STDOUT, env=env))
+        n_fg = None
+    elif part == "C":
         d = cell["decode"]; layers = 28 if d["variant"] == "int4" else 14
         t_win0 = t_sync + T["preroll"]; t_win1 = t_win0 + T["window"]
         procs.append(spawn("decode", dict(out=str(cdir / "decode.npz"), variant=0 if d["variant"] == "fp16" else 1, layers=layers, graph=d["graph"],
@@ -204,7 +215,7 @@ def run_cell(cell, block, idx, h, ctx):
         time.sleep(0.002)
     e0 = nv.nvmlDeviceGetTotalEnergyConsumption(h)
     samp = WinSampler(h); samp.start()
-    while time.perf_counter() < t_win1 + (0.05 if part != "C" else 0):
+    while time.perf_counter() < t_win1 + (0.05 if part not in ("C", "L") else 0):
         time.sleep(0.005)
     e1 = nv.nvmlDeviceGetTotalEnergyConsumption(h)
     samp.finish()
@@ -228,10 +239,19 @@ def run_cell(cell, block, idx, h, ctx):
     flags += clock_flags(samp.sm, samp.mem, sm_t, cell["mem_mhz"])
     if not ctx["hags"]["enabled"]:
         flags.append("hags_not_enabled")
-    if abs(row["power_counter_w"] - row["power_samples_w"]) > 0.15 * row["power_samples_w"] and part in ("B", "C"):
+    if abs(row["power_counter_w"] - row["power_samples_w"]) > 0.15 * row["power_samples_w"] and part in ("B", "C", "L"):
         flags.append(f"energy_vs_samples:{row['power_counter_w']:.1f}/{row['power_samples_w']:.1f}")
 
-    if part == "C":
+    if part == "L":
+        em = parse_exec_mode((cdir / "llama.log").read_text(errors="ignore"))
+        if not em["ok"]:
+            row.update(flags=";".join(flags + [f"exec_mode_not_gpu:{em['detail']}"])); raise RuntimeError(f"llama driver not fully on GPU in {cdir}: {em['detail']}")
+        tk = np.genfromtxt(cdir / "llama_tokens.csv", delimiter=",", names=True)
+        k, late = window_tokens(tk["t_tok_end"], t_win0, t_win1)
+        if late:
+            flags.append("decode_started_late")
+        row.update(tokens=int(k), tok_s=float(k / wall), eff_gb_s=float(ctx["llama_model_bytes"] / 1e9 * k / wall))
+    elif part == "C":
         z = load_npz(cdir / "decode.npz"); t = z["t_tok_end"]
         k = t[(t >= t_win0) & (t < t_win1)]
         if len(t) == 0 or t[0] > t_win0:
@@ -274,7 +294,7 @@ def run_cell(cell, block, idx, h, ctx):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--part", choices=["A", "A2", "B", "C"])
+    ap.add_argument("--part", choices=["A", "A2", "B", "C", "L"])
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--ambient-c", type=float, default=None)
     ap.add_argument("--armoury-mode", default=None, help="Armoury Crate mode (e.g. Silent/Performance/Turbo/Manual); required for full runs, not detectable (journal 0021)")
@@ -289,10 +309,10 @@ def main():
     global NO_CLOCK_CONTROL
     cfg = yaml.safe_load(CFG_PATH.read_text(encoding="utf-8"))
     admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
-    key = {"A": "experiment_A", "A2": "experiment_A", "B": "experiment_B", "C": "experiment_C"}[a.part]
+    key = {"A": "experiment_A", "A2": "experiment_A", "B": "experiment_B", "C": "experiment_C", "L": "experiment_C"}[a.part]
     blocks = cfg[key]["blocks"]
     T = dict(tmax=cfg["common"]["gpu_start_temp_max_c"], warmup=cfg["common"]["warmup_s"], idle=cfg["common"]["idle_between_cells_s"],
-             lead=5.0, preroll=cfg["experiment_C"]["preroll_s"], window=cfg["experiment_C"]["window_s"], child_timeout=90)
+             lead=5.0, lead_llama=25.0, preroll=cfg["experiment_C"]["preroll_s"], window=cfg["experiment_C"]["window_s"], child_timeout=90)
     batt0 = psutil.sensors_battery()
     if not a.smoke and batt0 is not None and not batt0.power_plugged:
         sys.exit("Full run refused: the laptop is on battery. The registration (hardware: AC power) requires AC; plug in and retry.")
@@ -308,6 +328,24 @@ def main():
     dll = ROOT / "workloads" / "background" / "build" / "w2_kernels.dll"
     if not dll.exists():
         sys.exit(f"FATAL {dll} missing: build it first (no CPU fallback)")
+    llama_meta = None
+    if a.part == "L":                                  # fail before any clock is touched (addendum: no silent fallback)
+        model = LLAMA_DIR / "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+        for need in (LLAMA_EXE, model, LLAMA_DIR / "prompt.txt", LLAMA_BIN / "llama.dll"):
+            if not need.exists():
+                sys.exit(f"FATAL part L needs {need} (build: third_party/build_llama.bat and workloads/background/build_llama_driver.bat)")
+        h256 = hashlib.sha256()
+        with open(model, "rb") as mf:
+            for chunk in iter(lambda: mf.read(1 << 24), b""):
+                h256.update(chunk)
+        if h256.hexdigest() != "6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff":
+            sys.exit(f"FATAL model sha256 {h256.hexdigest()} differs from the registered 6c1a2b41...28ff")
+        commit = subprocess.run(["git", "-C", str(ROOT / "third_party" / "llama.cpp"), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=30).stdout.strip()
+        if commit != "620d2225cc436ab0b001e3200e590e3b286ef9ab":
+            sys.exit(f"FATAL llama.cpp commit {commit!r} is not the pinned 620d2225...")
+        llama_meta = dict(commit=commit, build_path="source build (third_party/build_llama.bat, CUDA sm_89)", model=model.name, model_bytes=model.stat().st_size,
+                          model_sha256=h256.hexdigest(), prompt_sha256=hashlib.sha256((LLAMA_DIR / "prompt.txt").read_bytes()).hexdigest(),
+                          driver_exe_sha=sha(LLAMA_EXE), cpu_affinity="none (the +/-5% sanity check was also unpinned)")
 
     # one dxdiag capture per session (approved read-only call): reuse a capture younger than 6 h, else take a new one
     raw = ROOT / "data" / "raw"; raw.mkdir(parents=True, exist_ok=True)
@@ -332,7 +370,7 @@ def main():
     meta = dict(utc=stamp, part=a.part, smoke=a.smoke, admin=admin, ac_plugged=None if batt is None else batt.power_plugged, ambient_c=a.ambient_c, armoury_mode=a.armoury_mode,
                 yaml_sha=sha(CFG_PATH), dll_sha=sha(dll), git_head=git_head, git_dirty=bool(git_state(ROOT)[1]) if a.smoke else False,
                 gpu=nv.nvmlDeviceGetName(h), driver=nv.nvmlSystemGetDriverVersion(), hags=hags,
-                execution_mode="CUDA native kernels via w2_kernels.dll (no CPU fallback)", os=platform.platform(), python=sys.version.split()[0],
+                execution_mode=("llama.cpp CUDA build, all layers offloaded (checked per cell from the driver log; a cell with any CPU layer aborts the run)" if a.part == "L" else "CUDA native kernels via w2_kernels.dll (no CPU fallback)"), llama=llama_meta, os=platform.platform(), python=sys.version.split()[0],
                 blocks=blocks, timing=T)
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(f"HAGS: {hags['line']} | git {git_head[:8]} | out {out_dir}")
@@ -355,7 +393,7 @@ def main():
             print("calibration:", {k: (round(v["a_ms"], 4), round(v["b_ms_per_unit"], 7)) for k, v in cal.items()})
         base_cells = build_cells(cfg, "A" if a.part == "A" else a.part)
         frame_units = frame_units_for_part(a.part, base_cells, PILOT)
-        ctx = dict(cfg_seed=20261021, timing=T, cal=cal, frame_units=frame_units, out_dir=out_dir, hags=hags, units_for=units_for)
+        ctx = dict(cfg_seed=20261021, llama_model_bytes=(llama_meta or {}).get("model_bytes"), timing=T, cal=cal, frame_units=frame_units, out_dir=out_dir, hags=hags, units_for=units_for)
         t_run = time.time()
         for b in range(blocks):
             order = order_block(base_cells, ctx["cfg_seed"], b)

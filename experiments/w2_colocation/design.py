@@ -8,6 +8,9 @@ from pathlib import Path
 # Registered in the yaml as prose (experiment_B.clocks); mirrored here and checked by tests/test_w2_design.py.
 # 1050 MHz is a descriptive level added by experiments/w2_colocation_addendum_B_levels_2026-10-21.md (outside the HB1/HB2 families).
 B_LEVELS = [900, 1050, 1200, 1500, 1800, "unlocked"]
+# Part L (experiments/w2_colocation_addendum_llamacpp_2026-10-21.md): the same nine levels as experiment_C.sm_levels_mhz
+LLAMA_LEVELS = [600, 750, 900, 1050, 1200, 1350, 1500, 1800, "unlocked"]
+LLAMA_MODEL = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
 MEM_MHZ = 8001
 SM_TOL, MEM_TOL = 0.03, 0.01      # validity_checks in the yaml
 
@@ -71,7 +74,9 @@ def build_cells(cfg, part):
                     cells.append(_cell("C", f"{variant}_{'graph' if graph else 'stream'}_{lv}", lv, None, None,
                                        decode=dict(variant=variant, graph=graph)))
         return cells
-    raise ValueError(f"unknown part {part!r}; expected A, A2, B or C")
+    if part == "L":
+        return [_cell("L", f"llama_{lv}", lv, None, None, llama=dict(model=LLAMA_MODEL, n_prompt=512)) for lv in LLAMA_LEVELS]
+    raise ValueError(f"unknown part {part!r}; expected A, A2, B, C or L")
 
 
 def order_block(cells, base_seed, block):
