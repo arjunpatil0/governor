@@ -260,3 +260,30 @@ def test_deadline_aware_picks_lowest_power_level_with_zero_misses():
                        for lv, m, w, p in [("unlocked", 0, 56., 9.), (1800, 0, 38., 12.), (1500, 0, 32., 15.), (1200, 1, 26., 600.)]])
     t = deadline_aware(df, "f_nobg")
     assert t.attrs["best_level"] == "1500" and t.set_index("level").power_saved_vs_unlocked["1500"] == pytest.approx(1 - 32 / 56)
+
+
+# ---- capped-wait addendum (experiments/w2_colocation_addendum_capped_wait_2026-10-21.md) and incident flags (journal 0023) ----------------
+def test_capped_wait_fit_recovers_tau_and_offset():
+    from w2_analysis import fit_capped_wait
+    rng = np.random.default_rng(1)
+    r = rng.uniform(0, 4.0, 4000)                        # time-to-slice-end, ms
+    blocks = rng.integers(0, 10, r.size)
+    y = 0.05 + np.minimum(r, 0.3) + rng.normal(0, 0.02, r.size)
+    f = fit_capped_wait(r, y, blocks, n_boot=200, seed=0)
+    assert f["tau"] == pytest.approx(0.3, abs=0.03) and f["offset"] == pytest.approx(0.05, abs=0.02)
+    assert f["tau_lo"] <= f["tau"] <= f["tau_hi"]
+
+
+def test_capped_wait_binning_drops_sparse_bins_and_uses_registered_widths():
+    from w2_analysis import bin_by_time_to_end
+    r = np.r_[np.full(40, 0.02), np.full(10, 0.52), np.full(35, 1.2)]
+    t = bin_by_time_to_end(r, np.arange(r.size) * 0.0 + 1.0)
+    assert list(t.n) == [40, 35]                          # 0.52 bin has 10 < 30 requests -> dropped
+    assert t.lo.tolist() == pytest.approx([0.0, 1.0])     # 0.05 ms bins below 1 ms, 0.5 ms bins above
+
+
+def test_cells_overlapping_a_window_by_time_span():
+    from w2_analysis import cells_overlapping
+    spans = {"a": (0.0, 10.0), "b": (10.5, 20.0), "c": (30.0, 40.0)}
+    assert cells_overlapping(spans, 15.0, 31.0) == ["b", "c"]
+    assert cells_overlapping(spans, 10.1, 10.4) == []

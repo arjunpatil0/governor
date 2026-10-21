@@ -56,3 +56,12 @@ A CUDA event is a timestamp the GPU takes when it reaches that point in a stream
 
 ## Wait saturation vs the residual-wait prediction
 The model said a request arriving during a long background slice must wait out the rest of it (mean about E[S^2]/(2E[S]), 4 ms for 8 ms slices). Measured, the added wait stayed at about 0.15-0.30 ms for slices from 0.25 to 8 ms. Whatever the GPU does, it does not make the foreground sit through the whole slice. This says what the wait is NOT; it does not yet say why (preemption, concurrency or a scheduler cap all fit a flat curve; A2 is designed to narrow that). [0020](../journal/0020_2026-10-21_experiment-a-results.md).
+
+## Console QuickEdit stall
+A Windows console in QuickEdit mode freezes the program writing to it as soon as you click in the window (to select text), until you press Enter. For a timed experiment that is a silent pause between cells. Disabling QuickEdit at startup removes the risk. [0023](../journal/0023_2026-10-22_a2-incidents-and-results.md).
+
+## Sensitivity analysis
+Running the registered analysis twice, once on all data and once without cells you suspect are contaminated, to see whether the conclusion depends on them. The registered result stays the headline; the sensitivity run tells you how much to trust it. [0023](../journal/0023_2026-10-22_a2-incidents-and-results.md).
+
+## Post-hoc (exploratory) hypothesis
+A hypothesis formed after seeing the data. It can suggest what to test next but cannot confirm itself on the same data: it was built to fit them. Here, tau was suggested by A's medians, so re-fitting it on A's own cells describes A rather than tests it. [0022](../journal/0022_2026-10-21_a2-addendum-and-armoury-mode-record.md), [0023](../journal/0023_2026-10-22_a2-incidents-and-results.md).

@@ -201,6 +201,7 @@ import sys  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "workloads" / "common"))   # loadgen (A2 report; journal 0023: the first A2 analysis run hit ModuleNotFoundError)
 
 
 def load_rel_w1(path=None):
@@ -344,14 +345,134 @@ def report_C(run_dir):
     return L, "C"
 
 
+# ---- capped-wait addendum (exploratory, post-hoc) and incident flags -------------------------------------------------
+def bin_by_time_to_end(r_ms, wait_ms, min_n=30):
+    """Mean wait per bin of time-to-slice-end: 0.05 ms bins below 1 ms, 0.5 ms bins above; bins with < min_n requests dropped."""
+    r, w = np.asarray(r_ms, float), np.asarray(wait_ms, float)
+    edges = np.r_[np.arange(0, 1.0, 0.05), np.arange(1.0, max(float(r.max()), 1.0) + 0.5, 0.5)]
+    k = np.searchsorted(edges, r, side="right") - 1
+    rows = [dict(lo=float(edges[i]), hi=float(edges[i + 1]) if i + 1 < len(edges) else float("inf"), n=int((k == i).sum()), mean_wait_ms=float(w[k == i].mean()))
+            for i in np.unique(k) if (k == i).sum() >= min_n]
+    return pd.DataFrame(rows)
+
+
+def _capped_fit(r, y, grid):
+    best = None
+    for t in grid:
+        f = np.minimum(r, t)
+        off = float(np.mean(y - f)); sse = float(np.sum((y - f - off) ** 2))
+        if best is None or sse < best[0]:
+            best = (sse, t, off)
+    return best[1], best[2]
+
+
+def fit_capped_wait(r_ms, wait_ms, blocks, n_boot=2000, seed=SEED, ci=0.90):
+    """wait = offset + min(r, tau): plateau tau, slope -1 below tau. Least squares over a tau grid; 90% block-cluster bootstrap CI of tau."""
+    r, y, b = np.asarray(r_ms, float), np.asarray(wait_ms, float), np.asarray(blocks)
+    grid = np.arange(0.02, 2.0001, 0.01)
+    tau, off = _capped_fit(r, y, grid)
+    rng = np.random.default_rng(seed); ub = np.unique(b); by = {u: np.where(b == u)[0] for u in ub}
+    ts = []
+    for _ in range(n_boot):
+        idx = np.concatenate([by[u] for u in rng.choice(ub, len(ub))])
+        ts.append(_capped_fit(r[idx], y[idx], grid)[0])
+    lo, hi = np.percentile(ts, [50 * (1 - ci), 100 - 50 * (1 - ci)])
+    return dict(tau=float(tau), offset=float(off), tau_lo=float(lo), tau_hi=float(hi))
+
+
+def cells_overlapping(spans, t_lo, t_hi):
+    """Cell ids whose [start, end] time span overlaps [t_lo, t_hi] (sorted by start)."""
+    return [k for k, (a, b) in sorted(spans.items(), key=lambda kv: kv[1][0]) if a <= t_hi and b >= t_lo]
+
+
 def _cell_dir(run_dir, r):
     return next((run_dir / "cells").glob(f"b{int(r.block):02d}_{int(r.cell_idx):02d}_*"))
 
 
-def report_A2(run_dir, a_dir):
+def _incident_flags(run_dir):
+    p = run_dir / "incident_flags.csv"
+    return pd.read_csv(p) if p.exists() else pd.DataFrame(columns=["cell_dir", "flag", "detail"])
+
+
+def _cell_dir_name(r):
+    return f"b{int(r.block):02d}_{int(r.cell_idx):02d}_{r.cell_id}"
+
+
+def _tte_points(cd, base_ms):
+    """Per fg request landing inside a bg slice: (time to the slice's end in ms, wait = latency - block baseline latency in ms)."""
+    with np.load(cd / "fg_window.npz") as fgz, np.load(cd / "bg_window.npz") as bgz:
+        a, s_, e_ = fgz["arrival"], bgz["t_start"], bgz["t_end"]
+        idx = np.clip(np.searchsorted(s_, a, side="right") - 1, 0, len(s_) - 1)
+        inside = (a >= s_[0]) & (a < e_[idx])
+        return (e_[idx] - a)[inside] * 1e3, ((fgz["t_complete"] - fgz["arrival"]) * 1e3)[inside] - base_ms
+
+
+def _tau_section(a_dir, dfa, run_dir, df2):
+    """EXPLORATORY, POST-HOC (addendum capped_wait_2026-10-21): wait vs time-to-slice-end. A's SA1 cells (c=0, m in 2,4,8) as registered; the
+    A2 HIGH-priority c=0 cells are shown beside them as a different condition. NOTE: the SA1 cells are the same A cells whose medians gave tau ~0.3."""
+    base = dfa[dfa.cell_id == "baseline"].set_index("block").lat_mean_ms
+    def collect(src, dd, sel):
+        out = []
+        for _, r in dd.iterrows():
+            sp = json.loads(r.spec)
+            if sel(r, sp):
+                rr, ww = _tte_points(_cell_dir(src, r), base[int(r.block)])
+                out.append((sp["bg"]["m_ms"], rr, ww, int(r.block)))
+        return out
+    A_ = collect(a_dir, dfa, lambda r, sp: r.part == "A" and sp["bg"] is not None and sp["bg"]["cv"] == 0 and sp["bg"]["m_ms"] in (2, 4, 8) and sp["fg"]["priority"] == "normal")
+    H_ = collect(run_dir, df2, lambda r, sp: r.cell_id.startswith("sa3_high_") and sp["bg"]["cv"] == 0)
+    L = ["", "## EXPLORATORY / POST-HOC: capped-wait model (addendum experiments/w2_colocation_addendum_capped_wait_2026-10-21.md; changes no decision rule)",
+         "Model: wait = offset + min(time-to-slice-end, tau). A's estimate from constant-slice medians: tau = 0.308 ms (least squares, six points, no CI).",
+         "CAVEAT: the registered SA1 cells below are A's own cells, the same data that suggested tau; this is a re-description of that data at request level, "
+         "not an independent test. The A2 high-priority cells are a different condition (priority), shown for comparison only.", ""]
+    for name, grp in (("A SA1 cells (normal priority; c=0, m in 2,4,8)", A_), ("A2 sa3_high cells (HIGH priority; c=0, m in 2,8)", H_)):
+        if not grp:
+            L.append(f"- {name}: none"); continue
+        R = np.concatenate([g[1] for g in grp]); W = np.concatenate([g[2] for g in grp]); B = np.concatenate([[g[3]] * len(g[1]) for g in grp])
+        f = fit_capped_wait(R, W, B)
+        L.append(f"- {name}: n = {len(R)} requests; fitted tau = {f['tau']:.3f} ms, 90% block-bootstrap CI [{f['tau_lo']:.3f}, {f['tau_hi']:.3f}]; offset = {f['offset']:.3f} ms")
+        for m in sorted({g[0] for g in grp}):
+            sel = [g for g in grp if g[0] == m]
+            fm = fit_capped_wait(np.concatenate([g[1] for g in sel]), np.concatenate([g[2] for g in sel]), np.concatenate([[g[3]] * len(g[1]) for g in sel]), n_boot=500)
+            L.append(f"    - m = {m} ms: tau = {fm['tau']:.3f} [{fm['tau_lo']:.3f}, {fm['tau_hi']:.3f}], offset {fm['offset']:.3f}")
+        t = bin_by_time_to_end(R, W)
+        L += ["", f"  Binned curve ({name}); lo/hi = time-to-slice-end bin in ms:", "", _fmt(t), ""]
+    return L
+
+
+def _stall_check(run_dir, df2, inc):
+    """Cells right after each console stall vs the same cell in the other 9 blocks (rank 0 = below all others)."""
+    names = {_cell_dir_name(r): i for i, r in df2.iterrows()}
+    rows = []
+    for cd in inc[inc.flag == "post_stall_first_cell"].cell_dir:
+        i0 = names[cd]
+        for off in (0, 1, 2):
+            r = df2.iloc[i0 + off]
+            o = df2[(df2.cell_id == r.cell_id) & (df2.block != r.block)]
+            row = dict(cell=_cell_dir_name(r), after_stall=off)
+            for c in ("temp_pre_c", "lat_mean_ms", "lat_p99_ms", "frac_completed", "power_counter_w", "sm_clock_med", "mem_clock_med"):
+                row[c] = r[c]; row[c + "_others_median"] = o[c].median(); row[c + "_rank_of_9"] = int((o[c] < r[c]).sum())
+            rows.append(row)
+    cols = ["cell", "after_stall", "temp_pre_c", "temp_pre_c_others_median", "lat_mean_ms", "lat_mean_ms_others_median", "lat_mean_ms_rank_of_9",
+            "lat_p99_ms", "lat_p99_ms_others_median", "frac_completed", "power_counter_w", "power_counter_w_others_median", "power_counter_w_rank_of_9",
+            "sm_clock_med", "mem_clock_med"]
+    return ["", "## Stall check (journal 0023): first three cells after each console-QuickEdit stall vs the same cell in the other 9 blocks; rank 0 = below all 9 others", "",
+            _fmt(pd.DataFrame(rows)[cols], floatfmt=".4g"), ""]
+
+
+def report_A2(run_dir, a_dir, exclude_flags=()):
     from loadgen import phase_in_slice, slice_stretch
     df2 = pd.read_csv(run_dir / "results.csv"); dfa = pd.read_csv(a_dir / "results.csv")
-    L = _md_head(run_dir, "W2 Experiment A secondary: preemption characterisation (descriptive; motivated by the pilot, journal 0011)")
+    inc = _incident_flags(run_dir)
+    df2["incident"] = df2.apply(lambda r: ";".join(inc[inc.cell_dir == _cell_dir_name(r)].flag), axis=1)
+    title = "W2 Experiment A secondary: preemption characterisation (descriptive; motivated by the pilot, journal 0011)"
+    if exclude_flags:
+        drop = df2.incident.map(lambda x: any(f in x.split(";") for f in exclude_flags))
+        title += f" | SENSITIVITY: excluding {int(drop.sum())} cells flagged {', '.join(exclude_flags)} (registered rules unchanged)"
+        df2 = df2[~drop].reset_index(drop=True)
+    else:
+        title += " | REGISTERED ANALYSIS (all cells)"
+    L = _md_head(run_dir, title)
     rows = []
     for _, r in dfa.iterrows():                   # SA1: c = 0, m in {2, 4, 8}, from the A run's cell logs
         sp = json.loads(r.spec)
@@ -396,14 +517,21 @@ def report_A2(run_dir, a_dir):
     L += ["", "## SA4 foreground size and duty cycle (medians over blocks; slowdown = latency / the fg-alone latency of the same size)", ""]
     sp2 = _specs(df2)
     t4 = pd.DataFrame(dict(cell_id=df2.cell_id, fg_ms=sp2.map(lambda x: x["fg"]["size_ms"]), duty=sp2.map(lambda x: x["bg"]["duty"] if x["bg"] else 0.0),
-                           m_ms=sp2.map(lambda x: x["bg"]["m_ms"] if x["bg"] else 0), lat_mean_ms=df2.lat_mean_ms, lat_p99_ms=df2.lat_p99_ms, fg_gpu_p50_ms=df2.fg_gpu_p50_ms))
+                           m_ms=sp2.map(lambda x: x["bg"]["m_ms"] if x["bg"] else 0), lat_mean_ms=df2.lat_mean_ms, lat_p99_ms=df2.lat_p99_ms, frac_completed=df2.frac_completed, fg_gpu_p50_ms=df2.fg_gpu_p50_ms))
     t4 = t4[~t4.cell_id.str.startswith("sa3")]
     med = t4.groupby(["cell_id", "fg_ms", "m_ms", "duty"]).median().reset_index()
     alone = med[med.duty == 0].set_index("fg_ms").lat_mean_ms
     med["slowdown"] = med.lat_mean_ms / med.fg_ms.map(alone)
+    med["overloaded"] = (med.frac_completed < 0.99) | (med.slowdown > 10)           # latency of an overloaded cell depends on how long the cell ran (review 2026-10-21 B finding 4)
     L += [_fmt(med.sort_values(["fg_ms", "m_ms", "duty"])), "",
+          "Cells with frac_completed < 0.99 or slowdown > 10 are OVERLOADED (a backlog builds up; a completed fraction of 1.0 can still hide a long queue): their latency and slowdown are artefacts of the window length, not service times.",
           "Reference for 4 and 9 ms foreground: equal sharing predicts slowdown ~ 1 + duty (rough; descriptive only)."]
+    L += _tau_section(a_dir, dfa, run_dir, df2)
+    if not exclude_flags:
+        L += _stall_check(run_dir, df2, inc)
     L += _flags_block(df2)
+    if len(inc):
+        L += ["", "## Incident flags (sidecar incident_flags.csv; analysis/a2_incident_flags.py; journal 0023)", "", inc.to_string(index=False)]
     return L, "A2"
 
 
@@ -421,7 +549,11 @@ def main():
     elif a.part == "C":
         L, tag = report_C(run_dir)
     else:
-        L, tag = report_A2(run_dir, Path(a.dir_a) if a.dir_a else _newest("A"))
+        a_dir = Path(a.dir_a) if a.dir_a else _newest("A")
+        L, tag = report_A2(run_dir, a_dir)
+        if (run_dir / "incident_flags.csv").exists():
+            L2, _ = report_A2(run_dir, a_dir, exclude_flags=("user_activity_contamination",))
+            L += ["", "---", ""] + L2
     out = ROOT / "data" / ("w2_A_secondary_results.md" if tag == "A2" else f"w2_{tag}_results.md")
     out.write_text("\n".join(L), encoding="utf-8")
     print("\n".join(L)); print(f"\nwritten: {out}")
