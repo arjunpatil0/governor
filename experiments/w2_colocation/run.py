@@ -24,7 +24,8 @@ for sub in ("telemetry", "workloads/common", "analysis", "experiments/w2_colocat
     sys.path.insert(0, str(ROOT / sub))
 from console import disable_quickedit  # noqa: E402
 from llama_cell import parse_exec_mode, window_tokens  # noqa: E402
-from design import build_cells, cell_seed, clock_flags, frame_units_for_part, order_block  # noqa: E402
+from design import G_SEED, build_cells, cell_seed, clock_flags, frame_units_for_part, order_block, precheck_cells_G  # noqa: E402
+from w2_timeline import pack_rec  # noqa: E402
 from loadgen import gamma_slice_durations, latencies, parse_hags, poisson_arrivals, residual_wait  # noqa: E402
 from nvml_utils import current_event_mask, decode_event_reasons  # noqa: E402
 from provenance import check_run_provenance, git_state  # noqa: E402
@@ -36,13 +37,14 @@ LLAMA_DIR = ROOT / "data" / "llama"
 PILOT = ROOT / "data" / "pilot" / "w2" / "20261020T222839Z" / "pilot.json"
 FG_CPU, BG_CPU = 4, 8
 KIND_ID = {"mem": 0, "fma": 1}
+G_BG_REC_BLOCKS = 800_000      # bg record buffer (Rec = 48 B): ~3700 slices of 216 blocks; later slices run uninstrumented and are counted
 SELF = [sys.executable, str(Path(__file__).resolve())]
 NO_CLOCK_CONTROL = False
 FIELDS = ["block", "cell_idx", "part", "cell_id", "sm_mhz", "mem_mhz", "seed", "spec", "n_fg_measured", "frac_completed",
           "lat_mean_ms", "lat_p50_ms", "lat_p99_ms", "lat_p999_ms", "lat_max_ms", "fg_gpu_p50_ms", "miss_frac", "budget_ms",
           "bg_slices", "rho", "bg_mean_slice_ms", "residual_ms", "predicted_wait_ms", "gap_mean_us", "gap_p99_us",
           "tokens", "tok_s", "eff_gb_s", "energy_j", "power_counter_w", "power_samples_w",
-          "sm_clock_med", "mem_clock_med", "sm_clock_min", "sm_clock_max", "temp_pre_c", "temp_max_c", "event_reasons", "flags"]
+          "sm_clock_med", "mem_clock_med", "sm_clock_min", "sm_clock_max", "temp_pre_c", "temp_max_c", "event_reasons", "rec_blocks_fg", "rec_dropped_fg", "rec_blocks_bg", "rec_dropped_bg", "flags"]
 
 
 def sha(p):
@@ -95,6 +97,11 @@ class WinSampler(threading.Thread):
 
 
 # ------------------------------------------------------------------------------------------- children
+def save_rec(path, rec, sync0, sync1, sms):
+    """Per-block records (packed) plus the host<->GPU timer offsets measured before and after the run: (offset_s, round_trip_s) each."""
+    np.savez_compressed(path, sync0=np.array(sync0), sync1=np.array(sync1), sms=sms, **pack_rec(rec))
+
+
 def child_main(role, spec_path):
     from w2lib import W2, calibrate
     spec = json.loads(Path(spec_path).read_text(encoding="utf-8"))
@@ -111,14 +118,33 @@ def child_main(role, spec_path):
         out.write_text(json.dumps(cal, indent=2), encoding="utf-8")
     elif role == "bg":
         units = np.load(spec["units"])
+        rec = bool(spec.get("rec"))
+        sync0 = w.gt_sync() if rec else None
         while w.now() < spec["t_sync"]:
             time.sleep(0.001)
-        ts, te, g = w.bg_until(spec["kind"], units, spec["t_stop"], cap=spec["cap"], duty=spec["duty"])
+        if rec:
+            ts, te, g, r = w.bg_until_rec(units, spec["t_stop"], t_rec0=spec["t_rec0"], cap_blocks=spec["rec_cap_blocks"], cap=spec["cap"], duty=spec["duty"])
+            save_rec(Path(spec["rec_out"]), r, sync0, w.gt_sync(), w.sms)
+        else:
+            ts, te, g = w.bg_until(spec["kind"], units, spec["t_stop"], cap=spec["cap"], duty=spec["duty"])
         np.savez_compressed(out, t_start=ts, t_end=te, gpu_ms=g.astype(np.float32))
     elif role == "fg":
         arr = np.load(spec["arrivals"])
-        tl, tc, g = w.fg_run(spec["kind"], arr, spec["units"])
+        if spec.get("rec"):
+            sync0 = w.gt_sync()
+            cap_blocks = (len(arr) - spec["rec_from"] + 10) * w.sms * 6
+            tl, tc, g, r = w.fg_run_rec(spec["kind"], arr, spec["units"], rec_from=spec["rec_from"], cap_blocks=cap_blocks)
+            save_rec(Path(spec["rec_out"]), r, sync0, w.gt_sync(), w.sms)
+        else:
+            tl, tc, g = w.fg_run(spec["kind"], arr, spec["units"])
         np.savez_compressed(out, arrival=arr, t_launch=tl, t_complete=tc, gpu_ms=g.astype(np.float32))
+    elif role == "gtprobe":     # Experiment G pre-checks (i) timer resolution and (ii) single-process, two-stream timebase
+        reads = w.gt_resolution(100_000)
+        off, rt = w.gt_sync(500)
+        r = w.two_streams_rec(8000, 3000, 0.002)
+        off2, rt2 = w.gt_sync(500)
+        np.savez_compressed(out, reads=reads, off=off, rt=rt, off2=off2, rt2=rt2, sms=w.sms,
+                            times=np.array([r["a_launch"], r["a_done"], r["b_launch"], r["b_done"]]), **pack_rec(r["rec"]))
     elif role == "decode":
         import ctypes as C
         from w2lib import dbl
@@ -186,21 +212,26 @@ def run_cell(cell, block, idx, h, ctx):
                                           t_sync=t_sync + 0.0, t_stop=t_win1 + 0.1, cap=200_000, cpu=BG_CPU), cdir))
         n_fg = None
     else:
-        rate, n_meas = fg["rate_hz"], fg["n"]
-        n_warm = int(round(rate * T["warmup"]))
-        if fg["arrivals"] == "poisson":
-            arr = poisson_arrivals(rate, n_warm + n_meas, seed, t0=t_sync)
-        else:
-            arr = t_sync + np.arange(n_warm + n_meas) / rate
-        t_win0 = t_sync + T["warmup"]; t_win1 = arr[-1]
-        np.save(cdir / "arrivals.npy", arr)
-        if fg.get("frame"):
-            units_fg = ctx["frame_units"][fg["frame"]]
-        else:
-            units_fg = int(ctx["units_for"](cal["fma"], fg["size_ms"]))
-        kid = KIND_ID[fg["kind"]]
-        procs.append(spawn("fg", dict(out=str(cdir / "fg.npz"), arrivals=str(cdir / "arrivals.npy"), kind=kid, units=units_fg,
-                                      cpu=FG_CPU, priority=fg["priority"]), cdir))
+        rec = bool(cell.get("rec"))
+        t_win0 = t_sync + T["warmup"]
+        if fg:
+            rate, n_meas = fg["rate_hz"], fg["n"]
+            n_warm = int(round(rate * T["warmup"]))
+            if fg["arrivals"] == "poisson":
+                arr = poisson_arrivals(rate, n_warm + n_meas, seed, t0=t_sync)
+            else:
+                arr = t_sync + np.arange(n_warm + n_meas) / rate
+            t_win1 = arr[-1]
+            np.save(cdir / "arrivals.npy", arr)
+            if fg.get("frame"):
+                units_fg = ctx["frame_units"][fg["frame"]]
+            else:
+                units_fg = int(ctx["units_for"](cal["fma"], fg["size_ms"]))
+            kid = KIND_ID[fg["kind"]]
+            procs.append(spawn("fg", dict(out=str(cdir / "fg.npz"), arrivals=str(cdir / "arrivals.npy"), kind=kid, units=units_fg,
+                                          cpu=FG_CPU, priority=fg["priority"], rec=rec, rec_from=n_warm, rec_out=str(cdir / "fg_rec.npz")), cdir))
+        else:                                              # part G bgalone: no foreground, a window of T["window"] after the warm-up
+            t_win1 = t_win0 + T["window"]
         if bg:
             nslice = int((t_win1 - t_sync + 2) / (0.4 * bg["m_ms"] * 1e-3)) + 100
             dur = gamma_slice_durations(min(nslice, 400_000), bg["m_ms"], bg["cv"], seed + 1)
@@ -208,7 +239,8 @@ def run_cell(cell, block, idx, h, ctx):
             np.save(cdir / "bg_units.npy", units)
             cap = int((t_win1 - t_sync + 2) / (0.3 * bg["m_ms"] * 1e-3)) + 1000
             procs.append(spawn("bg", dict(out=str(cdir / "bg.npz"), units=str(cdir / "bg_units.npy"), kind=KIND_ID[bg["kind"]], t_sync=t_sync,
-                                          t_stop=t_win1 + 1.0, cap=min(cap, 1_500_000), duty=bg["duty"], cpu=BG_CPU), cdir))
+                                          t_stop=t_win1 + 1.0, cap=min(cap, 1_500_000), duty=bg["duty"], cpu=BG_CPU,
+                                          rec=rec, t_rec0=t_win0, rec_cap_blocks=G_BG_REC_BLOCKS, rec_out=str(cdir / "bg_rec.npz")), cdir))
 
     # measured window: energy counter read exactly twice; 20 Hz samples inside
     while time.perf_counter() < t_win0:
@@ -260,17 +292,18 @@ def run_cell(cell, block, idx, h, ctx):
             flags.append("decode_state_not_finite")
         row.update(tokens=int(len(k)), tok_s=float(len(k) / wall), eff_gb_s=float(z["bytes_per_token"] / 1e9 * len(k) / wall))
     else:
-        z = load_npz(cdir / "fg.npz")
-        a, tc, g = z["arrival"], z["t_complete"], z["gpu_ms"]
-        m = a >= t_win0
-        lat = latencies(a[m], tc[m]) * 1e3
-        done = float(np.mean(tc[m] <= t_win1 + 1.0))
-        row.update(n_fg_measured=int(m.sum()), frac_completed=done, lat_mean_ms=float(lat.mean()), lat_p50_ms=pct(lat, 50), lat_p99_ms=pct(lat, 99),
-                   lat_p999_ms=pct(lat, 99.9), lat_max_ms=float(lat.max()), fg_gpu_p50_ms=float(np.median(g[m])))
-        if fg["arrivals"] == "periodic":
-            row.update(budget_ms=1000.0 / fg["rate_hz"], miss_frac=float(np.mean(lat > 1000.0 / fg["rate_hz"])))
-        if done < 0.95:
-            flags.append(f"fg_incomplete:{done:.2f}")
+        if fg:
+            z = load_npz(cdir / "fg.npz")
+            a, tc, g = z["arrival"], z["t_complete"], z["gpu_ms"]
+            m = a >= t_win0
+            lat = latencies(a[m], tc[m]) * 1e3
+            done = float(np.mean(tc[m] <= t_win1 + 1.0))
+            row.update(n_fg_measured=int(m.sum()), frac_completed=done, lat_mean_ms=float(lat.mean()), lat_p50_ms=pct(lat, 50), lat_p99_ms=pct(lat, 99),
+                       lat_p999_ms=pct(lat, 99.9), lat_max_ms=float(lat.max()), fg_gpu_p50_ms=float(np.median(g[m])))
+            if fg["arrivals"] == "periodic":
+                row.update(budget_ms=1000.0 / fg["rate_hz"], miss_frac=float(np.mean(lat > 1000.0 / fg["rate_hz"])))
+            if done < 0.95:
+                flags.append(f"fg_incomplete:{done:.2f}")
         if bg:
             zb = load_npz(cdir / "bg.npz"); ts, te = zb["t_start"], zb["t_end"]
             if len(ts) and ts[0] - t_sync > 0.5:
@@ -285,7 +318,16 @@ def run_cell(cell, block, idx, h, ctx):
                            predicted_wait_ms=r["predicted_s"] * 1e3, gap_mean_us=r["gap_mean_s"] * 1e6, gap_p99_us=r["gap_p99_s"] * 1e6)
                 if bg["duty"] == 1.0 and r["rho"] < 0.95:
                     flags.append(f"rho_low:{r['rho']:.3f}")
-        np.savez_compressed(cdir / "fg_window.npz", arrival=a[m], t_launch=z["t_launch"][m], t_complete=tc[m], gpu_ms=g[m])
+        if fg:
+            np.savez_compressed(cdir / "fg_window.npz", arrival=a[m], t_launch=z["t_launch"][m], t_complete=tc[m], gpu_ms=g[m], idx0=int(np.argmax(m)))
+    if cell.get("rec"):                                    # Experiment G: record counts; bg overflow is by design (buffer cap), fg overflow is a flag
+        for role in ("fg", "bg"):
+            f = cdir / f"{role}_rec.npz"
+            if f.exists():
+                zr = np.load(f)
+                row[f"rec_blocks_{role}"] = int(len(zr["t0_rel"])); row[f"rec_dropped_{role}"] = int(zr["dropped"])
+                if role == "fg" and int(zr["dropped"]) > 0:
+                    flags.append(f"rec_dropped_fg:{int(zr['dropped'])}")
     row["flags"] = ";".join(flags)
     for tmp in ("fg.npz", "bg.npz", "arrivals.npy", "bg_units.npy"):    # window files hold the measured data; drop the warm-up duplicates
         (cdir / tmp).unlink(missing_ok=True)
@@ -294,7 +336,8 @@ def run_cell(cell, block, idx, h, ctx):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--part", choices=["A", "A2", "B", "C", "L"])
+    ap.add_argument("--part", choices=["A", "A2", "B", "C", "L", "G"])
+    ap.add_argument("--precheck", action="store_true", help="part G only: pre-checks (i)-(iii), unlocked clocks, 3 blocks of 6 cells, full-length windows; NOT a result")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--ambient-c", type=float, default=None)
     ap.add_argument("--armoury-mode", default=None, help="Armoury Crate mode (e.g. Silent/Performance/Turbo/Manual); required for full runs, not detectable (journal 0021)")
@@ -304,12 +347,16 @@ def main():
         return child_main(a.child, a.spec)
     if not a.part:
         ap.error("--part is required")
+    if a.precheck:
+        if a.part != "G":
+            ap.error("--precheck is for --part G")
+        a.smoke = True
     disable_quickedit()                                    # a click in the console would pause the run (journal 0023)
 
     global NO_CLOCK_CONTROL
     cfg = yaml.safe_load(CFG_PATH.read_text(encoding="utf-8"))
     admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
-    key = {"A": "experiment_A", "A2": "experiment_A", "B": "experiment_B", "C": "experiment_C", "L": "experiment_C"}[a.part]
+    key = {"A": "experiment_A", "A2": "experiment_A", "B": "experiment_B", "C": "experiment_C", "L": "experiment_C", "G": "experiment_A"}[a.part]
     blocks = cfg[key]["blocks"]
     T = dict(tmax=cfg["common"]["gpu_start_temp_max_c"], warmup=cfg["common"]["warmup_s"], idle=cfg["common"]["idle_between_cells_s"],
              lead=5.0, lead_llama=25.0, preroll=cfg["experiment_C"]["preroll_s"], window=cfg["experiment_C"]["window_s"], child_timeout=90)
@@ -318,8 +365,12 @@ def main():
         sys.exit("Full run refused: the laptop is on battery. The registration (hardware: AC power) requires AC; plug in and retry.")
     if a.smoke:
         NO_CLOCK_CONTROL = not admin
-        blocks, T["warmup"], T["preroll"], T["window"], T["idle"] = 1, 0.5, 0.5, 1.5, 0.5
-        print("SMOKE: one block, first 3 cells plus one per other fg stream, short windows. Not a result.")
+        if a.precheck:
+            blocks = 3
+            print("PRE-CHECK (Experiment G i-iii): 3 blocks x 6 cells, full-length windows, no clock control without admin. Not a result.")
+        else:
+            blocks, T["warmup"], T["preroll"], T["window"], T["idle"] = 1, 0.5, 0.5, 1.5, 0.5
+            print("SMOKE: one block, first 3 cells plus one per other fg stream, short windows. Not a result.")
     elif not admin:
         sys.exit("Full run needs an Administrator shell (clock locks). Use --smoke to test without admin.")
     if not a.smoke and not a.armoury_mode:
@@ -364,10 +415,10 @@ def main():
 
     nv.nvmlInit(); h = nv.nvmlDeviceGetHandleByIndex(0)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_dir = ROOT / "data" / "raw" / (f"w2_{a.part}_smoke" if a.smoke else f"w2_{a.part}") / stamp
+    out_dir = ROOT / "data" / "raw" / (f"w2_{a.part}_precheck" if a.precheck else f"w2_{a.part}_smoke" if a.smoke else f"w2_{a.part}") / stamp
     out_dir.mkdir(parents=True)
     batt = psutil.sensors_battery()
-    meta = dict(utc=stamp, part=a.part, smoke=a.smoke, admin=admin, ac_plugged=None if batt is None else batt.power_plugged, ambient_c=a.ambient_c, armoury_mode=a.armoury_mode,
+    meta = dict(utc=stamp, part=a.part, smoke=a.smoke, precheck=a.precheck, admin=admin, ac_plugged=None if batt is None else batt.power_plugged, ambient_c=a.ambient_c, armoury_mode=a.armoury_mode,
                 yaml_sha=sha(CFG_PATH), dll_sha=sha(dll), git_head=git_head, git_dirty=bool(git_state(ROOT)[1]) if a.smoke else False,
                 gpu=nv.nvmlDeviceGetName(h), driver=nv.nvmlSystemGetDriverVersion(), hags=hags,
                 execution_mode=("llama.cpp CUDA build, all layers offloaded (checked per cell from the driver log; a cell with any CPU layer aborts the run)" if a.part == "L" else "CUDA native kernels via w2_kernels.dll (no CPU fallback)"), llama=llama_meta, os=platform.platform(), python=sys.version.split()[0],
@@ -383,7 +434,7 @@ def main():
     try:
         set_mem(8001)
         cal, frame_units = None, None
-        if a.part in ("A", "A2", "B"):
+        if a.part in ("A", "A2", "B", "G"):
             set_sm(1800)                                   # calibrate at the experiment's clock (A, A2) / the B background reference clock
             calp = out_dir / "calibration.json"
             p = spawn("calibrate", dict(out=str(calp), cpu=BG_CPU), out_dir)
@@ -393,11 +444,15 @@ def main():
             print("calibration:", {k: (round(v["a_ms"], 4), round(v["b_ms_per_unit"], 7)) for k, v in cal.items()})
         base_cells = build_cells(cfg, "A" if a.part == "A" else a.part)
         frame_units = frame_units_for_part(a.part, base_cells, PILOT)
-        ctx = dict(cfg_seed=20261021, llama_model_bytes=(llama_meta or {}).get("model_bytes"), timing=T, cal=cal, frame_units=frame_units, out_dir=out_dir, hags=hags, units_for=units_for)
+        if a.precheck:                                     # (i) timer resolution and (ii-a) single-process two-stream timebase, in one CUDA child
+            pg = spawn("gtprobe", dict(out=str(out_dir / "gtprobe.npz"), cpu=BG_CPU), out_dir)
+            if pg.wait(timeout=180) != 0:
+                raise RuntimeError("gtprobe child failed")
+        ctx = dict(cfg_seed=G_SEED if a.part == "G" else 20261021, llama_model_bytes=(llama_meta or {}).get("model_bytes"), timing=T, cal=cal, frame_units=frame_units, out_dir=out_dir, hags=hags, units_for=units_for)
         t_run = time.time()
         for b in range(blocks):
-            order = order_block(base_cells, ctx["cfg_seed"], b)
-            if a.smoke:                                    # first 3 cells + the first cell of every other fg stream (journal 0021: the 9 ms frame cell was the 4th)
+            order = order_block(precheck_cells_G(base_cells) if a.precheck else base_cells, ctx["cfg_seed"], b)
+            if a.smoke and not a.precheck:                                    # first 3 cells + the first cell of every other fg stream (journal 0021: the 9 ms frame cell was the 4th)
                 sigf = lambda c: (c["fg"]["size_ms"], c["fg"].get("frame")) if c.get("fg") else None
                 pick = order[:3]
                 seen = {sigf(c) for c in pick}

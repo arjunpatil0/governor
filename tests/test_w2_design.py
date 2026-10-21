@@ -123,3 +123,36 @@ def test_frame_units_loaded_for_every_part_whose_cells_use_a_frame(part):
                 assert units[c["fg"]["frame"]] > 0
     else:
         assert units is None
+
+
+# ---- part G (experiments/w2_colocation_addendum_globaltimer_2026-10-22.md): 14 cells per block
+def test_G_cells_match_the_registered_addendum():
+    cells = build_cells(CFG, "G")
+    assert len(cells) == 14 and len({c["cell_id"] for c in cells}) == 14
+    by = {c["cell_id"]: c for c in cells}
+    assert by["g_baseline"]["rec"] and by["g_baseline"]["bg"] is None and by["g_baseline"]["fg"]["size_ms"] == 0.1
+    for m in (0.5, 1, 2, 8):
+        on, off = by[f"g_R{m}"], by[f"g_R{m}_off"]
+        assert on["rec"] and not off["rec"]
+        assert on["bg"] == off["bg"] and on["fg"] == off["fg"]
+        assert on["bg"]["m_ms"] == m and on["bg"]["cv"] == 0.0 and on["bg"]["duty"] == 1.0 and on["fg"]["size_ms"] == 0.1
+    assert by["g_T1"]["fg"]["size_ms"] == 1 and by["g_T1"]["bg"]["m_ms"] == 2 and by["g_T1"]["rec"]
+    assert by["g_T4"]["fg"]["size_ms"] == 4 and by["g_T4"]["bg"]["m_ms"] == 2 and by["g_T4"]["rec"]
+    assert by["g_bgalone"]["fg"] is None and by["g_bgalone"]["bg"]["m_ms"] == 2 and by["g_bgalone"]["rec"]
+    assert by["g_T1_alone"]["bg"] is None and by["g_T1_alone"]["fg"]["size_ms"] == 1 and by["g_T1_alone"]["rec"]
+    assert by["g_T4_alone"]["bg"] is None and by["g_T4_alone"]["fg"]["size_ms"] == 4 and by["g_T4_alone"]["rec"]
+    assert {c["sm_mhz"] for c in cells} == {1800}
+
+
+def test_G_uses_the_non_overlapping_seed_namespace():
+    from design import G_SEED, cell_seed as cs
+    assert G_SEED != 20261021 and cs(G_SEED, 0, 0) != cs(20261021, 0, 0)
+
+
+def test_G_precheck_cells_pair_every_instrumented_cell_with_an_uninstrumented_twin():
+    from design import precheck_cells_G
+    cells = precheck_cells_G(build_cells(CFG, "G"))
+    by = {c["cell_id"]: c for c in cells}
+    assert set(by) == {"g_baseline", "g_baseline_off", "g_R2", "g_R2_off", "g_bgalone", "g_T4"}
+    assert by["g_baseline"]["rec"] and not by["g_baseline_off"]["rec"]
+    assert {k: v for k, v in by["g_baseline"].items() if k not in ("cell_id", "rec")} == {k: v for k, v in by["g_baseline_off"].items() if k not in ("cell_id", "rec")}

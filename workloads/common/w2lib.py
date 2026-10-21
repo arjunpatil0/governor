@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "analysis"))   # w2_timeline (gt_sync)
 DLL = ROOT / "workloads" / "background" / "build" / "w2_kernels.dll"
 BPS = 6   # blocks per SM for full-GPU kernels (same as W1 fma)
 P = ctypes.POINTER
@@ -25,6 +26,9 @@ class W2:
         if self.d.w2_init(ctypes.byref(sms)) != 0:
             sys.exit(f"FATAL w2_init: {self.d.w2_last_error().decode()} (no CPU fallback)")
         self.sms = sms.value
+        for f in ("w2_rec_used", "w2_rec_dropped"):
+            getattr(self.d, f).restype = ctypes.c_size_t
+        self.d.w2_rec_init.argtypes = [ctypes.c_size_t]
 
     def now(self):
         return self.d.w2_qpc_now()
@@ -46,6 +50,51 @@ class W2:
         tl, tc, g = (np.zeros(n) for _ in range(3))
         self.chk(self.d.w2_fg_run(kind, n, dbl(arrivals), int(units), bps, dbl(tl), dbl(tc), dbl(g)), "fg_run")
         return tl, tc, g
+
+    # ---- Experiment G instrumentation (experiments/w2_colocation_addendum_globaltimer_2026-10-22.md); fma kernel only
+    def rec_init(self, cap_blocks):
+        self.chk(self.d.w2_rec_init(int(cap_blocks)), "rec_init")
+
+    def rec_fetch(self):
+        n = int(self.d.w2_rec_used())
+        u64 = lambda: np.zeros(n, dtype=np.uint64); u32 = lambda: np.zeros(n, dtype=np.uint32)
+        t0, t1, gmax, gbeg = u64(), u64(), u64(), u64(); smid, tag, blk = u32(), u32(), u32()
+        ptr = lambda a: a.ctypes.data_as(ctypes.c_void_p)
+        self.chk(self.d.w2_rec_fetch(ptr(t0), ptr(t1), ptr(gmax), ptr(gbeg), ptr(smid), ptr(tag), ptr(blk)), "rec_fetch")
+        return dict(t0=t0, t1=t1, gmax=gmax, gbeg=gbeg, smid=smid, tag=tag, blk=blk, dropped=int(self.d.w2_rec_dropped()))
+
+    def bg_until_rec(self, units, t_stop, t_rec0, cap_blocks, cap=200_000, bps=BPS, duty=1.0):
+        self.rec_init(cap_blocks)
+        units = np.ascontiguousarray(units, dtype=np.int32)
+        ts, te, g = (np.zeros(cap) for _ in range(3)); n = ctypes.c_int()
+        self.chk(self.d.w2_bg_until_rec(1, i32(units), len(units), bps, ctypes.c_double(t_stop), dbl(ts), dbl(te), dbl(g), cap,
+                                        ctypes.byref(n), ctypes.c_double(duty), ctypes.c_double(t_rec0)), "bg_until_rec")
+        return ts[:n.value], te[:n.value], g[:n.value], self.rec_fetch()
+
+    def fg_run_rec(self, kind, arrivals, units, rec_from, cap_blocks, bps=BPS):
+        self.rec_init(cap_blocks)
+        arrivals = np.ascontiguousarray(arrivals, dtype=np.float64); n = len(arrivals)
+        tl, tc, g = (np.zeros(n) for _ in range(3))
+        self.chk(self.d.w2_fg_run_rec(kind, n, dbl(arrivals), int(units), bps, dbl(tl), dbl(tc), dbl(g), int(rec_from)), "fg_run_rec")
+        return tl, tc, g, self.rec_fetch()
+
+    def gt_resolution(self, n=20000):
+        out = np.zeros(n, dtype=np.uint64)
+        self.chk(self.d.w2_gt_resolution(n, out.ctypes.data_as(ctypes.c_void_p)), "gt_resolution")
+        return out
+
+    def gt_sync(self, n=200):
+        """(offset_s, round_trip_s): qpc = globaltimer*1e-9 - offset_s, from the minimum-round-trip sample."""
+        from w2_timeline import best_sync
+        qb, qa = np.zeros(n), np.zeros(n); gt = np.zeros(n, dtype=np.uint64)
+        self.chk(self.d.w2_gt_sync(n, dbl(qb), dbl(qa), gt.ctypes.data_as(ctypes.c_void_p)), "gt_sync")
+        return best_sync(qb, qa, gt)
+
+    def two_streams_rec(self, units_a, units_b, delay_s):
+        self.rec_init(2 * self.sms * BPS)
+        t = np.zeros(4)
+        self.chk(self.d.w2_two_streams_rec(int(units_a), int(units_b), ctypes.c_double(delay_s), dbl(t)), "two_streams_rec")
+        return dict(a_launch=t[0], a_done=t[1], b_launch=t[2], b_done=t[3], rec=self.rec_fetch())
 
 
 def calibrate(w, kind, probe_units):

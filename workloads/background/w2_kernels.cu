@@ -66,9 +66,81 @@ __global__ void fma_kernel(float* out, int iters, float a, float b)
     out[blockIdx.x * blockDim.x + threadIdx.x] = x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7;
 }
 
-static int launch_unit(int kind, int units, int blocks)
+// ---- Experiment G instrumentation (experiments/w2_colocation_addendum_globaltimer_2026-10-22.md). A separate kernel, so the
+// uninstrumented fma_kernel above is byte-for-byte what A, A2, B and C ran. Per thread block: %globaltimer at start and end, %smid, and a
+// gap detector: lane 0 of every warp reads %globaltimer every kGapStride loop iterations and keeps the largest gap between consecutive
+// reads (and where it began); the block keeps the largest over its warps. A block descheduled mid-execution shows up as a large gap.
+static const int kGapStride = 64;
+struct Rec { unsigned long long t0, t1, gmax, gbeg; unsigned int smid, tag, blk, pad; };
+
+__device__ __forceinline__ unsigned long long gtimer_ns()
 {
-    if (kind == 1) fma_kernel<<<blocks, kThreads, 0, g_s>>>(dOut, units, 0.9999f, 1e-4f);
+    unsigned long long t;
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+    return t;
+}
+__device__ __forceinline__ unsigned int smid_now()
+{
+    unsigned int s;
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(s));
+    return s;
+}
+
+__global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec, unsigned int tag)
+{
+    __shared__ unsigned long long s_gmax[kThreads / 32], s_gbeg[kThreads / 32];
+    const unsigned long long t0 = gtimer_ns();
+    const bool lane0 = (threadIdx.x & 31) == 0;
+    unsigned long long last = t0, gmax = 0, gbeg = t0;
+    float x0 = threadIdx.x * 1e-3f, x1 = x0 + 1e-3f, x2 = x0 + 2e-3f, x3 = x0 + 3e-3f;
+    float x4 = x0 + 4e-3f, x5 = x0 + 5e-3f, x6 = x0 + 6e-3f, x7 = x0 + 7e-3f;
+    for (int i = 0; i < iters; ++i) {
+        x0 = fmaf(x0, a, b); x1 = fmaf(x1, a, b); x2 = fmaf(x2, a, b); x3 = fmaf(x3, a, b);
+        x4 = fmaf(x4, a, b); x5 = fmaf(x5, a, b); x6 = fmaf(x6, a, b); x7 = fmaf(x7, a, b);
+        if (lane0 && (i & (kGapStride - 1)) == kGapStride - 1) {
+            unsigned long long t = gtimer_ns(), g = t - last;
+            if (g > gmax) { gmax = g; gbeg = last; }
+            last = t;
+        }
+    }
+    out[blockIdx.x * blockDim.x + threadIdx.x] = x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7;
+    if (lane0) {
+        unsigned long long t = gtimer_ns(), g = t - last;
+        if (g > gmax) { gmax = g; gbeg = last; }
+        s_gmax[threadIdx.x >> 5] = gmax; s_gbeg[threadIdx.x >> 5] = gbeg;
+    }
+    __syncthreads();
+    if (threadIdx.x == 0) {
+        unsigned long long m = 0, mb = t0;
+        for (int w = 0; w < kThreads / 32; ++w) if (s_gmax[w] > m) { m = s_gmax[w]; mb = s_gbeg[w]; }
+        Rec r;
+        r.t0 = t0; r.t1 = gtimer_ns(); r.gmax = m; r.gbeg = mb; r.smid = smid_now(); r.tag = tag; r.blk = blockIdx.x; r.pad = 0;
+        rec[blockIdx.x] = r;
+    }
+}
+
+static Rec* dRec = nullptr;
+static size_t g_rec_cap = 0, g_rec_used = 0, g_rec_dropped = 0;
+static cudaStream_t g_s2 = nullptr;
+
+__global__ void gt_read_loop(unsigned long long* out, int n) { for (int i = 0; i < n; ++i) out[i] = gtimer_ns(); }
+__global__ void gt_read_once(unsigned long long* out) { *out = gtimer_ns(); }
+
+// Reserve record space for one launch of `blocks` blocks; nullptr (and a count) when the buffer is full or recording is off.
+static Rec* rec_take(int blocks)
+{
+    if (!dRec) return nullptr;
+    if (g_rec_used + (size_t)blocks > g_rec_cap) { ++g_rec_dropped; return nullptr; }
+    Rec* r = dRec + g_rec_used;
+    g_rec_used += (size_t)blocks;
+    return r;
+}
+
+static int launch_unit(int kind, int units, int blocks, Rec* rec = nullptr, unsigned int tag = 0, cudaStream_t st = nullptr)
+{
+    if (!st) st = g_s;
+    if (kind == 1 && rec) fma_kernel_rec<<<blocks, kThreads, 0, st>>>(dOut, units, 0.9999f, 1e-4f, rec, tag);
+    else if (kind == 1) fma_kernel<<<blocks, kThreads, 0, st>>>(dOut, units, 0.9999f, 1e-4f);
     else {   // mem: units = chunks of 4096 float4 (64 KiB read + 64 KiB written); one full pass = kN4/4096 = 4096 chunks
         const int per_pass = (int)(kN4 / 4096);
         for (int left = units; left > 0; left -= per_pass)
@@ -103,18 +175,16 @@ EXPORT int w2_init(int* sm_count)
     return 0;
 }
 
-// Background: launch+sync slices back to back until QPC time t_stop. units[] is cycled. Per slice: host start (just before
-// launch), host end (just after sync), CUDA-event gpu ms. kind 0 = mem (units = 64 KiB chunks, see launch_unit), 1 = fma (units = iterations;
-// blocks = SMs * blocks_per_sm). duty in (0,1]: after each slice spin-wait so busy/(busy+idle) = duty. Slices done are returned in *n_done (<= cap).
-EXPORT int w2_bg_until(int kind, const int* units, int n_units, int blocks_per_sm, double t_stop,
-                       double* t_start, double* t_end, double* gpu_ms, int cap, int* n_done, double duty)
+static int bg_loop(int kind, const int* units, int n_units, int blocks_per_sm, double t_stop,
+                   double* t_start, double* t_end, double* gpu_ms, int cap, int* n_done, double duty, bool rec, double t_rec0)
 {
     if (!(duty > 0.0 && duty <= 1.0)) { snprintf(g_err, sizeof g_err, "duty must be in (0,1], got %g", duty); return 2; }
     int i = 0;
     while (i < cap && qpc_now() < t_stop) {
         t_start[i] = qpc_now();
         CK(cudaEventRecord(e0, g_s));
-        if (launch_unit(kind, units[i % n_units], g_sms * blocks_per_sm)) return 1;
+        Rec* rb = (rec && t_start[i] >= t_rec0) ? rec_take(g_sms * blocks_per_sm) : nullptr;
+        if (launch_unit(kind, units[i % n_units], g_sms * blocks_per_sm, rb, (unsigned int)i)) return 1;
         CK(cudaEventRecord(e1, g_s));
         CK(cudaEventSynchronize(e1));
         t_end[i] = qpc_now();
@@ -131,17 +201,33 @@ EXPORT int w2_bg_until(int kind, const int* units, int n_units, int blocks_per_s
     return 0;
 }
 
-// Foreground: request i is released at absolute QPC time arrivals[i] (busy-wait), launched, synced.
-// t_launch = host time just before launch, t_complete = host time just after sync. Latency = t_complete - arrivals[i]
-// (computed by the caller from the SCHEDULED arrival). A request whose arrival has already passed is launched at once.
-EXPORT int w2_fg_run(int kind, int n, const double* arrivals, int units, int blocks_per_sm,
-                     double* t_launch, double* t_complete, double* gpu_ms)
+// Background: launch+sync slices back to back until QPC time t_stop. units[] is cycled. Per slice: host start (just before
+// launch), host end (just after sync), CUDA-event gpu ms. kind 0 = mem (units = 64 KiB chunks, see launch_unit), 1 = fma (units = iterations;
+// blocks = SMs * blocks_per_sm). duty in (0,1]: after each slice spin-wait so busy/(busy+idle) = duty. Slices done are returned in *n_done (<= cap).
+EXPORT int w2_bg_until(int kind, const int* units, int n_units, int blocks_per_sm, double t_stop,
+                       double* t_start, double* t_end, double* gpu_ms, int cap, int* n_done, double duty)
+{
+    return bg_loop(kind, units, n_units, blocks_per_sm, t_stop, t_start, t_end, gpu_ms, cap, n_done, duty, false, 0.0);
+}
+
+// Same, with the instrumented fma kernel for slices that START at or after t_rec0 (QPC) while the record buffer (w2_rec_init) has room;
+// later slices run the plain kernel and are counted in w2_rec_dropped(). fma only (kind 1).
+EXPORT int w2_bg_until_rec(int kind, const int* units, int n_units, int blocks_per_sm, double t_stop,
+                           double* t_start, double* t_end, double* gpu_ms, int cap, int* n_done, double duty, double t_rec0)
+{
+    if (kind != 1) { snprintf(g_err, sizeof g_err, "recording supports the fma kernel only"); return 4; }
+    return bg_loop(kind, units, n_units, blocks_per_sm, t_stop, t_start, t_end, gpu_ms, cap, n_done, duty, true, t_rec0);
+}
+
+static int fg_loop(int kind, int n, const double* arrivals, int units, int blocks_per_sm,
+                   double* t_launch, double* t_complete, double* gpu_ms, bool rec, int rec_from)
 {
     for (int i = 0; i < n; ++i) {
         while (qpc_now() < arrivals[i]) { YieldProcessor(); }
         t_launch[i] = qpc_now();
         CK(cudaEventRecord(e0, g_s));
-        if (launch_unit(kind, units, g_sms * blocks_per_sm)) return 1;
+        Rec* rb = (rec && i >= rec_from) ? rec_take(g_sms * blocks_per_sm) : nullptr;
+        if (launch_unit(kind, units, g_sms * blocks_per_sm, rb, (unsigned int)i)) return 1;
         CK(cudaEventRecord(e1, g_s));
         CK(cudaEventSynchronize(e1));
         t_complete[i] = qpc_now();
@@ -152,12 +238,105 @@ EXPORT int w2_fg_run(int kind, int n, const double* arrivals, int units, int blo
     return 0;
 }
 
+// Foreground: request i is released at absolute QPC time arrivals[i] (busy-wait), launched, synced.
+// t_launch = host time just before launch, t_complete = host time just after sync. Latency = t_complete - arrivals[i]
+// (computed by the caller from the SCHEDULED arrival). A request whose arrival has already passed is launched at once.
+EXPORT int w2_fg_run(int kind, int n, const double* arrivals, int units, int blocks_per_sm,
+                     double* t_launch, double* t_complete, double* gpu_ms)
+{
+    return fg_loop(kind, n, arrivals, units, blocks_per_sm, t_launch, t_complete, gpu_ms, false, 0);
+}
+
+// Same, recording requests with index >= rec_from (fma only).
+EXPORT int w2_fg_run_rec(int kind, int n, const double* arrivals, int units, int blocks_per_sm,
+                         double* t_launch, double* t_complete, double* gpu_ms, int rec_from)
+{
+    if (kind != 1) { snprintf(g_err, sizeof g_err, "recording supports the fma kernel only"); return 4; }
+    return fg_loop(kind, n, arrivals, units, blocks_per_sm, t_launch, t_complete, gpu_ms, true, rec_from);
+}
+
+// ---- record buffer and %globaltimer probes (Experiment G pre-checks)
+EXPORT int w2_rec_init(size_t cap_blocks)
+{
+    if (dRec) { CK(cudaFree(dRec)); dRec = nullptr; }
+    CK(cudaMalloc(&dRec, cap_blocks * sizeof(Rec)));
+    g_rec_cap = cap_blocks; g_rec_used = 0; g_rec_dropped = 0;
+    return 0;
+}
+EXPORT size_t w2_rec_used() { return g_rec_used; }
+EXPORT size_t w2_rec_dropped() { return g_rec_dropped; }
+EXPORT int w2_rec_fetch(unsigned long long* t0, unsigned long long* t1, unsigned long long* gmax, unsigned long long* gbeg,
+                        unsigned int* smid, unsigned int* tag, unsigned int* blk)
+{
+    CK(cudaDeviceSynchronize());
+    std::vector<Rec> h(g_rec_used);
+    if (g_rec_used) CK(cudaMemcpy(h.data(), dRec, g_rec_used * sizeof(Rec), cudaMemcpyDeviceToHost));
+    for (size_t i = 0; i < h.size(); ++i) {
+        t0[i] = h[i].t0; t1[i] = h[i].t1; gmax[i] = h[i].gmax; gbeg[i] = h[i].gbeg; smid[i] = h[i].smid; tag[i] = h[i].tag; blk[i] = h[i].blk;
+    }
+    return 0;
+}
+
+// n consecutive %globaltimer reads by a single thread (pre-check i: timer resolution).
+EXPORT int w2_gt_resolution(int n, unsigned long long* out)
+{
+    unsigned long long* d = nullptr;
+    CK(cudaMalloc(&d, (size_t)n * 8));
+    gt_read_loop<<<1, 1, 0, g_s>>>(d, n);
+    CK(cudaGetLastError());
+    CK(cudaStreamSynchronize(g_s));
+    CK(cudaMemcpy(out, d, (size_t)n * 8, cudaMemcpyDeviceToHost));
+    CK(cudaFree(d));
+    return 0;
+}
+
+// n host/GPU timer sample pairs: QPC just before the launch, QPC just after the sync, %globaltimer read inside the kernel (pre-check ii).
+EXPORT int w2_gt_sync(int n, double* qpc_before, double* qpc_after, unsigned long long* gt)
+{
+    unsigned long long* d = nullptr;
+    CK(cudaMalloc(&d, 8));
+    for (int i = 0; i < n; ++i) {
+        qpc_before[i] = qpc_now();
+        gt_read_once<<<1, 1, 0, g_s>>>(d);
+        CK(cudaStreamSynchronize(g_s));
+        qpc_after[i] = qpc_now();
+        CK(cudaMemcpy(&gt[i], d, 8, cudaMemcpyDeviceToHost));
+    }
+    CK(cudaFree(d));
+    return 0;
+}
+
+// Single-process, two-stream test of the shared timebase (pre-check ii): a recording kernel A (tag 0) on the bg stream, then, after
+// delay_s of host time, a recording kernel B (tag 1) on a second stream. times = {a_launch, a_done, b_launch, b_done} (QPC).
+// Requires w2_rec_init with room for two launches.
+EXPORT int w2_two_streams_rec(int units_a, int units_b, double delay_s, double* times)
+{
+    if (!dRec) { snprintf(g_err, sizeof g_err, "w2_rec_init first"); return 5; }
+    if (!g_s2) CK(cudaStreamCreateWithFlags(&g_s2, cudaStreamNonBlocking));
+    const int blocks = g_sms * 6;
+    Rec* ra = rec_take(blocks);
+    Rec* rb = rec_take(blocks);
+    if (!ra || !rb) { snprintf(g_err, sizeof g_err, "record buffer too small"); return 6; }
+    times[0] = qpc_now();
+    if (launch_unit(1, units_a, blocks, ra, 0, g_s)) return 1;
+    double until = qpc_now() + delay_s;
+    while (qpc_now() < until) { YieldProcessor(); }
+    times[2] = qpc_now();
+    if (launch_unit(1, units_b, blocks, rb, 1, g_s2)) return 1;
+    CK(cudaStreamSynchronize(g_s2));
+    times[3] = qpc_now();
+    CK(cudaStreamSynchronize(g_s));
+    times[1] = qpc_now();
+    return 0;
+}
+
 EXPORT int w2_free()
 {
     if (dA) CK(cudaFree(dA));
     if (dB) CK(cudaFree(dB));
     if (dOut) CK(cudaFree(dOut));
-    dA = dB = nullptr; dOut = nullptr;
+    if (dRec) CK(cudaFree(dRec));
+    dA = dB = nullptr; dOut = nullptr; dRec = nullptr; g_rec_cap = g_rec_used = g_rec_dropped = 0;
     return 0;
 }
 

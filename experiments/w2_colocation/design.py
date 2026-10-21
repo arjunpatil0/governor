@@ -11,6 +11,8 @@ B_LEVELS = [900, 1050, 1200, 1500, 1800, "unlocked"]
 # Part L (experiments/w2_colocation_addendum_llamacpp_2026-10-21.md): the same nine levels as experiment_C.sm_levels_mhz
 LLAMA_LEVELS = [600, 750, 900, 1050, 1200, 1350, 1500, 1800, "unlocked"]
 LLAMA_MODEL = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+# Part G (experiments/w2_colocation_addendum_globaltimer_2026-10-22.md): fresh seed namespace ("fresh seeds from a new seed namespace")
+G_SEED = 20261022
 MEM_MHZ = 8001
 SM_TOL, MEM_TOL = 0.03, 0.01      # validity_checks in the yaml
 
@@ -76,7 +78,27 @@ def build_cells(cfg, part):
         return cells
     if part == "L":
         return [_cell("L", f"llama_{lv}", lv, None, None, llama=dict(model=LLAMA_MODEL, n_prompt=512)) for lv in LLAMA_LEVELS]
-    raise ValueError(f"unknown part {part!r}; expected A, A2, B, C or L")
+    if part == "G":
+        rec = lambda c, on: dict(c, rec=on)
+        cells = [rec(_cell("G", "g_baseline", 1800, _fg(0.1), None), True)]
+        for m in (0.5, 1, 2, 8):
+            for on in (True, False):
+                cells.append(rec(_cell("G", f"g_R{m}" + ("" if on else "_off"), 1800, _fg(0.1), _bg(m, 0.0)), on))
+        cells.append(rec(_cell("G", "g_T1", 1800, _fg(1), _bg(2, 0.0)), True))
+        cells.append(rec(_cell("G", "g_T4", 1800, _fg(4), _bg(2, 0.0)), True))
+        cells.append(rec(_cell("G", "g_bgalone", 1800, None, _bg(2, 0.0)), True))
+        cells.append(rec(_cell("G", "g_T1_alone", 1800, _fg(1), None), True))
+        cells.append(rec(_cell("G", "g_T4_alone", 1800, _fg(4), None), True))
+        return cells
+    raise ValueError(f"unknown part {part!r}; expected A, A2, B, C, L or G")
+
+
+def precheck_cells_G(cells):
+    """Cells of the Experiment G pre-check (iii) run: instrumented/uninstrumented pairs for fg alone (g_baseline_off exists only here, it is
+    not one of the 14 registered cells) and for R_2, plus bgalone and T4 so every recording code path runs. Not a result."""
+    by = {c["cell_id"]: c for c in cells}
+    twin = dict(by["g_baseline"], cell_id="g_baseline_off", rec=False)
+    return [by["g_baseline"], twin, by["g_R2"], by["g_R2_off"], by["g_bgalone"], by["g_T4"]]
 
 
 def order_block(cells, base_seed, block):
