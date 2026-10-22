@@ -128,7 +128,7 @@ def test_frame_units_loaded_for_every_part_whose_cells_use_a_frame(part):
 # ---- part G (experiments/w2_colocation_addendum_globaltimer_2026-10-22.md): 14 cells per block
 def test_G_cells_match_the_registered_addenda():
     cells = build_cells(CFG, "G")
-    assert len(cells) == 15 and len({c["cell_id"] for c in cells}) == 15       # 14 + g_baseline_off (addendum 2 section D)
+    assert len(cells) == 17 and len({c["cell_id"] for c in cells}) == 17       # 14 + g_baseline_off (addendum 2 D) + two 3-bpsm controls (addendum 3 B)
     by = {c["cell_id"]: c for c in cells}
     assert by["g_baseline"]["rec"] and by["g_baseline"]["bg"] is None and by["g_baseline"]["fg"]["size_ms"] == 0.1
     assert not by["g_baseline_off"]["rec"] and by["g_baseline_off"]["bg"] is None and by["g_baseline_off"]["fg"] == by["g_baseline"]["fg"]
@@ -167,3 +167,14 @@ def test_G_gap_k_follows_addendum_2():
     for cid in ("g_T1", "g_T4", "g_T1_alone", "g_T4_alone"):
         assert gap_k_for(cells[cid], "fg") == 32
     assert gap_k_for(cells["g_R2"], "bg") == 32 and gap_k_for(cells["g_bgalone"], "bg") == 32
+
+
+def test_G_3bpsm_controls_follow_addendum_3():
+    from design import gap_k_for
+    cells = {c["cell_id"]: c for c in build_cells(CFG, "G")}
+    t4, ba = cells["g_T4_3bpsm"], cells["g_bgalone_3bpsm"]
+    assert t4["bpsm"] == 3 and ba["bpsm"] == 3 and t4["rec"] and ba["rec"]
+    assert t4["fg"] == cells["g_T4"]["fg"] and t4["bg"] == cells["g_T4"]["bg"]            # same fg 4 ms stream and bg m = 2, only the grid differs
+    assert ba["fg"] is None and ba["bg"] == cells["g_bgalone"]["bg"]
+    assert all("bpsm" not in c for k, c in cells.items() if "3bpsm" not in k)             # the 15 earlier cells keep the 6-blocks-per-SM grid
+    assert gap_k_for(t4, "fg") == 32 and gap_k_for(t4, "bg") == 32 and gap_k_for(ba, "bg") == 32

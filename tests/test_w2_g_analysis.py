@@ -7,11 +7,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from test_w2_g_timeline import make_launches
+from test_w2_g_timeline import make_launches as _make_launches
 from w2_g_analysis import build_report
 from w2_timeline import pack_rec
 
 US, MS = 1000, 1_000_000
+
+
+def make_launches(launches, **kw):
+    """6 blocks on 2 SMs = exactly 3 witnesses per SM (the verified witness layout, in miniature)."""
+    return _make_launches(launches, **{**dict(n_blocks=6, sm_mod=2), **kw})
 OFF = 7.0                      # synthetic GPU-timer-minus-QPC offset (s)
 GT0 = int((100.0 + OFF) * 1e9)  # GPU ns of QPC time 100.0 s
 
@@ -93,6 +98,8 @@ def run_dir(tmp_path):
                 bo.append((t, t + 500 * US)); t += 740 * US
         bo.append((t, t + 2 * MS)); t4_fg.append((k, fo)); t4_bg.append((k, bo))
     cd = mk("g_T4"); _save_rec(cd, make_launches(_g(t4_fg)), "fg_rec.npz"); _save_rec(cd, make_launches(_g(t4_bg)), "bg_rec.npz"); _fg_window(cd, np.array([100.0 + (10 + 40 * k) * 1e-3 for k in range(8)]), lat_ms=4.0)
+    cd = mk("g_bgalone_3bpsm"); _save_rec(cd, make_launches(_g([(k, [(k * 5 * MS, k * 5 * MS + 4 * MS)]) for k in range(3)])), "bg_rec.npz")
+    cd = mk("g_T4_3bpsm"); _save_rec(cd, make_launches(_g(t4_fg)), "fg_rec.npz"); _save_rec(cd, make_launches(_g(t4_bg)), "bg_rec.npz"); _fg_window(cd, np.array([100.0 + (10 + 40 * k) * 1e-3 for k in range(8)]), lat_ms=4.0)
     cd = mk("g_T1"); _save_rec(cd, make_launches(_g(t4_fg)), "fg_rec.npz"); _save_rec(cd, make_launches(_g(t4_bg)), "bg_rec.npz"); _fg_window(cd, np.array([100.0 + (10 + 40 * k) * 1e-3 for k in range(8)]), lat_ms=4.0)
     pd.DataFrame(rows).to_csv(tmp_path / "results.csv", index=False)
     return tmp_path
@@ -122,3 +129,28 @@ def test_report_detects_concurrency_in_the_timeline(run_dir):
     _save_rec(cd, make_launches(t4_bg), "bg_rec.npz")
     text = "\n".join(build_report(run_dir)[0])
     assert "P6 DID NOT HOLD" in text
+
+
+def test_control_cell_decides_whether_main_cell_overlaps_are_reported_as_concurrency(run_dir):
+    t4_bg = [(k, [(10 * MS + k * 40 * MS - 2 * MS + GT0, 10 * MS + k * 40 * MS + 6 * MS + GT0)]) for k in range(8)]
+    main = next((run_dir / "cells").glob("b00_*_g_T4"))
+    _save_rec(main, make_launches(t4_bg), "bg_rec.npz")                      # main cell: bg runs straight through the fg
+    text = chr(10).join(build_report(run_dir)[0])
+    assert "UNEXPLAINED" in text and "NOT reported as concurrency" in text    # control (alternating) shows none
+    ctl = next((run_dir / "cells").glob("b00_*_g_T4_3bpsm"))
+    _save_rec(ctl, make_launches(t4_bg), "bg_rec.npz")                       # now the control overlaps too
+    text = chr(10).join(build_report(run_dir)[0])
+    assert "REPORTED AS A FINDING" in text
+
+
+def test_witness_gate_fails_when_bgalone_witness_blocks_show_gaps(run_dir):
+    cd = next((run_dir / "cells").glob("b00_*_g_bgalone"))
+    bad = [(k, [(k * 5 * MS + GT0 + i * 400 * US, k * 5 * MS + GT0 + i * 400 * US + 200 * US) for i in range(4)]) for k in range(3)]
+    _save_rec(cd, make_launches(bad), "bg_rec.npz")                          # every witness block has 3 gaps >= G_thr alone
+    text = chr(10).join(build_report(run_dir)[0])
+    assert "gate (i): FAIL" in text and "NOT interpreted" in text
+
+
+def test_report_lists_witness_placement_columns(run_dir):
+    text = chr(10).join(build_report(run_dir)[0])
+    assert "fg_w_fallback" in text and "bg_w_excluded" in text and "Witness validity gate" in text

@@ -35,3 +35,9 @@ def test_duty_cycle_option_hits_the_requested_utilisation(w, duty):
 def test_bg_slices_are_timestamped_in_order(w):
     ts, te, g = w.bg_until(1, [4000], w.now() + 0.2)
     assert len(ts) > 10 and (te > ts).all() and (ts[1:] >= te[:-1]).all() and (g > 0).all()
+
+
+def test_calibration_at_3_blocks_per_sm_runs_about_twice_as_fast_per_unit(w):
+    from w2lib import calibrate
+    c6 = calibrate(w, 1, [4000, 16000, 32000]); c3 = calibrate(w, 1, [4000, 16000, 32000], bps=3)
+    assert c3["b_ms_per_unit"] < 0.75 * c6["b_ms_per_unit"]

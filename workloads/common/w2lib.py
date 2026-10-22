@@ -112,11 +112,11 @@ class W2:
         return dict(a_launch=t[0], a_done=t[1], b_launch=t[2], b_done=t[3], rec=self.rec_fetch())
 
 
-def calibrate(w, kind, probe_units):
+def calibrate(w, kind, probe_units, bps=BPS):
     """host duration (ms) of one slice vs units: linear fit a + b*units from constant-unit runs."""
     xs, ys = [], []
     for u in probe_units:
-        ts, te, _ = w.bg_until(kind, [u], w.now() + 0.5)
+        ts, te, _ = w.bg_until(kind, [u], w.now() + 0.5, bps=bps)
         xs.append(u); ys.append(float(np.median((te - ts)[3:])) * 1e3)
     b, a = np.polyfit(xs, ys, 1)
     return dict(a_ms=float(a), b_ms_per_unit=float(b), probes=dict(zip(map(str, xs), ys)))

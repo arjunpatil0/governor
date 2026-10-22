@@ -12,7 +12,7 @@ US = 1000          # ns
 MS = 1_000_000
 
 
-def make_launches(launches, n_blocks=8, jitter_ns=0, seed=1, smid_offset=0):
+def make_launches(launches, n_blocks=8, jitter_ns=0, seed=1, smid_offset=0, sm_mod=None):
     """launches: list of (tag, [(on_start_ns, on_end_ns), ...]) -> rec dict. Every block of a launch follows the same on-intervals (a context
     switch suspends all resident blocks together); the gaps between on-intervals are logged exactly as the kernel would (> 20 us)."""
     rng = np.random.default_rng(seed)
@@ -23,7 +23,7 @@ def make_launches(launches, n_blocks=8, jitter_ns=0, seed=1, smid_offset=0):
             j = lambda: int(rng.integers(-jitter_ns, jitter_ns + 1)) if jitter_ns else 0
             ons_b = [(s + j(), e + j()) for s, e in ons]
             idx = len(t0)
-            t0.append(ons_b[0][0]); t1.append(ons_b[-1][1]); tg0.append(ons_b[0][0]); tag.append(tg); smid.append(b + smid_offset); blk.append(b)
+            t0.append(ons_b[0][0]); t1.append(ons_b[-1][1]); tg0.append(ons_b[0][0]); tag.append(tg); smid.append((b if sm_mod is None else b % sm_mod) + smid_offset); blk.append(b)
             n = 0
             for (s0, e0), (s1, e1) in zip(ons_b[:-1], ons_b[1:]):
                 if s1 - e0 > 20 * US:
@@ -206,3 +206,53 @@ def test_arbitration_gaps_of_late_blocks_inflate_preemption_unless_restricted_to
     full = preempted_fraction(rec, fg, g_thr_ns=41 * US)["fraction"]
     wit = preempted_fraction(restrict_rec(rec, rec["blk"] < 108), fg, g_thr_ns=41 * US)["fraction"]
     assert full == pytest.approx(92 / 200) and wit == 0.0
+
+
+# ---------------------------------------------------------------- witness verification via %smid (addendum 3 section A) and the concurrency rule (section B)
+def _launch_with_placement(sm_of_block, t0_of_block=None, tag=0, n=216):
+    rec = make_launches([(tag, [(0, 1 * MS)])], n_blocks=n)
+    rec["smid"] = np.array([sm_of_block(i) for i in range(n)], dtype=np.uint32)
+    if t0_of_block is not None:
+        rec["t0"] = np.array([t0_of_block(i) for i in range(n)], dtype=np.uint64)
+    return rec
+
+
+def test_witness_mask_uses_the_nominal_set_when_every_sm_hosts_exactly_three_of_it():
+    from w2_g_timeline import witness_mask
+    rec = _launch_with_placement(lambda i: i % 36)                     # round-robin placement: blocks 0-107 put 3 on each SM
+    m, st = witness_mask(rec)
+    assert m.sum() == 108 and (rec["blk"][m] < 108).all() and st["nominal"] == 1 and st["fallback"] == 0 and st["excluded"] == 0
+
+
+def test_witness_mask_falls_back_to_the_three_earliest_starting_blocks_per_sm():
+    from w2_g_timeline import witness_mask
+    rec = _launch_with_placement(lambda i: i // 6, t0_of_block=lambda i: 1000 + (5 - i % 6) * 10)   # 6 consecutive blocks per SM: nominal set is wrong
+    m, st = witness_mask(rec)
+    assert st["fallback"] == 1 and m.sum() == 108
+    sm = rec["smid"][m]
+    assert (np.bincount(sm.astype(int), minlength=36) == 3).all()
+    assert ((rec["blk"][m] % 6) >= 3).all()                              # the earliest starts are blk % 6 in {5, 4, 3} by construction
+
+
+def test_witness_mask_excludes_a_launch_when_an_sm_hosts_fewer_than_three_blocks():
+    from w2_g_timeline import witness_mask
+    rec = _launch_with_placement(lambda i: (i % 36) if i < 215 else 35)  # fine so far ...
+    rec["smid"][np.arange(216) % 36 == 0] = 1                            # ... then SM 0 hosts nothing and SM 1 hosts 12: SM-count rule cannot form 3 per SM
+    rec["smid"][3] = 0                                                   # SM 0 hosts exactly one block
+    m, st = witness_mask(rec)
+    assert st["excluded"] == 1 and m.sum() == 0
+
+
+def test_witness_mask_handles_the_3_blocks_per_sm_control_launch():
+    from w2_g_timeline import witness_mask
+    rec = _launch_with_placement(lambda i: i % 36, n=108)
+    m, st = witness_mask(rec)
+    assert m.all() and st["nominal"] == 1
+
+
+def test_concurrency_is_a_finding_only_if_the_3bpsm_control_also_overlaps():
+    from w2_g_timeline import concurrency_verdict
+    assert concurrency_verdict(main_overlaps=0, control_overlaps=0)["state"] == "p6_held"
+    assert concurrency_verdict(main_overlaps=500, control_overlaps=3)["state"] == "concurrency_finding"
+    assert concurrency_verdict(main_overlaps=500, control_overlaps=0)["state"] == "unexplained"
+    assert concurrency_verdict(main_overlaps=500, control_overlaps=None)["state"] == "control_missing"

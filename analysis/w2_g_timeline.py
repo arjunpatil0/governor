@@ -236,3 +236,45 @@ def restrict_rec(rec, keep):
     out["gaps"] = dict(rec_idx=remap[gi[g]].astype(np.uint32), off=np.asarray(rec["gaps"]["off"])[g], len=np.asarray(rec["gaps"]["len"])[g])
     out["dropped"] = rec.get("dropped", 0); out["gap_lost"] = rec.get("gap_lost", 0)
     return out
+
+
+def witness_mask(rec, n_per_sm=3, nominal_blocks=108):
+    """Verified witness set (addendum 3 section A). Per launch (tag): the nominal set is blockIdx < nominal_blocks; it is used if every SM of the
+    launch hosts exactly n_per_sm of it (checked from the recorded %smid). Otherwise the data-driven rule applies: the n_per_sm earliest-starting
+    blocks on each SM (ties by blockIdx); a launch in which any SM hosts fewer than n_per_sm blocks is excluded. Returns (mask over records,
+    stats = launches that used the nominal set / the fallback / were excluded)."""
+    n = len(rec["t0"])
+    tag = np.asarray(rec["tag"]).astype(np.int64); blk = np.asarray(rec["blk"]).astype(np.int64)
+    sm = np.asarray(rec["smid"]).astype(np.int64); t0 = np.asarray(rec["t0"]).astype(np.int64)
+    mask = np.zeros(n, bool); st = dict(nominal=0, fallback=0, excluded=0)
+    if not n:
+        return mask, st
+    order = np.argsort(tag, kind="stable"); lo, hi = _group_bounds(tag[order])
+    for a, b in zip(lo, hi):
+        idx = order[a:b]; sms = np.unique(sm[idx])
+        nom = idx[blk[idx] < nominal_blocks]
+        cnt = np.bincount(sm[nom], minlength=int(sms.max()) + 1)[sms] if len(nom) else np.zeros(len(sms), int)
+        if (cnt == n_per_sm).all():
+            mask[nom] = True; st["nominal"] += 1
+            continue
+        sel, ok = [], True
+        for s in sms:
+            on = idx[sm[idx] == s]
+            if len(on) < n_per_sm:
+                ok = False
+                break
+            sel.append(on[np.lexsort((blk[on], t0[on]))][:n_per_sm])
+        if ok:
+            mask[np.concatenate(sel)] = True; st["fallback"] += 1
+        else:
+            st["excluded"] += 1
+    return mask, st
+
+
+def concurrency_verdict(main_overlaps, control_overlaps):
+    """Addendum 3 section B: if P6 fails in the main cells, concurrency is a FINDING only if the arbitration-free 3-blocks-per-SM control also overlaps."""
+    if main_overlaps == 0:
+        return dict(state="p6_held")
+    if control_overlaps is None:
+        return dict(state="control_missing")
+    return dict(state="concurrency_finding" if control_overlaps > 0 else "unexplained")

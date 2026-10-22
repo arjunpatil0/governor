@@ -16,7 +16,7 @@ import sys  # noqa: E402
 sys.path.insert(0, str(ROOT / "analysis")); sys.path.insert(0, str(ROOT / "workloads" / "common"))
 from w2_analysis import _tte_points, bin_by_time_to_end, fit_capped_wait  # noqa: E402
 from w2_g_timeline import (count_overlaps, launch_table, offset_at, p3_ripple, preempted_fraction, q_and_s, recorded_interval,  # noqa: E402
-                           restrict_rec, sliced_mask)
+                           restrict_rec, sliced_mask, witness_mask, concurrency_verdict)
 from w2_timeline import g_thr_ns, overhead_check, unpack_rec  # noqa: E402
 
 A_WAIT = {0.5: 0.226, 1: 0.255, 2: 0.287, 8: 0.298}      # A's cell-median observed waits (ms), as quoted in the G addendum P1
@@ -29,6 +29,7 @@ P8_MAX_MS = 0.4
 SLICE_EXTRA_MS = 2 * 0.243
 WITNESS_BLOCKS = 108        # blockIdx < 108 = the first three blocks per SM (addendum 3): gap-free when the kernel runs alone; blocks beyond them show intra-SM arbitration gaps
 BLOCK_SET = {"witness": True}
+SKIPPED = []
 FENCE, FENCE_END = "```" + chr(10), chr(10) + "```"
 FG_SIZE = {"g_baseline": 0.1, "g_T1": 1, "g_T4": 4, "g_T1_alone": 1, "g_T4_alone": 4}
 
@@ -42,7 +43,8 @@ def load_rec(path):
     keys = [k for k in z.files if k not in ("sync0", "sync1", "sms")]
     rec = unpack_rec({k: z[k] for k in keys})
     if BLOCK_SET["witness"]:
-        rec = restrict_rec(rec, rec["blk"] < WITNESS_BLOCKS)
+        mask, stats = witness_mask(rec, nominal_blocks=WITNESS_BLOCKS)
+        rec = restrict_rec(rec, mask); rec["witness_stats"] = stats
     return rec, tuple(z["sync0"]), tuple(z["sync1"])
 
 
@@ -68,12 +70,21 @@ def alone_spans(run_dir, df):
     return out
 
 
+def _ws(rec):
+    return rec.get("witness_stats", dict(nominal=0, fallback=0, excluded=0))
+
+
+def _bpsm(cell_id):
+    return 3 if cell_id.endswith("_3bpsm") else 6
+
+
 def g_thr_by_block(run_dir, df):
+    """(block, blocks per SM) -> G_thr from that block's bgalone cell of the same grid (witness blocks)."""
     out = {}
-    for _, r in df[df.cell_id == "g_bgalone"].iterrows():
+    for _, r in df[df.cell_id.isin(["g_bgalone", "g_bgalone_3bpsm"])].iterrows():
         cd = cell_dir(run_dir, r)
         if (cd / "bg_rec.npz").exists():
-            rec, _, _ = load_rec(cd / "bg_rec.npz"); out[int(r.block)] = g_thr_ns(rec)
+            rec, _, _ = load_rec(cd / "bg_rec.npz"); out[(int(r.block), _bpsm(r.cell_id))] = g_thr_ns(rec)
     return out
 
 
@@ -88,6 +99,8 @@ def timeline_cells(run_dir, df):
         b = int(r.block); size = _fg_size(r.cell_id)
         fg, fs0, fs1 = load_rec(cd / "fg_rec.npz"); bg, bs0, bs1 = load_rec(cd / "bg_rec.npz")
         fgw = np.load(cd / "fg_window.npz")
+        if not len(fg["t0"]) or not len(bg["t0"]):                    # every launch excluded by the witness rule: nothing to analyse
+            SKIPPED.append(f"b{b:02d} {r.cell_id}"); continue
         ft, bt = launch_table(fg), launch_table(bg)
         iv = recorded_interval(bg, fg)
         inside = np.isin(ft["tags"], iv["fg_tags"])
@@ -97,7 +110,7 @@ def timeline_cells(run_dir, df):
         sliced_tags = ft["tags"][inside][sl]
         qs = q_and_s(ft, bt, sliced_tags)
         ov = count_overlaps(fg, bg, fg_tags=iv["fg_tags"])
-        g_thr = thr.get(b, np.nan)
+        g_thr = thr.get((b, _bpsm(r.cell_id)), np.nan)
         pf = preempted_fraction(bg, fg, g_thr) if np.isfinite(g_thr) else dict(fraction=np.nan, fraction_with_fg=np.nan, n_blocks=len(bg["t0"]))
         # P8: arrival -> on-GPU start of the fg kernel (QPC), offset interpolated between the two syncs
         k = ft["tags"].astype(int) - int(fgw["idx0"]); ok = (k >= 0) & (k < len(fgw["arrival"]))
@@ -112,7 +125,9 @@ def timeline_cells(run_dir, df):
                          n_fg_blocks=ov["n_fg_blocks"], n_untrusted_fg=ov["n_untrusted_fg"], n_untrusted_bg=int(bt["untrusted"].sum()),
                          g_thr_us=g_thr * 1e-3, preempt_frac=pf["fraction"], preempt_frac_with_fg=pf["fraction_with_fg"],
                          p8_delay_p99_ms=float(np.percentile(delay_ms, 99)) if len(delay_ms) else np.nan,
-                         gap_lost=int(fg["gap_lost"]) + int(bg["gap_lost"])))
+                         gap_lost=int(fg["gap_lost"]) + int(bg["gap_lost"]),
+                         fg_w_nominal=_ws(fg)["nominal"], fg_w_fallback=_ws(fg)["fallback"], fg_w_excluded=_ws(fg)["excluded"],
+                         bg_w_nominal=_ws(bg)["nominal"], bg_w_fallback=_ws(bg)["fallback"], bg_w_excluded=_ws(bg)["excluded"]))
         d = raw.setdefault(r.cell_id, dict(q=[], s=[], qf=[], qb=[], delay=[]))
         d["q"] += list(qs["q_fg_raw_ms"]) + list(qs["q_bg_raw_ms"]); d["qf"] += list(qs["q_fg_raw_ms"]); d["qb"] += list(qs["q_bg_raw_ms"])
         d["s"] += list(qs["s_raw_ms"]); d["delay"] += list(delay_ms)
@@ -122,14 +137,14 @@ def timeline_cells(run_dir, df):
 def bgalone_rates(run_dir, df):
     """Gaps in the bgalone cell (no fg): other GPU contexts (finding 6). Per block: bg blocks with a gap >= G_thr, gap count, gap length summary."""
     rows = []
-    for _, r in df[df.cell_id == "g_bgalone"].iterrows():
+    for _, r in df[df.cell_id.isin(["g_bgalone", "g_bgalone_3bpsm"])].iterrows():
         cd = cell_dir(run_dir, r)
         if not (cd / "bg_rec.npz").exists():
             continue
         rec, _, _ = load_rec(cd / "bg_rec.npz"); thr = g_thr_ns(rec)
         gl = rec["gaps"]["len"].astype(float); gi = rec["gaps"]["rec_idx"]
         big = gl >= thr
-        rows.append(dict(block=int(r.block), g_thr_us=thr * 1e-3, bg_blocks=len(rec["t0"]), blocks_with_gap_ge_gthr=len(np.unique(gi[big])),
+        rows.append(dict(block=int(r.block), cell=r.cell_id, g_thr_us=thr * 1e-3, bg_blocks=len(rec["t0"]), blocks_with_gap_ge_gthr=len(np.unique(gi[big])),
                          fraction=len(np.unique(gi[big])) / max(len(rec["t0"]), 1), gaps_logged=len(gl), gaps_ge_gthr=int(big.sum()),
                          gap_len_median_us=float(np.median(gl[big])) * 1e-3 if big.any() else np.nan, gap_len_max_us=float(gl.max()) * 1e-3 if len(gl) else np.nan,
                          novf_blocks=int((rec["novf"] > 0).sum())))
@@ -228,15 +243,33 @@ def build_report(run_dir, witness=True):
               f"- local minimum 0.35-0.40: {p3['min1_ok']} (drop {p3['drop1_ms']:.3f} ms below the preceding maximum); local minimum 0.80-0.85: {p3['min2_ok']} (drop {p3['drop2_ms']:.3f} ms); required drop >= 0.04 ms (A: 0.300->0.214, 0.364->0.232)",
               f"- P3 {_verdict(p3['held'])}"]
     # ---- timeline
-    tl, raw = timeline_cells(run_dir, df)
+    SKIPPED.clear()
+    tl_all, raw_all = timeline_cells(run_dir, df)
+    ba = bgalone_rates(run_dir, df)
+    # validity gate (addendum 3 section A): (i) bgalone witness preempted fraction < 1% (pooled, per grid); (ii) placement is reported per cell
+    gate_w, gate_lines = True, []
+    if witness:
+        for cid, g in ba.groupby("cell"):
+            frac = g.blocks_with_gap_ge_gthr.sum() / max(g.bg_blocks.sum(), 1)
+            ok = bool(frac < 0.01); gate_w = gate_w and ok
+            gate_lines.append(f"- {cid}: witness preempted fraction {frac*100:.3f}% over {int(g.bg_blocks.sum())} blocks -> {'PASS' if ok else 'FAIL'} (limit 1%)")
+        if ba.empty:
+            gate_w = False; gate_lines.append("- no bgalone cell: gate (i) cannot be evaluated -> FAIL")
+    gate = gate and gate_w
+    L += ["", "## Witness validity gate (addendum 3 section A)", ""] + (gate_lines or ["- all-blocks view: the witness gate does not apply (secondary view, arbitration artefact present)"]) +          [f"- gate (i): {'PASS' if gate_w else 'FAIL: P6, P7, q and s are reported but NOT interpreted'}; gate (ii) placement is reported per cell below (nominal / fallback / excluded launches)"]
+    ctl = tl_all[tl_all.cell.str.endswith("_3bpsm")] if len(tl_all) else tl_all
+    tl = tl_all[~tl_all.cell.str.endswith("_3bpsm")] if len(tl_all) else tl_all
+    raw = {k: v for k, v in raw_all.items() if not k.endswith("_3bpsm")}
     L += ["", "## Timeline cells: coverage, trust and results per block (recorded-interval rule, addendum 2 section C)", ""]
     if not len(tl):
         L += ["(no cell had both fg and bg records)"]
     else:
-        cov = tl[["block", "cell", "n_fg_in_interval", "n_bg_launches", "interval_s", "fg_share", "bg_launches_dropped", "n_untrusted_fg", "n_untrusted_bg", "gap_lost"]]
+        cov = tl[["block", "cell", "n_fg_in_interval", "n_bg_launches", "interval_s", "fg_share", "bg_launches_dropped", "n_untrusted_fg", "n_untrusted_bg", "gap_lost",
+                  "fg_w_nominal", "fg_w_fallback", "fg_w_excluded", "bg_w_nominal", "bg_w_fallback", "bg_w_excluded"]]
         L += ["Coverage and trust (fg_share = share of the cell's measured fg requests wholly inside the recorded interval; untrusted = blocks with gap-log overflow; gap_lost = gaps lost to a full global list):", "", _tab(cov, 3), ""]
-        L += ["Per block results:", "", _tab(tl.drop(columns=["n_fg_in_interval", "n_bg_launches", "interval_s", "fg_share", "bg_launches_dropped", "n_untrusted_fg", "n_untrusted_bg", "gap_lost"]), 4), ""]
-        verdict_note = "" if gate else " (pre-check (iii) FAILED: shown for completeness, NOT interpreted)"
+        L += ["Per block results:", "", _tab(tl.drop(columns=["n_fg_in_interval", "n_bg_launches", "interval_s", "fg_share", "bg_launches_dropped", "n_untrusted_fg", "n_untrusted_bg", "gap_lost",
+                                                                  "fg_w_nominal", "fg_w_fallback", "fg_w_excluded", "bg_w_nominal", "bg_w_fallback", "bg_w_excluded"]), 4), ""]
+        verdict_note = "" if gate else " (a validity gate FAILED: shown for completeness, NOT interpreted)"
         # P4/P5: pooled over the cells with sliced spans
         allq = np.array([x for c in raw.values() for x in c["q"]]); alls = np.array([x for c in raw.values() for x in c["s"]])
         L += [f"### P4 quantum q (pooled complete runs of both contexts inside sliced fg spans){verdict_note}", ""]
@@ -255,6 +288,16 @@ def build_report(run_dir, witness=True):
         agg = tl.groupby("cell")[["n_overlap", "n_overlap_same_sm", "n_overlap_diff_sm", "n_ties", "n_fg_blocks", "n_untrusted_fg"]].sum().reset_index()
         L += ["", f"### P6 no concurrency{verdict_note}", "", _tab(agg, 0), "",
               f"- fg blocks overlapping a bg block by more than 10 us: {int(agg.n_overlap.sum())} of {int(agg.n_fg_blocks.sum())} trusted blocks (untrusted excluded: {int(agg.n_untrusted_fg.sum())}); ties (<= 10 us): {int(agg.n_ties.sum())}; P6 {_verdict(int(agg.n_overlap.sum()) == 0)}"]
+        c_ov = int(ctl.n_overlap.sum()) if len(ctl) else None
+        cv = concurrency_verdict(int(agg.n_overlap.sum()), c_ov)
+        L += ["", "#### Concurrency rule (addendum 3 section B): the 3-blocks-per-SM control g_T4_3bpsm", ""]
+        if len(ctl):
+            c = ctl[["block", "n_overlap", "n_overlap_same_sm", "n_overlap_diff_sm", "n_ties", "n_fg_blocks", "n_untrusted_fg", "preempt_frac", "interval_s"]]
+            L += [_tab(c, 3), ""]
+        L += [{"p6_held": "- P6 held in the main cells; the control is shown for completeness.",
+               "concurrency_finding": f"- P6 failed in the main cells AND the control overlaps ({c_ov} fg blocks; same-SM {int(ctl.n_overlap_same_sm.sum())}, different-SM {int(ctl.n_overlap_diff_sm.sum())}): concurrency is REPORTED AS A FINDING{verdict_note}.",
+               "unexplained": "- P6 failed in the main cells but the arbitration-free control shows NO overlap: the main-cell overlaps are UNEXPLAINED and are NOT reported as concurrency.",
+               "control_missing": "- P6 failed in the main cells and the control cell is missing: concurrency cannot be reported as a finding."}[cv["state"]]]
         pf = tl.groupby("cell")[["preempt_frac", "preempt_frac_with_fg"]].mean().reset_index()
         L += ["", f"### P7 mid-kernel preemption of bg blocks (block has a gap >= G_thr; mean over blocks){verdict_note}", "", _tab(pf, 4)]
         t4 = pf[pf.cell == "g_T4"]
@@ -266,7 +309,8 @@ def build_report(run_dir, witness=True):
         L += ["", f"### P8 arrival -> on-GPU start delay of the 0.1 ms fg (p99, ms){verdict_note}", "", _tab(pd.DataFrame(dict(cell=list(p8), p99_ms=list(p8.values()))), 4)]
         if p8:
             L += ["", f"- registered: p99 <= {P8_MAX_MS} ms for every m; P8 {_verdict(all(v <= P8_MAX_MS for v in p8.values()))}"]
-    ba = bgalone_rates(run_dir, df)
+    if SKIPPED:
+        L += ["", f"## Cells skipped because the witness rule excluded every launch: {', '.join(SKIPPED)}"]
     L += ["", "## g_bgalone: gaps with no foreground (other GPU contexts, reported baseline preemption rate; not a prediction)", "", _tab(ba, 4), ""]
     return L, smoke
 

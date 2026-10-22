@@ -115,6 +115,8 @@ def child_main(role, spec_path):
     if role == "calibrate":
         w.bg_until(1, [20000], w.now() + 3)          # warm-up at the locked clock
         cal = {"fma": calibrate(w, 1, [2000, 8000, 32000, 64000]), "mem": calibrate(w, 0, [200, 800, 2000, 4096, 8192])}
+        if spec.get("bps3"):                         # Experiment G addendum 3 section B: the 3-blocks-per-SM control cells need their own calibration
+            cal["fma3"] = calibrate(w, 1, [2000, 8000, 32000, 64000], bps=3)
         out.write_text(json.dumps(cal, indent=2), encoding="utf-8")
     elif role == "bg":
         units = np.load(spec["units"])
@@ -126,10 +128,10 @@ def child_main(role, spec_path):
         while w.now() < spec["t_sync"]:
             time.sleep(0.001)
         if rec:
-            ts, te, g, r = w.bg_until_rec(units, spec["t_stop"], t_rec0=spec["t_rec0"], cap_blocks=spec["rec_cap_blocks"], cap=spec["cap"], duty=spec["duty"], gap_k=spec["gap_k"])
+            ts, te, g, r = w.bg_until_rec(units, spec["t_stop"], t_rec0=spec["t_rec0"], cap_blocks=spec["rec_cap_blocks"], cap=spec["cap"], duty=spec["duty"], gap_k=spec["gap_k"], bps=spec.get("bps", 6))
             save_rec(Path(spec["rec_out"]), r, sync0, w.gt_sync3(), w.sms)
         else:
-            ts, te, g = w.bg_until(spec["kind"], units, spec["t_stop"], cap=spec["cap"], duty=spec["duty"])
+            ts, te, g = w.bg_until(spec["kind"], units, spec["t_stop"], cap=spec["cap"], duty=spec["duty"], bps=spec.get("bps", 6))
         np.savez_compressed(out, t_start=ts, t_end=te, gpu_ms=g.astype(np.float32))
     elif role == "fg":
         arr = np.load(spec["arrivals"])
@@ -137,11 +139,11 @@ def child_main(role, spec_path):
             while w.now() < spec["t_probe"]:
                 time.sleep(0.001)
             sync0 = w.gt_sync3()
-            cap_blocks = (len(arr) - spec["rec_from"] + 10) * w.sms * 6
-            tl, tc, g, r = w.fg_run_rec(spec["kind"], arr, spec["units"], rec_from=spec["rec_from"], cap_blocks=cap_blocks, gap_k=spec["gap_k"])
+            cap_blocks = (len(arr) - spec["rec_from"] + 10) * w.sms * spec.get("bps", 6)
+            tl, tc, g, r = w.fg_run_rec(spec["kind"], arr, spec["units"], rec_from=spec["rec_from"], cap_blocks=cap_blocks, gap_k=spec["gap_k"], bps=spec.get("bps", 6))
             save_rec(Path(spec["rec_out"]), r, sync0, w.gt_sync3(), w.sms)
         else:
-            tl, tc, g = w.fg_run(spec["kind"], arr, spec["units"])
+            tl, tc, g = w.fg_run(spec["kind"], arr, spec["units"], bps=spec.get("bps", 6))
         np.savez_compressed(out, arrival=arr, t_launch=tl, t_complete=tc, gpu_ms=g.astype(np.float32))
     elif role == "ovh":         # Experiment G pre-check (iii), controlled A/B in one process: plain vs recording kernel, alternating, per gap stride
         out_rows = []
@@ -231,7 +233,7 @@ def run_cell(cell, block, idx, h, ctx):
                                           t_sync=t_sync + 0.0, t_stop=t_win1 + 0.1, cap=200_000, cpu=BG_CPU), cdir))
         n_fg = None
     else:
-        rec = bool(cell.get("rec"))
+        rec = bool(cell.get("rec")); bpsm = cell.get("bpsm", 6)
         t_win0 = t_sync + T["warmup"]
         if fg:
             rate, n_meas = fg["rate_hz"], fg["n"]
@@ -245,21 +247,21 @@ def run_cell(cell, block, idx, h, ctx):
             if fg.get("frame"):
                 units_fg = ctx["frame_units"][fg["frame"]]
             else:
-                units_fg = int(ctx["units_for"](cal["fma"], fg["size_ms"]))
+                units_fg = int(ctx["units_for"](cal["fma3" if bpsm == 3 else "fma"], fg["size_ms"]))
             kid = KIND_ID[fg["kind"]]
             procs.append(spawn("fg", dict(out=str(cdir / "fg.npz"), arrivals=str(cdir / "arrivals.npy"), kind=kid, units=units_fg,
-                                          cpu=FG_CPU, priority=fg["priority"], rec=rec, rec_from=n_warm, t_probe=t_sync - 1.0, rec_out=str(cdir / "fg_rec.npz"), gap_k=gap_k_for(cell, "fg")), cdir))
+                                          cpu=FG_CPU, priority=fg["priority"], rec=rec, rec_from=n_warm, t_probe=t_sync - 1.0, rec_out=str(cdir / "fg_rec.npz"), gap_k=gap_k_for(cell, "fg"), bps=bpsm), cdir))
         else:                                              # part G bgalone: no foreground, a window of T["window"] after the warm-up
             t_win1 = t_win0 + T["window"]
         if bg:
             nslice = int((t_win1 - t_sync + 2) / (0.4 * bg["m_ms"] * 1e-3)) + 100
             dur = gamma_slice_durations(min(nslice, 400_000), bg["m_ms"], bg["cv"], seed + 1)
-            units = ctx["units_for"](cal[bg["kind"]], dur)
+            units = ctx["units_for"](cal["fma3" if bpsm == 3 and bg["kind"] == "fma" else bg["kind"]], dur)
             np.save(cdir / "bg_units.npy", units)
             cap = int((t_win1 - t_sync + 2) / (0.3 * bg["m_ms"] * 1e-3)) + 1000
             procs.append(spawn("bg", dict(out=str(cdir / "bg.npz"), units=str(cdir / "bg_units.npy"), kind=KIND_ID[bg["kind"]], t_sync=t_sync,
                                           t_stop=t_win1 + 1.0, cap=min(cap, 1_500_000), duty=bg["duty"], cpu=BG_CPU,
-                                          rec=rec, t_rec0=t_win0, t_probe=t_sync - 1.0, rec_cap_blocks=G_BG_REC_BLOCKS, gap_k=gap_k_for(cell, "bg"), rec_out=str(cdir / "bg_rec.npz")), cdir))
+                                          rec=rec, t_rec0=t_win0, t_probe=t_sync - 1.0, rec_cap_blocks=G_BG_REC_BLOCKS, gap_k=gap_k_for(cell, "bg"), bps=bpsm, rec_out=str(cdir / "bg_rec.npz")), cdir))
 
     # measured window: energy counter read exactly twice; 20 Hz samples inside
     while time.perf_counter() < t_win0:
@@ -456,7 +458,7 @@ def main():
         if a.part in ("A", "A2", "B", "G"):
             set_sm(1800)                                   # calibrate at the experiment's clock (A, A2) / the B background reference clock
             calp = out_dir / "calibration.json"
-            p = spawn("calibrate", dict(out=str(calp), cpu=BG_CPU), out_dir)
+            p = spawn("calibrate", dict(out=str(calp), cpu=BG_CPU, bps3=(a.part == "G")), out_dir)
             if p.wait(timeout=180) != 0:
                 raise RuntimeError("calibration child failed")
             cal = json.loads(calp.read_text(encoding="utf-8"))

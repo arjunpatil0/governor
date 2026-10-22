@@ -89,6 +89,9 @@ def build_cells(cfg, part):
         cells.append(rec(_cell("G", "g_bgalone", 1800, None, _bg(2, 0.0)), True))
         cells.append(rec(_cell("G", "g_T1_alone", 1800, _fg(1), None), True))
         cells.append(rec(_cell("G", "g_T4_alone", 1800, _fg(4), None), True))
+        # addendum 3 section B: arbitration-free controls, BOTH kernels at 3 blocks per SM (needs its own calibration)
+        cells.append(dict(rec(_cell("G", "g_T4_3bpsm", 1800, _fg(4), _bg(2, 0.0)), True), bpsm=3))
+        cells.append(dict(rec(_cell("G", "g_bgalone_3bpsm", 1800, None, _bg(2, 0.0)), True), bpsm=3))
         return cells
     raise ValueError(f"unknown part {part!r}; expected A, A2, B, C, L or G")
 
