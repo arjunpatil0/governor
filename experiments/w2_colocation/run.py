@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 for sub in ("telemetry", "workloads/common", "analysis", "experiments/w2_colocation"):
     sys.path.insert(0, str(ROOT / sub))
 from console import disable_quickedit  # noqa: E402
+import procsnap  # noqa: E402
 from llama_cell import parse_exec_mode, window_tokens  # noqa: E402
 from design import G_SEED, build_cells, cell_seed, clock_flags, frame_units_for_part, gap_k_for, order_block, precheck_cells_G  # noqa: E402
 from w2_timeline import pack_rec  # noqa: E402
@@ -443,7 +444,7 @@ def main():
                 yaml_sha=sha(CFG_PATH), dll_sha=sha(dll), git_head=git_head, git_dirty=bool(git_state(ROOT)[1]) if a.smoke else False,
                 gpu=nv.nvmlDeviceGetName(h), driver=nv.nvmlSystemGetDriverVersion(), hags=hags,
                 execution_mode=("llama.cpp CUDA build, all layers offloaded (checked per cell from the driver log; a cell with any CPU layer aborts the run)" if a.part == "L" else "CUDA native kernels via w2_kernels.dll (no CPU fallback)"), llama=llama_meta, os=platform.platform(), python=sys.version.split()[0],
-                blocks=blocks, timing=T)
+                blocks=blocks, timing=T, processes=procsnap.snapshot())
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(f"HAGS: {hags['line']} | git {git_head[:8]} | out {out_dir}")
     if not hags["enabled"]:

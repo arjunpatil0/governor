@@ -207,14 +207,16 @@ def _verdict(held):
     return "HELD" if held else "DID NOT HOLD"
 
 
-def build_report(run_dir, witness=True):
+def build_report(run_dir, witness=True, skip_blocks=()):
     BLOCK_SET["witness"] = witness
     run_dir = Path(run_dir)
     meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8")); df = pd.read_csv(run_dir / "results.csv")
+    if skip_blocks:
+        df = df[~df.block.isin(list(skip_blocks))].reset_index(drop=True)
     smoke = bool(meta.get("smoke"))
     L = [f"# Experiment G report{' (SMOKE: not a result)' if smoke else ''}", "",
          f"Source `{run_dir}` | admin {meta['admin']} | AC {meta['ac_plugged']} | ambient {meta['ambient_c']} C | Armoury {meta.get('armoury_mode')} | {meta['gpu']} driver {meta['driver']} | "
-         f"yaml {meta['yaml_sha']} | dll {meta['dll_sha']} | git {meta['git_head'][:8]} | blocks {meta['blocks']} | cells {len(df)}",
+         f"yaml {meta['yaml_sha']} | dll {meta['dll_sha']} | git {meta['git_head'][:8]} | blocks {meta['blocks']} | cells {len(df)}" + (f" | Excluded blocks: {list(skip_blocks)}" if skip_blocks else ""),
          "Addenda: experiments/w2_colocation_addendum_globaltimer_2026-10-22.md and ..._prerun_2026-10-22.md (and _witness_ if registered). Each prediction: held / did not hold, with the numbers.",
          f"Block set for gap, run, overlap and preemption analyses: {'WITNESS blocks only (blockIdx < %d, the first three blocks per SM)' % WITNESS_BLOCKS if witness else 'ALL blocks (secondary view; blocks beyond three per SM show intra-SM arbitration gaps even with no other context)'}.", ""]
     t3, chk = precheck_iii(df)
@@ -316,7 +318,8 @@ def build_report(run_dir, witness=True):
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--dir"); ap.add_argument("--all-blocks", action="store_true", help="secondary view: do not restrict to the witness blocks"); a = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument("--dir"); ap.add_argument("--all-blocks", action="store_true", help="secondary view: do not restrict to the witness blocks")
+    ap.add_argument("--skip-blocks", type=int, nargs="*", default=[], help="drop these experiment blocks (sensitivity analysis)"); a = ap.parse_args()
     if a.dir:
         d = Path(a.dir)
     else:
@@ -324,8 +327,8 @@ def main():
         if not runs:
             sys.exit("no full-run results under data/raw/w2_G (pass --dir for a smoke directory)")
         d = runs[-1].parent
-    L, smoke = build_report(d, witness=not a.all_blocks)
-    out = ROOT / "data" / (("w2_G_smoke_report" if smoke else "w2_G_results") + ("_allblocks" if a.all_blocks else "") + ".md")
+    L, smoke = build_report(d, witness=not a.all_blocks, skip_blocks=tuple(a.skip_blocks))
+    out = ROOT / "data" / (("w2_G_smoke_report" if smoke else "w2_G_results") + ("_allblocks" if a.all_blocks else "") + ("_skip_b" + "".join(map(str, a.skip_blocks)) if a.skip_blocks else "") + ".md")
     out.write_text("\n".join(L), encoding="utf-8"); print("\n".join(L)); print("written:", out)
 
 

@@ -154,3 +154,13 @@ def test_witness_gate_fails_when_bgalone_witness_blocks_show_gaps(run_dir):
 def test_report_lists_witness_placement_columns(run_dir):
     text = chr(10).join(build_report(run_dir)[0])
     assert "fg_w_fallback" in text and "bg_w_excluded" in text and "Witness validity gate" in text
+
+
+def test_skip_blocks_drops_those_rows_and_says_so(run_dir):
+    df = pd.read_csv(run_dir / "results.csv"); n = len(df)
+    full = chr(10).join(build_report(run_dir)[0])
+    assert f"cells {n}" in full and "Excluded blocks" not in full
+    df.loc[df.cell_id.isin(["g_R8", "g_R8_off"]), "block"] = 1          # pretend these two cells came from block 1 (their dirs are not read once skipped)
+    df.to_csv(run_dir / "results.csv", index=False)
+    sub = chr(10).join(build_report(run_dir, skip_blocks=(1,))[0])
+    assert f"cells {n - 2}" in sub and "Excluded blocks: [1]" in sub
