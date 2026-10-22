@@ -47,3 +47,9 @@ def test_earns_place_needs_a_win_in_s1_and_s4_and_no_loss_elsewhere():
     assert earns_place(base)
     assert not earns_place({**base, "S4": tie})
     assert not earns_place({**base, "S2": loss})
+
+
+def test_pareto_front_keeps_non_dominated_points_with_more_tokens_and_less_power():
+    from w45_sim_report import pareto_front
+    pts = {"x": (50.0, 80.0), "y": (30.0, 45.0), "z": (30.0, 60.0), "w": (50.0, 80.0)}
+    assert pareto_front(pts) == {"x", "y", "w"}          # z is dominated by y; ties are not dominated

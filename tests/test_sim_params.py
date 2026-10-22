@@ -1,5 +1,6 @@
 """Simulator parameters (sim/params.py): every number is read from a committed result file; tests check the parse against the B and L files and the provenance registry."""
 import re
+import numpy as np
 from pathlib import Path
 
 import pytest
@@ -84,3 +85,8 @@ def test_idle_power_comes_from_a_quoted_source_that_exists(P):
 
 def test_clock_actuation_latency_is_the_audit_value(P):
     assert P.clock_latency_ms == pytest.approx(443.2346)
+
+
+def test_token_jitter_comes_from_the_L_per_token_logs_with_mean_one(P):
+    j = P.token_jitter
+    assert len(j) > 10000 and j.mean() == pytest.approx(1.0, rel=1e-9) and 0.8 < np.median(j) < 1.0 and np.percentile(j, 99) > 1.05

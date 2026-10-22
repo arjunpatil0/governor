@@ -166,3 +166,13 @@ def test_energy_is_integral_of_segment_power(P):
     r = run(P, scen(fg_periodic(4.0), dur=4000.0), Action(clock=1800))
     s = summarise(r)
     assert s["power_w"] == pytest.approx(r.energy_j / 4.0, rel=1e-9)
+
+
+# ---------------------------------------------------------------- empirical token-time jitter (sensitivity follow-up)
+def test_token_jitter_keeps_the_L_throughput_but_makes_a_zero_guard_overrun(P):
+    alone = summarise(run(P, scen(fg_periodic(4.0, active=lambda t: False), BgSpec(kind="llama", jitter=True), dur=20000.0), Action(clock=P.UNLOCKED_MHZ, pacing="unaligned", duty=1.0)))
+    assert alone["bg_tok_s"] == pytest.approx(P.tok_s(P.UNLOCKED_MHZ), rel=0.03)
+    sc = scen(fg_periodic(6.0), BgSpec(kind="llama", jitter=True), dur=30000.0)
+    g0 = summarise(run(P, sc, Action(clock=P.UNLOCKED_MHZ, pacing="aligned", guard_ms=0.0)))
+    g3 = summarise(run(P, sc, Action(clock=P.UNLOCKED_MHZ, pacing="aligned", guard_ms=3.0)))
+    assert g0["miss_frac"] > g3["miss_frac"] and g0["lat_p99_ms"] > g3["lat_p99_ms"]

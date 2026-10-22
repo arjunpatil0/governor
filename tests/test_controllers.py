@@ -154,3 +154,20 @@ def test_model_goes_to_the_knee_clock_when_the_fg_is_idle(P):
     m = ModelController(P, "aligned"); m.reset(ctx(P))
     a = run_ticks(m, [], 12, n_arrived=0)
     assert a.clock == knee_clock(P) and a.pacing == "aligned"
+
+
+# ---------------------------------------------------------------- follow-ups: scenario-agnostic static, idle-triggered clock drop
+def test_idle_drop_controller_runs_a_fixed_aligned_setting_and_drops_to_the_knee_when_idle(P):
+    from controllers.static import IdleDropController
+    fixed = Action(clock=P.UNLOCKED_MHZ, pacing="aligned", guard_ms=0.0)
+    c = IdleDropController(P, fixed)
+    assert c.reset(ctx(P)) == fixed and run_ticks(c, [5.0] * 6, 10) == fixed
+    a = run_ticks(c, [], 6, n_arrived=0)
+    assert a.clock == knee_clock(P) and a.pacing == "aligned"
+    assert run_ticks(c, [5.0] * 6, 1) == fixed                          # frames are back: the fixed setting returns at once
+
+
+def test_global_static_holds_the_slo_in_every_listed_scenario(P):
+    from controllers.static import tune_static_global
+    r = tune_static_global(P, "aligned", (100,), ("S0", "S1"), duration_ms=15000.0, clocks=(1800.0, P.UNLOCKED_MHZ))
+    assert r["feasible"] and r["miss_max_seen"] <= 0.01 and r["action"].pacing == "aligned"
