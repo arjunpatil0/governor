@@ -1,22 +1,21 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-22 · Phase: W2 (Experiment G built and smoke-tested; one design decision blocks the full run)
+Updated 2026-10-22 · Phase: W2 (Experiment G registered, built and smoke-tested; ready to run)
 
 ## Just did (commits; see git log)
-- Followed the requested order: addendum 2 registered (913fc82) -> multi-gap kernel test-first (28fb49c) -> P1-P8 analysis test-first on synthetic timelines incl. alternating suspend/resume (5fb7204) -> 15-cell smoke. Journal 0030, response reviews/2026-10-22_G_prerun_response.md. Suite 173 passed. Full G run NOT started.
-- Smoke (unlocked, 1 block, not a result): overflow 0 (no untrusted blocks, no lost gaps); coverage as stated (R0.5 38% of fg requests inside the recorded interval, R1 82%, rest >= 99.5%).
-- FINDING from the smoke: block gaps are not context switches beyond 3 blocks/SM. bg alone: 50.0% of blocks show ~267 us gaps; sweep 1/2/3/4/5/6 blocks per SM -> 0/0/0/25/40/50% of blocks. Witness blocks (blockIdx < 108) show 0 gaps alone. Draft addendum 3 (witness blocks, validity gate) committed as _DRAFT, NOT registered.
+- Applied the G witness review: addendum 3 REGISTERED (verified witness set via %smid with a fallback rule, witness rule for fg too, g_T4_3bpsm and g_bgalone_3bpsm controls with the concurrency rule). P4-P6 unchanged. Slip disclosed: commit b50cc2c holds the draft text under the final name, 675e861 the registered text (no data in between).
+- Controls built test-first (17 cells per block, 170 cells; own calibration at 3 blocks per SM); smoke of all 17 cells (not a result): witness set nominal in every launch, bgalone witness gap rate 0.000% on both grids (gate passes), 0 untrusted blocks, 0 lost gaps, coverage R0.5 41% / R1 92% / rest >= 99.5%. Control g_T4_3bpsm: 0 overlaps in 43,092 fg blocks vs 11,070 of 870,048 in the main cells, i.e. by the registered rule "unexplained, not concurrency" if that repeats on locked data.
+- Suite 183 passed. Response reviews/2026-10-22_G_witness_response.md, journal 0031.
 
 ## Waiting for
-- Reviewer + Arjun on the draft addendum 3 (experiments/w2_colocation_addendum_globaltimer_witness_2026-10-22_DRAFT.md).
+- Your go. Nothing else blocks the full run.
 
 ## Decisions needed
-1. Register addendum 3 (rename, commit before any G data), or run as registered? Recommendation: register it. As registered, P6/P7 and G_thr would be computed on blocks whose gaps are largely arbitration (bgalone 50% alone, so P7's >= 1% test is vacuous and P6 compares against starved blocks). The recorded data are identical either way (all blocks are kept), but the pre-registered reading must be fixed before data.
-2. If addendum 3 is registered, the smoke suggests P4 (q 0.5-0.9 ms), P5 (s 0.2-0.3 ms) and P6 (zero overlap) may not hold as written (q ~0.375, s ~0.13, overlaps remain). I changed none of them; reviewer to say whether they stay as predictions.
-3. Duration: 150 cells; the last two 15-cell smokes took 4.2 and 14.6 min (cool-down waits). Plan 1-2.5 h with the laptop untouched.
+1. Two readings of mine to confirm or overrule (response items 1 and 2): gate (ii) fails only if a cell has no usable launch; fg/bg on-intervals subtract every logged gap > 20 us (addendum 2) rather than only gaps >= G_thr (about 25 us). Recommendation: keep both; they are registered as written.
+2. Schedule: 170 cells; the 17-cell smoke took 6.6 min, earlier ones 4.2 and 14.6 (cool-down waits). Plan 1.2-3 h with the laptop untouched. Raw data will be about 0.1-0.3 GB; I will force-add results.csv, meta.json and the cells.
 
 ## Reviewer checkpoint due?
-- Yes, before the run: the finding above and addendum 3. Results checkpoint after the run.
+- Results before interpretation, after the run. Analysis: `python analysis\w2_g_analysis.py` (witness view) and `--all-blocks` (secondary).
 
-## Full G run (only after decision 1; admin PowerShell, AC power, clean tree, Armoury Crate Performance, Chrome and other apps closed, do not click in the window)
+## Full G run (admin PowerShell, AC power, clean tree, Armoury Crate Performance, Chrome and other apps closed, do not click in the window)
 cd C:\Users\arjun\governor
 python experiments\w2_colocation\run.py --part G --ambient-c 25 --armoury-mode Performance
