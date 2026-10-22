@@ -1,18 +1,15 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-23 · Phase: W4-5. Reviewer decisions on smoke 2 applied; the FINAL driver (pace-view fix + clean-token estimate) is built; smoke 3 READY for you. Yaml draft 3b is UNCOMMITTED (excluded from git) for re-review.
+Updated 2026-10-23 · Phase: W4-5. Smoke 3 recorded; reviewer notes 1-4 applied. Yaml draft 3b is UNCOMMITTED (excluded from git) and PRESENTED FOR FINAL REVIEW before commit and W5a.
 
-## Just did (journal 0042)
-- Correction recorded: smoke-1 "guard must be learned / guard 0 unsafe" WITHDRAWN; smoke-1 aligned-driver and governor numbers (c'B 5.7% miss, tok/s) INVALID (data/w45_smoke/smoke1/README_INVALID.md); the learned controller is justified by the unseen workload and the per-workload clock choice under a power budget. No W1/W2 experiment used the pace-block reader (shm/ring code first committed 2026-10-22, after W2 closed).
-- Granularity limitation recorded (plan addendum H, yaml limitations, PAPER_MAP 23, CONCEPTS): a clean token (10.1 ms) exceeds the slack at c0 >= about 6.6 ms; aligned admits <= 1 token/frame (about 60 tok/s) at light frames and about none at heavier ones; sub-token pacing = future work.
-- Yaml: HW0 unchanged + c0 grid {7, 8, 9, 10, 11} ms (smallest meeting the gate); no open reviewer questions.
-- Clean-token estimate implemented test-first (workloads/background/tok_estimate.h; 4 C++-vs-Python tests + source test), driver rebuilt, both estimates and the overlap flag logged per token in the driver CSV.
+## Just did (journal 0043; report data/w45_smoke/smoke3_report.md)
+- Smoke 3 (final driver): measured frame alone 3.0 / 5.2 / 6.7 ms for nominal 4 / 7 / 9 ms. Aligned gates correctly: 60 tok/s (1 token per frame) at 3.0 and 5.2 ms, 0 tok/s at 6.7 ms, 0 misses; overrun 0% / 0.5% (max 3.3 ms). Unaligned duty 1 at nominal 9 overloads the fg (100% misses, p50 308.6 ms). Clean-token estimate steady at 10.1 ms.
+- My unit error corrected: the 6.8 ms I used for nominal 7 was the contended smoke-2 median; alone it is 5.2 ms, so aligned pacing works at nominal 7 (my earlier expectation was wrong). The 6.57 ms boundary is in measured time (about nominal 8.8 ms).
+- Yaml: gate needs bg tok/s >= 20% of background-alone; c0 = nominal cost, measured frame time recorded per block, grid {7..11} nominal; HW7 pre-states the clean-estimate staleness check around clock changes.
+- Helper: 3 NVML reset errors in this log (first reset after a successful RESET) were handled as "reset not needed"; cause still unexplained (probe passed 12/12).
 
 ## Waiting for
-1. You: smoke 3 with the commands in docs/W45_SMOKE3_SETUP.md (given again in chat, including warm).
-2. Reviewer: re-review yaml draft 3b.
-
-## Next (after smoke 3)
-Addendum with the smoke-3 result (fit test at costs 4 / 7 / 9 ms, both estimates), then W5a (load pre-check addendum first).
+1. Reviewer: FINAL review of experiments/w5_governor.yaml (draft 3b). No open questions.
+2. Then (after your go): commit the yaml with a dated addendum, then W5a starts with its load pre-check addendum (8B load check, held-out choice) first.
 
 ## Notes
-- Simulator frozen. Run checklist: Administrator PowerShell; AC power; clean committed tree; Armoury mode stated; Chrome closed; tray apps quit; no clicking; warm every new exe (the driver exe was rebuilt twice since smoke 2; `warm` is step 1).
+- Simulator frozen. Run checklist: Administrator PowerShell; AC power; clean committed tree; Armoury mode stated; Chrome closed; tray apps quit; no clicking; warm every new exe.

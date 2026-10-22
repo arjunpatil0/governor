@@ -168,3 +168,12 @@ About 20 min of GPU time with the helper: token durations and overrun past the n
 - **Granularity limitation:** a clean token (10.1 ms) is longer than the slack once the frame cost is >= about 6.6 ms; aligned pacing admits at most one token per frame (about 60 tok/s at 60 Hz) at light frames and about none at heavier ones, where the controller must choose unaligned pacing. Sub-token (layer-level) pacing is future work and a stated limitation.
 - **Feasibility gate:** unchanged; the tuning blocks search c0 over {7, 8, 9, 10, 11} ms and take the smallest c0 meeting the registered gate.
 - **Driver token estimate:** median of the last 8 non-overlapped tokens (both estimates logged); implemented test-first and rebuilt before smoke 3 (journal 0042).
+
+
+---
+# ADDENDUM I 2026-10-23 (smoke 3 and reviewer notes; recorded BEFORE W5a and any W5b data)
+- **Smoke 3 (diagnostic):** measured frame alone 3.0 / 5.2 / 6.7 ms for nominal 4 / 7 / 9 ms; aligned pacing gates correctly (60 tok/s = 1 token/frame at 5.2 ms measured and below, 0 tok/s at 6.7 ms measured, 0 misses); unaligned duty 1 at nominal 9 overloads the fg (100% misses, p50 308.6 ms); clean-token estimate steady at 10.1 ms, overrun 0.5% (max 3.3 ms). Data: data/w45_smoke/smoke3, smoke3_report.md; journal 0043.
+- **Units corrected:** the boundary 16.67 - 10.1 = 6.57 ms is in MEASURED frame time (about 8.8 ms nominal, indicative). At nominal c0 = 7 aligned pacing works; addendum H and PAPER_MAP row 23 used a contended 6.8 ms and are superseded by this addendum and PAPER_MAP row 24.
+- **Feasibility gate:** a static setting passes only if it meets the SLO, the budget AND bg tok/s >= 20% of the background-alone tok/s (measured in each tuning block).
+- **c0:** grid in nominal cost {7..11} ms; the measured frame time alone is recorded for every block; the boundary is judged in measured time.
+- **Clean-token estimate staleness:** untested; check pre-stated in the yaml (HW7); W5a logs est_clean_ms around every clock change.

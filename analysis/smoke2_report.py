@@ -32,7 +32,7 @@ def main():
     L = ["# W4-5 hardware smoke 2: token durations and overrun (DIAGNOSTIC, not a registered result; journal 0041)", "",
          f"Source: {D.relative_to(ROOT).as_posix()}/overrun.json and overrun_raw_*.json. Long token = tok_ms > {LONG_MS:.0f} ms. 'fit test would admit' = the driver's rule now + EWMA estimate + guard <= next arrival, "
          "evaluated at the logged token start with the estimate reconstructed from the logged durations (the driver's own 0.9/0.1 EWMA).", "",
-         "| run | cost ms | tokens | true tok/s (DONE line) | fg p50 / p99 ms | fg miss | long tokens | clean tok_ms p50 | long tok_ms p50 | start phase after arrival, clean p50 [p10, p90] | long p50 | fit test would admit | driver overlap flag | est EWMA / clean p50 (logged) |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+         "| run | cost ms | tokens | tok/s in the measured window (bg_tok_s) | tok/s DONE line (whole driver life) | fg p50 / p99 ms | fg miss | long tokens | clean tok_ms p50 | long tok_ms p50 | start phase after arrival, clean p50 [p10, p90] | long p50 | fit test would admit | driver overlap flag | est EWMA / clean p50 (logged) |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in runs:
         raw = json.loads((D / f"overrun_raw_{r['label']}.json").read_text(encoding="utf-8"))
         te, tm, a = np.array(raw["tok_end"]), np.array(raw["tok_ms"]), np.array(raw["arrivals"])
@@ -47,7 +47,14 @@ def main():
             ph, tn = (st - a[prev]) * 1000.0, (a[nxt] - st) * 1000.0
             guard = r["ctrl"][2] if r["ctrl"][0] >= 0.5 else None
             est = ewma_before(tm)
-            admit = f"{100 * float(((est + (guard or 0.0)) <= tn)[1:].mean()):.1f}%" if guard is not None else "n/a (unaligned)"
+            if guard is not None and (D / f"driver_{r['label']}.csv").exists() and "est_clean_ms" in pd.read_csv(D / f"driver_{r['label']}.csv").columns:
+                lg0 = pd.read_csv(D / f"driver_{r['label']}.csv")
+                used = np.where(np.isfinite(lg0.est_clean_ms), lg0.est_clean_ms, lg0.est_ewma_ms)           # the estimate the driver actually used (clean median, EWMA before the first clean token)
+                m = dict(zip(lg0.t_tok_end.round(6), used))
+                u = np.array([m.get(round(float(t), 6), np.nan) for t in te])
+                admit = f"{100 * float(np.nanmean(((u + guard) <= tn)[1:])):.1f}% (logged estimate)" if np.isfinite(u).any() else "-"
+            else:
+                admit = f"{100 * float(((est + (guard or 0.0)) <= tn)[1:].mean()):.1f}%" if guard is not None else "n/a (unaligned)"
             ph_s = f"{q(ph[~lng], 50):.2f} [{q(ph[~lng], 10):.2f}, {q(ph[~lng], 90):.2f}]" if (~lng).any() else "-"
             ph_l = f"{q(ph[lng], 50):.2f}" if lng.any() else "-"
         else:
@@ -60,7 +67,7 @@ def main():
         else:
             ovf = ests = "-"
         fg = "-" if not r["frames"] else f"{r['fg_p50_ms']:.2f} / {r['fg_p99_ms']:.2f}"
-        L.append(f"| {r['label']} | {r.get('cost_ms', 'S0 (7)')} | {int(n)} | {tok_s:.1f} | {fg} | {r['fg_miss_frac']:.3f} | {100 * float(lng.mean()):.0f}% | {q(tm[~lng], 50):.2f} | {q(tm[lng], 50):.2f} | {ph_s} | {ph_l} | {admit} | {ovf} | {ests} |")
+        L.append(f"| {r['label']} | {r.get('cost_ms', 'S0 (7)')} | {int(n)} | {'-' if not r['frames'] else format(r['bg_tok_s'], '.1f')} | {tok_s:.1f} | {fg} | {r['fg_miss_frac']:.3f} | {100 * float(lng.mean()):.0f}% | {q(tm[~lng], 50):.2f} | {q(tm[lng], 50):.2f} | {ph_s} | {ph_l} | {admit} | {ovf} | {ests} |")
     L += ["", "Reading: see journal 0041. The table is produced by analysis/smoke2_report.py from the files above; nothing in it is estimated."]
     (D.parent / f"{D.name}_report.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     print("\n".join(L))

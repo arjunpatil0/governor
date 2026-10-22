@@ -1,0 +1,136 @@
+{
+ "utc": "2026-10-22T18:47:33.286399+00:00",
+ "armoury_mode": "Performance",
+ "armoury_mode_recorded": true,
+ "chrome_running": false,
+ "git_head": "5dc7b2f7c7bb196a260e66d9eb78de0a5feac84f",
+ "exe_sha256": "788a5463d9d560e8dffe0aae4699f37cb00447ba4c9fd463bb75aa08a37f6334",
+ "helper_ping": "unreachable: error",
+ "processes": [
+  {
+   "name": "System Idle Process",
+   "count": 1,
+   "cpu_pct": 1483.7
+  },
+  {
+   "name": "python.exe",
+   "count": 1,
+   "cpu_pct": 51.9
+  },
+  {
+   "name": "claude.exe",
+   "count": 9,
+   "cpu_pct": 24.0
+  },
+  {
+   "name": "System",
+   "count": 1,
+   "cpu_pct": 7.8
+  },
+  {
+   "name": "dwm.exe",
+   "count": 1,
+   "cpu_pct": 5.9
+  },
+  {
+   "name": "AvastSvc.exe",
+   "count": 1,
+   "cpu_pct": 1.2
+  },
+  {
+   "name": "csrss.exe",
+   "count": 2,
+   "cpu_pct": 1.1
+  },
+  {
+   "name": "SpotifyLauncher.exe",
+   "count": 1,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "WindowsTerminal.exe",
+   "count": 1,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "copilotapphost.exe",
+   "count": 1,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "GameInputSvc.exe",
+   "count": 2,
+   "cpu_pct": 0.7
+  },
+  {
+   "name": "msedgewebview2.exe",
+   "count": 6,
+   "cpu_pct": 0.7
+  },
+  {
+   "name": "vmwp.exe",
+   "count": 1,
+   "cpu_pct": 0.7
+  },
+  {
+   "name": "svchost.exe",
+   "count": 94,
+   "cpu_pct": 0.6
+  },
+  {
+   "name": "?",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSServ.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSSrcExt.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ASUSSmartDisplayControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AacAmbientLighting.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AcPowerNotification.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AdobeCollabSync.exe",
+   "count": 2,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AggregatorHost.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AppActions.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ApplicationFrameHost.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.Service.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  }
+ ]
+}

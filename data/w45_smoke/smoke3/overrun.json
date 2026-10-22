@@ -1,0 +1,231 @@
+[
+ {
+  "label": "aligned_g0_d1_cost4",
+  "ctrl": [
+   1.0,
+   1.0,
+   0.0
+  ],
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "frames": 1380,
+  "fg_p50_ms": 2.9979333048686385,
+  "fg_p99_ms": 3.292168637271972,
+  "fg_miss_frac": 0.0,
+  "bg_tok_s": 59.95652173913044,
+  "mean_power_w_whole_run": 78.52956,
+  "token_end_phase_ms_p10_p50_p90": [
+   12.867199976463011,
+   13.175599998794526,
+   13.529573318859235
+  ],
+  "ring_dropped": 0,
+  "driver_output_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=1510 t_first=492506.078307 t_last=492531.171142 ctx_end=2022"
+  ],
+  "cost_ms": 4.0,
+  "overrun": {
+   "n": 1379,
+   "frac_overrun": 0.0,
+   "overrun_ms_p50": -3.4910666872747242,
+   "overrun_ms_p90": -3.1370933749713004,
+   "overrun_ms_p99": -2.156971344957128,
+   "overrun_ms_max": -0.9351666667498648,
+   "tok_ms_p50": 10.152700007893145,
+   "tok_ms_p90": 10.476519970688969,
+   "tok_ms_p99": 11.216544004855677,
+   "tok_ms_max": 12.694099976215512,
+   "period_ms": 16.666666666666668
+  }
+ },
+ {
+  "label": "aligned_g1_d1_cost4",
+  "ctrl": [
+   1.0,
+   1.0,
+   1.0
+  ],
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "frames": 1380,
+  "fg_p50_ms": 3.0132666579447687,
+  "fg_p99_ms": 3.1395483354572207,
+  "fg_miss_frac": 0.0,
+  "bg_tok_s": 59.95652173913044,
+  "mean_power_w_whole_run": 81.47808,
+  "token_end_phase_ms_p10_p50_p90": [
+   12.857406685749767,
+   13.1894333132856,
+   13.550013353427516
+  ],
+  "ring_dropped": 0,
+  "driver_output_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=1506 t_first=492543.801364 t_last=492568.853360 ctx_end=2018"
+  ],
+  "cost_ms": 4.0,
+  "overrun": {
+   "n": 1379,
+   "frac_overrun": 0.0,
+   "overrun_ms_p50": -3.477233345620334,
+   "overrun_ms_p90": -3.116653300821781,
+   "overrun_ms_p99": -2.356543991481884,
+   "overrun_ms_max": -1.2144333450123668,
+   "tok_ms_p50": 10.153599956538528,
+   "tok_ms_p90": 10.49570000031963,
+   "tok_ms_p99": 11.163026004796848,
+   "tok_ms_max": 12.385300011374056,
+   "period_ms": 16.666666666666668
+  }
+ },
+ {
+  "label": "aligned_g0_d1_cost7",
+  "ctrl": [
+   1.0,
+   1.0,
+   0.0
+  ],
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "frames": 1380,
+  "fg_p50_ms": 5.20125002367422,
+  "fg_p99_ms": 5.378589329775423,
+  "fg_miss_frac": 0.0,
+  "bg_tok_s": 59.91304347826087,
+  "mean_power_w_whole_run": 90.65008,
+  "token_end_phase_ms_p10_p50_p90": [
+   14.969556687089389,
+   15.319150016876161,
+   15.638960056240034
+  ],
+  "ring_dropped": 0,
+  "driver_output_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=1525 t_first=492581.538653 t_last=492606.785188 ctx_end=2037"
+  ],
+  "cost_ms": 7.0,
+  "overrun": {
+   "n": 1378,
+   "frac_overrun": 0.0050798258345428155,
+   "overrun_ms_p50": -1.3422500051092356,
+   "overrun_ms_p90": -1.0233432869426906,
+   "overrun_ms_p99": -0.4742976423585784,
+   "overrun_ms_max": 3.2730334205552936,
+   "tok_ms_p50": 10.100700019393116,
+   "tok_ms_p90": 10.361329966690391,
+   "tok_ms_p99": 10.869948989711704,
+   "tok_ms_max": 13.712000043597072,
+   "period_ms": 16.666666666666668
+  }
+ },
+ {
+  "label": "aligned_g1_d1_cost7",
+  "ctrl": [
+   1.0,
+   1.0,
+   1.0
+  ],
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "frames": 1380,
+  "fg_p50_ms": 5.209466675296426,
+  "fg_p99_ms": 5.46507035207469,
+  "fg_miss_frac": 0.0,
+  "bg_tok_s": 53.869565217391305,
+  "mean_power_w_whole_run": 87.67296,
+  "token_end_phase_ms_p10_p50_p90": [
+   14.967346684231217,
+   15.314633372084701,
+   15.63924001995504
+  ],
+  "ring_dropped": 0,
+  "driver_output_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=1386 t_first=492619.260028 t_last=492644.505875 ctx_end=1898"
+  ],
+  "cost_ms": 7.0,
+  "overrun": {
+   "n": 1239,
+   "frac_overrun": 0.005649717514124294,
+   "overrun_ms_p50": -1.3471333077177405,
+   "overrun_ms_p90": -1.0213600005954504,
+   "overrun_ms_p99": -0.4567486431915359,
+   "overrun_ms_max": 1.6685333685018122,
+   "tok_ms_p50": 10.076200007461011,
+   "tok_ms_p90": 10.3817000053823,
+   "tok_ms_p99": 10.908350021345539,
+   "tok_ms_max": 13.002199993934482,
+   "period_ms": 16.666666666666668
+  }
+ },
+ {
+  "label": "aligned_g1_d1_cost9",
+  "ctrl": [
+   1.0,
+   1.0,
+   1.0
+  ],
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "frames": 1380,
+  "fg_p50_ms": 6.695733347442001,
+  "fg_p99_ms": 6.955413325340488,
+  "fg_miss_frac": 0.0,
+  "bg_tok_s": 0.0,
+  "mean_power_w_whole_run": 50.206559999999996,
+  "token_end_phase_ms_p10_p50_p90": null,
+  "ring_dropped": 0,
+  "driver_output_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=23 t_first=492657.104865 t_last=492682.355457 ctx_end=535"
+  ],
+  "cost_ms": 9.0,
+  "overrun": {
+   "n": 0,
+   "frac_overrun": NaN,
+   "overrun_ms_p50": NaN,
+   "overrun_ms_p90": NaN,
+   "overrun_ms_p99": NaN,
+   "overrun_ms_max": NaN,
+   "tok_ms_p50": NaN,
+   "tok_ms_p90": NaN,
+   "tok_ms_p99": NaN,
+   "tok_ms_max": NaN
+  }
+ },
+ {
+  "label": "unaligned_d1_cost9",
+  "ctrl": [
+   0.0,
+   1.0,
+   0.5
+  ],
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "frames": 1380,
+  "fg_p50_ms": 308.6085999675561,
+  "fg_p99_ms": 548.3213389932644,
+  "fg_miss_frac": 1.0,
+  "bg_tok_s": 37.0,
+  "mean_power_w_whole_run": 87.30188,
+  "token_end_phase_ms_p10_p50_p90": [
+   1.645899971481575,
+   8.316533345108446,
+   15.049000002909482
+  ],
+  "ring_dropped": 0,
+  "driver_output_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=950 t_first=492694.844403 t_last=492720.622375 ctx_end=1462"
+  ],
+  "cost_ms": 9.0,
+  "overrun": {
+   "n": 832,
+   "frac_overrun": 1.0,
+   "overrun_ms_p50": 19.348016649018973,
+   "overrun_ms_p90": 25.911950005684048,
+   "overrun_ms_p99": 27.57945697696414,
+   "overrun_ms_max": 28.619633347261697,
+   "tok_ms_p50": 27.693900046870112,
+   "tok_ms_p90": 28.369200008455664,
+   "tok_ms_p99": 29.059099993901327,
+   "tok_ms_max": 31.76290000556037,
+   "period_ms": 16.666666666666668
+  }
+ }
+]
