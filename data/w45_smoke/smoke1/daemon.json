@@ -1,0 +1,18 @@
+{
+ "stats": {
+  "rows": 201,
+  "dropped_rows": 0,
+  "loop_late_p99_ms": 0.00140088377520442,
+  "ring_dropped": {}
+ },
+ "rows": 201,
+ "median_dt_ms": 49.99999998835847,
+ "changed_fraction": {
+  "nvml_changed": 0.5124378109452736
+ },
+ "age_ms_p90": {
+  "nvml_age_ms": 50.0
+ },
+ "sm_mhz_median": 2385.0,
+ "power_w_median": 94.747
+}

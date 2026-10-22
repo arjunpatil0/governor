@@ -1,0 +1,46 @@
+{
+ "steps": [
+  {
+   "op": "LOCK 900",
+   "ok": true,
+   "response": "OK",
+   "ack_ms": 5.2263999823480844,
+   "settle_s": 0.3299195999861695
+  },
+  {
+   "op": "LOCK 1500",
+   "ok": true,
+   "response": "OK",
+   "ack_ms": 13.383499986957759,
+   "settle_s": 0.12079810001887381
+  },
+  {
+   "op": "LOCK 1800",
+   "ok": true,
+   "response": "OK",
+   "ack_ms": 4.946300003211945,
+   "settle_s": 0.4106222999980673
+  },
+  {
+   "op": "LOCK 1499 (not allowed)",
+   "ok": false,
+   "response": "ERR NOT_ALLOWED"
+  },
+  {
+   "op": "RESET",
+   "ok": true,
+   "response": "OK",
+   "settle_s": 0.20273529994301498
+  },
+  {
+   "op": "watchdog (silent after LOCK 1200)",
+   "seconds_until_unlocked": 3.611321999982465
+  },
+  {
+   "op": "disconnect after LOCK 1200",
+   "seconds_until_unlocked": 0.40094000002136454
+  }
+ ],
+ "baseline_sm_mhz_median": 2415.0,
+ "final_ping": "OK none"
+}

@@ -1,0 +1,77 @@
+[
+ {
+  "label": "aligned_g0_d1",
+  "ctrl": [
+   1.0,
+   1.0,
+   0.0
+  ],
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "frames": 1680,
+  "fg_p50_ms": 6.510116683784872,
+  "fg_p99_ms": 13.554190707509406,
+  "fg_miss_frac": 0.0,
+  "bg_tok_s": 49.857142857142854,
+  "mean_power_w_whole_run": 84.75576666666666,
+  "token_end_phase_ms_p10_p50_p90": [
+   1.2703833713508512,
+   4.41313334934754,
+   16.24675003113231
+  ],
+  "ring_dropped": 0,
+  "driver_output_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=1534 t_first=470266.019467 t_last=470291.711187 ctx_end=2046"
+  ]
+ },
+ {
+  "label": "aligned_g0_d0.5",
+  "ctrl": [
+   1.0,
+   0.5,
+   0.0
+  ],
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "frames": 1680,
+  "fg_p50_ms": 7.155316707212478,
+  "fg_p99_ms": 13.534773032879457,
+  "fg_miss_frac": 0.0,
+  "bg_tok_s": 20.035714285714285,
+  "mean_power_w_whole_run": 64.5748,
+  "token_end_phase_ms_p10_p50_p90": [
+   2.4972333417585952,
+   3.438533326455797,
+   4.344333343518528
+  ],
+  "ring_dropped": 0,
+  "driver_output_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=612 t_first=470301.074681 t_last=470331.302928 ctx_end=1124"
+  ]
+ },
+ {
+  "label": "unaligned_d1",
+  "ctrl": [
+   0.0,
+   1.0,
+   0.5
+  ],
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "frames": 1680,
+  "fg_p50_ms": 13.100149983074516,
+  "fg_p99_ms": 13.555825972580351,
+  "fg_miss_frac": 0.0,
+  "bg_tok_s": 48.67857142857143,
+  "mean_power_w_whole_run": 91.084,
+  "token_end_phase_ms_p10_p50_p90": [
+   2.177373302014092,
+   10.22303332186643,
+   15.677386672857095
+  ],
+  "ring_dropped": 0,
+  "driver_output_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=1477 t_first=470344.149375 t_last=470374.308032 ctx_end=1989"
+  ]
+ }
+]
