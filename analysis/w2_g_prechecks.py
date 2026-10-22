@@ -17,14 +17,14 @@ FENCE, FENCE_END = "```" + chr(10), chr(10) + "```"
 
 def _rec(path):
     z = np.load(path)
-    r = unpack_rec({k: z[k] for k in ("base", "t0_rel", "dur", "gmax", "gbeg_off", "smid", "tag", "blk", "nreads", "dropped")})
+    r = unpack_rec({k: z[k] for k in z.files if k not in ("sync0", "sync1", "sms")})
     return r, z["sync0"], z["sync1"]
 
 
 def check_i_ii_a(d):
     z = np.load(d / "gtprobe.npz")
     res = resolution_ns(z["reads"]); reads = z["reads"].astype(np.int64)
-    r = unpack_rec({k: z[k] for k in ("base", "t0_rel", "dur", "gmax", "gbeg_off", "smid", "tag", "blk", "nreads", "dropped")})
+    r = unpack_rec({k: z[k] for k in z.files if k in ("base", "t0_rel", "dur", "gmax", "gbeg_off", "smid", "tag", "blk", "nreads", "dropped", "tg0_off", "ngaps", "novf", "gap_rec_idx", "gap_off", "gap_len", "gap_lost")})
     off = (float(z["off"]) + float(z["off2"])) / 2; drift = abs(float(z["off2"]) - float(z["off"]))
     tol = 2 * max(float(z["rt"]), float(z["rt2"])) + 1e-9 * (res if np.isfinite(res) else 0) + drift + 1e-4
     a_l, a_d, b_l, b_d = z["times"]
