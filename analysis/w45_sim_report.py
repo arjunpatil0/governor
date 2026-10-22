@@ -90,6 +90,13 @@ def build_report(df, tuned):
         if (a, b) in verdicts:
             ok = earns_place(verdicts[(a, b)])
             L.append(f"- {a} vs {b}: **{'EARNS ITS PLACE' if ok else 'DOES NOT EARN ITS PLACE'}** under the pre-registered rule (a win with CI above 0 in S1 and S4, no loss in S0/S2/S3).")
+    L += ["", "Against the best static setting (objective difference, 90% CI; wins = CI above 0, losses = CI below 0):", ""]
+    for a, b in (("c", "b"), ("d", "b"), ("c'", "b'"), ("d'", "b'"), ("b'", "b")):
+        if (a, b) in verdicts:
+            v = verdicts[(a, b)]
+            wins = [k for k in SCENARIOS if v[k]["n"] > 0 and v[k]["lo"] > 0]
+            loss = [k for k in SCENARIOS if v[k]["n"] > 0 and v[k]["hi"] < 0]
+            L.append(f"- {a} vs {b}: wins in {wins or 'none'}, losses in {loss or 'none'}")
     L += ["", "## 5. Frozen controller constants", "", "```", json.dumps(tuned.get("params", {}), indent=1), "```", "",
           "Best-static settings are in data/sim_tuned.json (per scenario, tuned on the tuning seeds). Static settings are per-scenario oracles; the dynamic controllers use one parameter set for all scenarios."]
     return L
