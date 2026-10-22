@@ -1,0 +1,95 @@
+{
+ "params_v2": {
+  "safety": 0.8,
+  "switch_gain": 0.5,
+  "clock_every": 10,
+  "guard_k": 3.0,
+  "sigma_w": 0.0,
+  "guard_floor": 0.0
+ },
+ "s5_oracle": {
+  "60": {
+   "action": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 0.6,
+    "guard_ms": 0.5
+   },
+   "tok_s": 38.770909090909086,
+   "power_max_seen": 59.651158814145525,
+   "feasible": true
+  },
+  "35": {
+   "action": {
+    "clock": 1800,
+    "pacing": "aligned",
+    "duty": 0.6,
+    "guard_ms": 0.5
+   },
+   "tok_s": 21.82,
+   "power_max_seen": 34.74786904774668,
+   "feasible": true
+  }
+ },
+ "v2_tuning": {
+  "params": {
+   "safety": 0.8,
+   "switch_gain": 0.5,
+   "clock_every": 10,
+   "guard_k": 3.0,
+   "sigma_w": 0.0,
+   "guard_floor": 0.0
+  },
+  "holds": false,
+  "min_frac_feasible": 0.0,
+  "tok_s_mean": 23.58,
+  "n_combos": 32,
+  "n_holding": 0
+ },
+ "meta": {
+  "tuning_seeds": [
+   100,
+   101,
+   102,
+   103,
+   104,
+   105,
+   106,
+   107,
+   108,
+   109
+  ],
+  "eval_seeds": [
+   300,
+   301,
+   302,
+   303,
+   304,
+   305,
+   306,
+   307,
+   308,
+   309,
+   310,
+   311,
+   312,
+   313,
+   314,
+   315,
+   316,
+   317,
+   318,
+   319,
+   320,
+   321,
+   322,
+   323,
+   324,
+   325,
+   326,
+   327,
+   328,
+   329
+  ]
+ }
+}
