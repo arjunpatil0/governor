@@ -10,7 +10,7 @@ import pandas as pd
 from controllers.model import ModelController
 from controllers.none import NoGovernor
 from controllers.pi import PIController
-from controllers.static import StaticController
+from controllers.static import IdleDropController, StaticController
 from sim.plant import Action, Plant, summarise
 from sim.scenarios import SCENARIOS, build
 
@@ -31,20 +31,26 @@ def make_controller(P, name, scenario, tuned):
     if name in ("b", "b'"):
         a = tuned["static"][scenario][name]
         return StaticController(Action(**a), name=name)
+    if name == "bj'":                                   # follow-up: per-scenario aligned static re-tuned under token jitter
+        return StaticController(Action(**tuned["static_jit"][scenario]["b'"]), name=name)
+    if name in ("g", "g'"):                             # follow-up: scenario-agnostic static
+        return StaticController(Action(**tuned["global"][name]), name=name)
+    if name == "e":                                     # follow-up: aligned scenario-agnostic static + idle-triggered clock drop
+        return IdleDropController(P, Action(**tuned["global"]["g'"]))
     pacing = "unaligned" if name in ("c", "d") else "aligned"
     kw = tuned.get("params", {}).get(name, {})
     return PIController(P, pacing, **kw) if name in ("c", "c'") else ModelController(P, pacing, **kw)
 
 
 def run_one(args):
-    P, name, scenario, seed, tuned = args
-    sc = build(scenario)
+    P, name, scenario, seed, tuned, jitter = args
+    sc = build(scenario, jitter=jitter)
     s = summarise(Plant(P, sc, seed=seed).run(make_controller(P, name, scenario, tuned)))
-    return dict(controller=name, scenario=scenario, seed=seed, **s)
+    return dict(controller=name, scenario=scenario, seed=seed, jitter=jitter, **s)
 
 
-def run_matrix(P, controllers, scenarios, seeds, tuned, workers=8):
-    jobs = [(P, c, s, seed, tuned) for s in scenarios for c in controllers for seed in seeds]
+def run_matrix(P, controllers, scenarios, seeds, tuned, workers=8, jitter=False):
+    jobs = [(P, c, s, seed, tuned, jitter) for s in scenarios for c in controllers for seed in seeds]
     with cf.ProcessPoolExecutor(max_workers=workers) as ex:
         rows = list(ex.map(run_one, jobs, chunksize=4))
     return pd.DataFrame(rows)

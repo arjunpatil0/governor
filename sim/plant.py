@@ -63,6 +63,7 @@ class FgSpec:
 class BgSpec:
     kind: str = "llama"              # "llama" (token = 1/tok_s(clock)) | "slice" (fma slice of slice_ms at 1800 MHz)
     slice_ms: float = 2.0
+    jitter: bool = False             # sample each token time from the empirical L inter-token distribution (mean 1)
 
 
 @dataclass
@@ -153,6 +154,8 @@ class Plant:
         bg_run = False
         bg_prog = 0.0
         bg_t0 = 0.0
+        bg_f = 1.0
+        jit = P.token_jitter if (bg is not None and bg.jitter) else None
         bg_wake = 0.0
         tok_t = []
         energy = 0.0
@@ -184,13 +187,13 @@ class Plant:
             if bg is not None and not bg_run:
                 if act.pacing == "aligned":
                     if not q and t + bgdur(eff) + act.guard_ms <= next_arrival(t) + eps:
-                        bg_run, bg_prog, bg_t0 = True, 0.0, t
+                        bg_run, bg_prog, bg_t0, bg_f = True, 0.0, t, (float(jit[rng.integers(len(jit))]) if jit is not None else 1.0)
                 elif act.duty > 0 and t >= bg_wake - eps:
-                    bg_run, bg_prog, bg_t0 = True, 0.0, t
+                    bg_run, bg_prog, bg_t0, bg_f = True, 0.0, t, (float(jit[rng.integers(len(jit))]) if jit is not None else 1.0)
             fg_on = bool(q)
             share = 1.0 / (S * (1.0 + sc.interaction * (1800.0 / eff - 1.0))) if (fg_on and bg_run) else 1.0
             fgd = w[q[0]] * P.fg_ratio(eff) if fg_on else 0.0
-            bgd = bgdur(eff) if bg_run else 0.0
+            bgd = bgdur(eff) * bg_f if bg_run else 0.0
             cand = [next_tick, T]
             if ai < n:
                 cand.append(arr[ai])

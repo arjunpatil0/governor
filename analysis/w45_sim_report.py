@@ -22,6 +22,15 @@ SLO = 0.01
 PAIRS = (("d", "c"), ("d'", "c'"), ("c'", "c"), ("d'", "d"), ("b'", "b"), ("c'", "b'"), ("d'", "b'"), ("c", "b"), ("d", "b"))
 
 
+def pareto_front(points):
+    """points: name -> (bg tok/s, power W). Non-dominated = no other point has >= tok/s and <= power with one strict inequality."""
+    out = set()
+    for n, (t, w) in points.items():
+        if not any((t2 >= t and w2 <= w) and (t2 > t or w2 < w) for m, (t2, w2) in points.items() if m != n):
+            out.add(n)
+    return out
+
+
 def holds_slo(miss):
     miss = pd.Series(miss).astype(float)
     return bool(miss.mean() <= SLO and (miss <= SLO).mean() >= 0.9)

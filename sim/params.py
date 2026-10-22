@@ -40,6 +40,7 @@ class Params:
     sa4: dict
     clock_latency_ms: float = 0.0
     share_override: float = None
+    token_jitter: np.ndarray = None
     CONSTANT_SOURCES: dict = field(default_factory=lambda: dict(CONSTANT_SOURCES))
     levels: tuple = ()
 
@@ -73,6 +74,20 @@ class Params:
     def bg_power_w(self, f):
         self._check(f)
         return float(np.interp(f, self._bg_x, self._bg_p))
+
+
+def load_token_jitter(root):
+    """Empirical bg token-time jitter from the L run per-token logs (data/raw/w2_L/<run>/cells/*llama_*/llama_tokens.csv): inter-token intervals of each cell
+    divided by that cell median (first 5 intervals dropped), pooled, rescaled to mean 1 so the L throughput anchor is preserved."""
+    run = sorted((Path(root) / "data" / "raw" / "w2_L").glob("*/cells"))[-1]
+    xs = []
+    for f in sorted(run.glob("*llama_*/llama_tokens.csv")):
+        t = np.loadtxt(f, delimiter=",", skiprows=1, usecols=0)
+        d = np.diff(t)[5:]
+        if len(d) > 20:
+            xs.append(d / np.median(d))
+    x = np.concatenate(xs)
+    return x / x.mean()
 
 
 def load_params(root=ROOT):
@@ -129,4 +144,4 @@ def load_params(root=ROOT):
 
     lv = tuple(sorted(int(k) for k in rel_l if k != "unlocked")) + (unlocked,)
     return Params(UNLOCKED_MHZ=unlocked, _fg_x=fx, _fg_rel=fr, _fg_p=fp, _bg_x=np.array(bx)[o], _bg_tok=np.array(bt)[o], _bg_p=np.array(bp)[o],
-                  rel_thr_L=rel_l, q_ms=q, s_ms=s, p_idle_w=p_idle, sa4=sa4, clock_latency_ms=float(lat[0]), share_override=share, levels=lv)
+                  rel_thr_L=rel_l, q_ms=q, s_ms=s, p_idle_w=p_idle, sa4=sa4, clock_latency_ms=float(lat[0]), share_override=share, token_jitter=load_token_jitter(root), levels=lv)
