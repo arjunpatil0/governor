@@ -1,15 +1,20 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-22 · Phase: W4-5. STOPPED MID-WORK because the usage limit was reached. Helper stopped by Arjun (clock unlocked, SM 1980 MHz, -rgc/-rmc run).
+Updated 2026-10-22 · Phase: W4-5. Reviewer notes 1-4 applied; round 3 (LAST simulator round) done; simulator now FROZEN. STOPPED for review. W5 yaml draft 3 is UNCOMMITTED (excluded from git) and waits for your re-review.
 
-## Done since the last STATUS (committed unless noted)
-- Reviewer note 1: helper now treats an NVML reset error as "reset not needed" when it knows no lock is held (distinct log line), real failure otherwise; governor-side `nvidia-smi -rgc` fallback when the helper reports `OK dirty` (ControlActuator fallback_reset). Tests GREEN. Log evidence partly contradicts "errors on already-unlocked": two back-to-back resets succeeded; both failures followed GPU idleness. Diagnostic for you (elevated, helper stopped): `python experiments/w4_smoke/reset_probe.py` -> data/w45_smoke/reset_probe.json (not run yet).
-- Reviewer note 2: run.py Armoury refusal is now a tested function (checked first); `chrome_running` added to meta; smoke writes meta.json (Armoury NOT_RECORDED flagged, Chrome, processes).
-- Round 3 groundwork (UNCOMMITTED, tests partly RED): plant/ObsBuilder/Governor report per-token slack overrun (`overrun_ms`); new tests for d'B v3 (learned guard from overrun, budget-respecting idle branch, power loop on the model duty) are written but ModelController v3 is NOT implemented; one plant overrun test still fails (ValueError in test_sim_plant.py:245, not yet diagnosed).
+## Just did (commits; see git log; journal 0039)
+- Helper reset incident: the log does not support "reset errors when already unlocked" (back-to-back resets worked); both failures came after the GPU was idle. Fix (tests GREEN): reset error in a known-unlocked state is logged "reset not needed", otherwise a real failure; the governor runs `nvidia-smi -rgc` when the helper reports `OK dirty`. Diagnostic NOT run yet: elevated shell, helper stopped: `python experiments/w4_smoke/reset_probe.py`.
+- Armoury/Chrome: run.py refusal is a tested function checked first; meta.json records chrome_running; the smoke writes meta.json.
+- Round 3 (post-hoc, seeds 400-429): d'B v3 (learned guard from observed overrun, budget-respecting idle branch, power loop). Pre-registered reading: S5 wins hold against c'B (+10.6 tok/s), g'B and eB (+5.2); S0 non-inferior (ratio 0.969); S2 FAILS (ratio 0.726 vs eB): a bg-power-scale/duty-offset interaction made the idle branch too timid (diagnosed, not fixed: the sim is frozen). Verdict: does NOT earn its place.
+- Yaml draft 3: 8B fallback by load pre-check only; S5 required + 0.95 non-inferiority reading; learned guard; Armoury/Chrome recorded. It now parses (draft 2 had YAML syntax errors).
 
-## Not done (next session)
-1. Finish v3 in controllers/model.py (guard_fb, _plan_idle under budget, pdelta power loop), fix the plant overrun test, round 3 script on seeds 400-429 (last sim round) with the reviewer's reading: S5 REQUIRED (win vs c'B, g'B, eB) and non-inferiority >= 95% of the best comparator in S0 and S2 (CI lower bound of the paired ratio), tuning on tuning seeds only.
-2. Update experiments/w5_governor.yaml (uncommitted draft 2): 8B fallback chosen by load pre-check only; the new "earns its place" reading; learned guard in d'B; Armoury mode + Chrome recorded; then stop for re-review.
-3. Journal 0039 (smoke incident: reset error; reviewer decisions), response notes, commit.
+## Waiting for
+1. Your re-review of experiments/w5_governor.yaml (2 questions at its end: fixed vs per-scene non-inferiority comparator; second short smoke before W5a?).
+2. Optional: run reset_probe.py as above and tell me the output.
+
+## Decisions needed
+1. One question: do a SECOND short hardware smoke (about 20 min, helper + GPU, token-duration ring and learned-guard overrun signal) before W5a, to find out why guard 0 overruns on hardware - yes or no? I recommend yes: the whole learned-guard design depends on it and the simulator can no longer answer it.
 
 ## Notes
-- Do not trust the tree as clean: uncommitted edits in sim/plant.py, telemetry/obs_builder.py, controllers/runtime.py and new tests (some RED).
+- Simulator frozen. Its token timing is wrong (smoke); round 3 is not evidence about hardware.
+- Open: CLAUDE.md run-checklist line "record Armoury mode and Chrome state in meta.json" (not yet added); PAPER_MAP entries at phase end.
+- Run checklist: Administrator PowerShell; AC power; clean committed tree; Armoury Crate mode stated; Chrome closed; tray apps quit; no clicking in the console; warm every new exe once (the governed driver exe was rebuilt: it will be warmed again).
