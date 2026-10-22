@@ -29,8 +29,8 @@
    "gmin": 0.3
   },
   "d": {
-   "safety": 0.6,
-   "gamma_alpha": 0.1,
+   "safety": 0.5,
+   "gamma_alpha": 0.05,
    "switch_gain": 0.5
   },
   "d'": {
@@ -265,37 +265,37 @@
    "n_holding": 81
   },
   "d": {
-   "holds": false,
-   "worst_mean_miss": 0.010666666666666666,
-   "objective": 6.229721896240837,
+   "holds": true,
+   "worst_mean_miss": 0.005030303030303031,
+   "objective": 3.304046561345744,
    "per_scenario": {
     "S0": {
      "mean_miss": 0.0,
      "frac_seeds_ok": 1.0
     },
     "S1": {
-     "mean_miss": 0.00903030303030303,
+     "mean_miss": 0.0030303030303030307,
      "frac_seeds_ok": 1.0
     },
     "S1d": {
-     "mean_miss": 0.0006363636363636365,
+     "mean_miss": 0.0003030303030303031,
      "frac_seeds_ok": 1.0
     },
     "S2": {
-     "mean_miss": 0.001142857142857143,
+     "mean_miss": 0.0008571428571428572,
      "frac_seeds_ok": 1.0
     },
     "S3": {
-     "mean_miss": 0.010666666666666666,
-     "frac_seeds_ok": 0.4
+     "mean_miss": 0.005030303030303031,
+     "frac_seeds_ok": 1.0
     },
     "S4": {
      "mean_miss": 0.0,
      "frac_seeds_ok": 1.0
     }
    },
-   "n_combos": 24,
-   "n_holding": 0
+   "n_combos": 42,
+   "n_holding": 18
   },
   "d'": {
    "holds": true,
