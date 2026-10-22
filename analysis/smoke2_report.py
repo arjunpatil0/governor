@@ -23,6 +23,14 @@ def ewma_before(tok_ms):
     return est
 
 
+def match_logged(t_ring, t_csv, values):
+    """values[i] of the csv row whose timestamp equals each ring timestamp (exact within 1 ns), nan where there is none. QPC ticks are 100 ns, so ROUNDING both sides to 6 decimals splits
+    ties (7th digit 5) and silently lost about 5% of the rows in the first version of this report (journal 0044)."""
+    t_ring, t_csv, values = np.asarray(t_ring, float), np.asarray(t_csv, float), np.asarray(values, float)
+    j = np.clip(np.searchsorted(t_csv, t_ring), 0, len(t_csv) - 1)
+    return np.where(np.abs(t_csv[j] - t_ring) < 1e-9, values[j], np.nan)
+
+
 def q(x, p):
     return float(np.percentile(x, p)) if len(x) else float("nan")
 
@@ -50,8 +58,7 @@ def main():
             if guard is not None and (D / f"driver_{r['label']}.csv").exists() and "est_clean_ms" in pd.read_csv(D / f"driver_{r['label']}.csv").columns:
                 lg0 = pd.read_csv(D / f"driver_{r['label']}.csv")
                 used = np.where(np.isfinite(lg0.est_clean_ms), lg0.est_clean_ms, lg0.est_ewma_ms)           # the estimate the driver actually used (clean median, EWMA before the first clean token)
-                m = dict(zip(lg0.t_tok_end.round(6), used))
-                u = np.array([m.get(round(float(t), 6), np.nan) for t in te])
+                u = match_logged(te, lg0.t_tok_end.values, used)
                 admit = f"{100 * float(np.nanmean(((u + guard) <= tn)[1:])):.1f}% (logged estimate)" if np.isfinite(u).any() else "-"
             else:
                 admit = f"{100 * float(((est + (guard or 0.0)) <= tn)[1:].mean()):.1f}%" if guard is not None else "n/a (unaligned)"
