@@ -73,6 +73,7 @@ class Scenario:
     clock_cap: Optional[list] = None          # [(t_ms, cap_mhz)], piecewise constant
     warmup_ms: float = 0.0
     clock_min_interval_ms: float = 1000.0
+    interaction: float = 0.0                  # scenario S4: co-run share divisor x (1 + interaction * (1800/clock - 1)); controllers do not know it
 
 
 @dataclass
@@ -186,7 +187,7 @@ class Plant:
                 elif act.duty > 0 and t >= bg_wake - eps:
                     bg_run, bg_prog, bg_t0 = True, 0.0, t
             fg_on = bool(q)
-            share = 1.0 / S if (fg_on and bg_run) else 1.0
+            share = 1.0 / (S * (1.0 + sc.interaction * (1800.0 / eff - 1.0))) if (fg_on and bg_run) else 1.0
             fgd = w[q[0]] * P.fg_ratio(eff) if fg_on else 0.0
             bgd = bgdur(eff) if bg_run else 0.0
             cand = [next_tick, T]
