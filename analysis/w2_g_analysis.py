@@ -308,7 +308,9 @@ def build_report(run_dir, witness=True, skip_blocks=()):
         else:
             L += ["", "- g_T4 missing: P7 cannot be evaluated"]
         p8 = {k: float(np.percentile(v["delay"], 99)) for k, v in raw.items() if k.startswith("g_R") and v["delay"]}
-        L += ["", f"### P8 arrival -> on-GPU start delay of the 0.1 ms fg (p99, ms){verdict_note}", "", _tab(pd.DataFrame(dict(cell=list(p8), p99_ms=list(p8.values()))), 4)]
+        p8q = {k: [float(np.percentile(v["delay"], q)) for q in (50, 90)] for k, v in raw.items() if k.startswith("g_R") and v["delay"]}
+        L += ["", f"### P8 arrival -> on-GPU start delay of the 0.1 ms fg (ms; the registered test is the p99; p50 and p90 added for context, review 2026-10-22 finding 5){verdict_note}", "",
+              _tab(pd.DataFrame(dict(cell=list(p8), p50_ms=[p8q[k][0] for k in p8], p90_ms=[p8q[k][1] for k in p8], p99_ms=list(p8.values()))), 4)]
         if p8:
             L += ["", f"- registered: p99 <= {P8_MAX_MS} ms for every m; P8 {_verdict(all(v <= P8_MAX_MS for v in p8.values()))}"]
     if SKIPPED:

@@ -164,3 +164,8 @@ def test_skip_blocks_drops_those_rows_and_says_so(run_dir):
     df.to_csv(run_dir / "results.csv", index=False)
     sub = chr(10).join(build_report(run_dir, skip_blocks=(1,))[0])
     assert f"cells {n - 2}" in sub and "Excluded blocks: [1]" in sub
+
+
+def test_p8_table_shows_p50_next_to_p99(run_dir):
+    text = chr(10).join(build_report(run_dir)[0])
+    assert "p50_ms" in text and "p99_ms" in text
