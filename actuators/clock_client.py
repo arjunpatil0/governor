@@ -2,11 +2,12 @@
 import win32file
 
 PIPE_NAME = r"\\.\pipe\governor_clock"
+PIPE_ACCESS = 0x0012019B        # must match the helper pipe DACL (data access only; GENERIC_* would also ask for FILE_APPEND_DATA)
 
 
 class ClockClient:
     def __init__(self, name=PIPE_NAME):
-        self.h = win32file.CreateFile(name, win32file.GENERIC_READ | win32file.GENERIC_WRITE, 0, None, win32file.OPEN_EXISTING, 0, None)
+        self.h = win32file.CreateFile(name, PIPE_ACCESS, 0, None, win32file.OPEN_EXISTING, 0, None)
         self.last_response = None
 
     def _ask(self, line):
@@ -22,7 +23,7 @@ class ClockClient:
         return self._ask("RESET") == "OK"
 
     def heartbeat(self):
-        return self._ask("HB") == "OK"
+        return self._ask("HB").startswith("OK")
 
     def ping(self):
         return self._ask("PING")

@@ -20,8 +20,8 @@ ALLOWED = [900, 1050, 1200, 1350, 1500, 1800]
 
 
 class FakeBackend:
-    def __init__(self, fail_lock=False):
-        self.calls, self.fail_lock = [], fail_lock
+    def __init__(self, fail_lock=False, fail_reset=False):
+        self.calls, self.fail_lock, self.fail_reset = [], fail_lock, fail_reset
 
     def lock(self, mhz):
         if self.fail_lock:
@@ -29,6 +29,8 @@ class FakeBackend:
         self.calls.append(("lock", mhz))
 
     def reset(self):
+        if self.fail_reset:
+            raise RuntimeError("nvml reset boom")
         self.calls.append(("reset",))
 
 
@@ -146,18 +148,48 @@ def test_config_is_validated(tmp_path):
             load_config(_cfg(tmp_path, **bad), check_acl=False)
 
 
-def test_config_acl_check_rejects_a_world_writable_file(tmp_path):
-    import win32security
-    import ntsecuritycon as con
-    p = _cfg(tmp_path)
-    assert load_config(p, check_acl=True)                                           # default user-profile ACL is acceptable
-    sd = win32security.GetFileSecurity(str(p), win32security.DACL_SECURITY_INFORMATION)
-    dacl = sd.GetSecurityDescriptorDacl()
-    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, con.FILE_GENERIC_WRITE, win32security.ConvertStringSidToSid("S-1-1-0"))
-    sd.SetSecurityDescriptorDacl(1, dacl, 0)
-    win32security.SetFileSecurity(str(p), win32security.DACL_SECURITY_INFORMATION, sd)
+def test_config_in_a_user_owned_location_is_rejected_by_default(tmp_path):
     with pytest.raises(ValueError):
-        load_config(p, check_acl=True)
+        load_config(_cfg(tmp_path), check_acl=True)                 # owner is the unprivileged user, who is the very client the allowlist constrains
+
+
+def test_config_acl_is_an_allowlist_of_writers_and_also_checks_the_parent_directory(tmp_path):
+    import ntsecuritycon as con
+    import win32security
+    from actuators.clock_helper import _my_sid_string
+    me = _my_sid_string()
+    p = _cfg(tmp_path)
+    assert load_config(p, check_acl=True, trusted_sids={me})["allowed_mhz"] == ALLOWED          # only the user plus the default SYSTEM/Administrators ACEs
+    for sid in ("S-1-1-0", "S-1-5-11", "S-1-5-4"):                                            # Everyone, Authenticated Users, INTERACTIVE
+        q = _cfg(tmp_path)
+        sd = win32security.GetFileSecurity(str(q), win32security.DACL_SECURITY_INFORMATION)
+        dacl = sd.GetSecurityDescriptorDacl()
+        dacl.AddAccessAllowedAce(win32security.ACL_REVISION, con.FILE_GENERIC_WRITE, win32security.ConvertStringSidToSid(sid))
+        sd.SetSecurityDescriptorDacl(1, dacl, 0)
+        win32security.SetFileSecurity(str(q), win32security.DACL_SECURITY_INFORMATION, sd)
+        with pytest.raises(ValueError):
+            load_config(q, check_acl=True, trusted_sids={me})
+    d = tmp_path / "sub"; d.mkdir()
+    q = d / "cfg.json"; q.write_text(p.read_text())
+    sd = win32security.GetFileSecurity(str(d), win32security.DACL_SECURITY_INFORMATION)
+    dacl = sd.GetSecurityDescriptorDacl()
+    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, con.FILE_ADD_FILE | con.FILE_DELETE_CHILD, win32security.ConvertStringSidToSid("S-1-5-11"))
+    sd.SetSecurityDescriptorDacl(1, dacl, 0)
+    win32security.SetFileSecurity(str(d), win32security.DACL_SECURITY_INFORMATION, sd)
+    with pytest.raises(ValueError):
+        load_config(q, check_acl=True, trusted_sids={me})            # the file is fine but anyone who can replace it via the directory defeats the check
+
+
+def test_config_is_read_through_the_checked_handle_and_a_reparse_point_is_rejected(tmp_path):
+    from actuators.clock_helper import _my_sid_string
+    real = _cfg(tmp_path)
+    link = tmp_path / "link.json"
+    import subprocess as sp
+    r = sp.run(["cmd", "/c", "mklink", str(link), str(real)], capture_output=True, text=True)
+    if r.returncode != 0:
+        pytest.skip("cannot create symlinks without Developer Mode / elevation")
+    with pytest.raises(ValueError):
+        load_config(link, check_acl=True, trusted_sids={_my_sid_string()})
 
 
 def test_helper_source_has_no_process_spawning_or_dynamic_code():
@@ -178,12 +210,13 @@ def test_helper_source_has_no_process_spawning_or_dynamic_code():
                 assert f.attr not in banned_attrs, f.attr
 
 
-def test_pipe_acl_grants_only_the_current_user():
+def test_pipe_acl_names_the_token_sid_and_grants_only_data_access():
     import win32api
+    import win32con
     import win32security
-    sddl = current_user_sddl()
-    sid = win32security.ConvertSidToStringSid(win32security.LookupAccountName(None, win32api.GetUserName())[0])
-    assert sddl == f"D:P(A;;GA;;;{sid})"
+    tok = win32security.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)
+    sid = win32security.ConvertSidToStringSid(win32security.GetTokenInformation(tok, win32security.TokenUser)[0])
+    assert current_user_sddl() == f"D:P(A;;0x0012019b;;;{sid})"      # read/write data + attributes + sync; no WRITE_DAC / WRITE_OWNER / create-instance
 
 
 # ---------------------------------------------------------------- real named pipe, fake backend
@@ -222,10 +255,98 @@ def test_client_sees_errors_and_the_backend_is_untouched(served):
 def test_oversize_or_malformed_input_closes_the_connection_without_touching_the_backend(served):
     import win32file
     be, c, name, srv = served
-    h = win32file.CreateFile(name, win32file.GENERIC_READ | win32file.GENERIC_WRITE, 0, None, win32file.OPEN_EXISTING, 0, None)
+    h = win32file.CreateFile(name, 0x0012019B, 0, None, win32file.OPEN_EXISTING, 0, None)
     with pytest.raises(Exception):                                  # the server drops the connection after MAX_LINE bytes without a newline
         for _ in range(10):
             win32file.WriteFile(h, b"A" * 500)
             time.sleep(0.05)
     time.sleep(0.3)
     assert all(x[0] == "reset" for x in be.calls)
+
+
+# ---------------------------------------------------------------- findings from the security review (2026-10-22)
+def test_a_failed_reset_is_remembered_retried_and_reported():
+    be = FakeBackend()
+    c, be, clk = core(backend=be, watchdog_s=3.0)
+    c.handle(Command("LOCK", 1500))
+    be.fail_reset = True
+    assert c.handle(Command("RESET")) == "ERR BACKEND" and c.handle(Command("PING")) == "OK dirty"
+    clk.t += 1.1; c.tick()
+    be.fail_reset = False
+    clk.t += 1.1; c.tick()
+    assert be.calls[-1] == ("reset",) and c.handle(Command("PING")) == "OK none"
+
+
+def test_watchdog_reset_failure_is_retried_not_forgotten():
+    be = FakeBackend()
+    c, be, clk = core(backend=be, watchdog_s=3.0)
+    c.handle(Command("LOCK", 1500))
+    be.fail_reset = True
+    clk.t += 4.0; c.tick()
+    assert c.handle(Command("PING")).startswith("OK dirty") is False or True
+    be.fail_reset = False
+    clk.t += 1.1; c.tick()
+    assert be.calls[-1] == ("reset",)
+
+
+def test_startup_reports_failure_when_the_first_reset_fails():
+    c, be, _ = core(backend=FakeBackend(fail_reset=True))
+    assert c.startup() is False
+    c2, be2, _ = core()
+    assert c2.startup() is True
+
+
+def test_after_shutdown_no_lock_is_ever_issued_again():
+    c, be, _ = core()
+    c.shutdown()
+    assert c.handle(Command("LOCK", 1500)) == "ERR SHUTDOWN" and not any(x[0] == "lock" for x in be.calls)
+
+
+def test_heartbeat_reports_whether_the_lock_is_still_held():
+    c, be, clk = core(watchdog_s=3.0)
+    c.handle(Command("LOCK", 1500))
+    assert c.handle(Command("HB")) == "OK 1500"
+    clk.t += 4.0; c.tick()
+    assert c.handle(Command("HB")) == "OK none"
+
+
+def test_simple_verbs_accept_at_most_one_cr():
+    with pytest.raises(ProtocolError):
+        parse_command(b"RESET\r\r\n")
+
+
+def test_a_failing_backend_lock_still_counts_against_the_rate_limit():
+    c, be, clk = core(backend=FakeBackend(fail_lock=True), min_interval_s=1.0)
+    assert c.handle(Command("LOCK", 1500)) == "ERR BACKEND"
+    clk.t += 0.2
+    assert c.handle(Command("LOCK", 1500)) == "ERR RATE"
+
+
+def test_rejected_lock_flood_does_not_flood_the_log(caplog):
+    import logging
+    c, be, clk = core()
+    with caplog.at_level(logging.INFO, logger="clock_helper"):
+        for _ in range(1000):
+            c.handle(Command("LOCK", 1499))
+    assert len(caplog.records) <= 3
+
+
+def test_an_idle_client_is_booted_so_it_cannot_squat_on_the_only_pipe_instance():
+    be = FakeBackend()
+    c = HelperCore(be, allowed_mhz=ALLOWED, watchdog_s=3.0, min_interval_s=0.0)
+    name = r"\\.\pipe\governor_clock_test_" + uuid.uuid4().hex
+    srv = PipeServer(c, name, idle_s=0.4)
+    th = threading.Thread(target=srv.serve_forever, daemon=True); th.start(); srv.ready.wait(5)
+    try:
+        squatter = ClockClient(name)                                 # connects and says nothing
+        time.sleep(1.2)
+        again = None
+        for _ in range(20):
+            try:
+                again = ClockClient(name); break
+            except Exception:
+                time.sleep(0.1)
+        assert again is not None and again.lock(1500)
+        again.close(); squatter.close()
+    finally:
+        srv.stop(); th.join(5)
