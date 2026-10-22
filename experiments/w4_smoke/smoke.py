@@ -1,6 +1,6 @@
 """W4-5 hardware smoke (NOT a result; no hypothesis is tested): checks that the pieces work on the real GPU and NVML. Run step by step, unelevated, with the admin clock helper
 already running in its own Administrator window. Writes data/w45_smoke/<run>/<step>.json.   python experiments/w4_smoke/smoke.py <step> [--run RUNDIR]
-steps: warm | clock | daemon | frame | driver | governor | overrun (smoke 2)
+steps: warm | clock | daemon | frame | driver | governor | overrun (smoke 2) | gate (smoke 3)
 Always resets the clock lock in a finally block (helper RESET) and stops child processes."""
 import argparse
 import json
@@ -221,7 +221,7 @@ def step_frame(d):
     save(d, "frame", out)
 
 
-def run_driver(w, cal, d, label, ctrl_vals, seconds=30, with_fg=True):
+def run_driver(w, cal, d, label, ctrl_vals, seconds=30, with_fg=True, cost_ms=None):
     """One governed-driver run against the synthetic fg (with_fg=False: background alone): returns metrics; raw frames/tokens are kept in out['_raw'] for step_overrun."""
     frames, tokens = SharedRing(nm("fr"), 8192, 3, True), SharedRing(nm("tk"), 65536, 2, True)
     ctrl, pace = SeqBlock(nm("ct"), 3, True), SeqBlock(nm("pc"), 3, True)
@@ -243,7 +243,11 @@ def run_driver(w, cal, d, label, ctrl_vals, seconds=30, with_fg=True):
         smp = NvmlSampler(); smp.start()
         e0 = smp.nv.nvmlDeviceGetTotalEnergyConsumption(smp.h)
         if with_fg:
-            loop = FrameLoop(build("S0").fg, FmaFrameRunner(w, cal), FramePublisher(frames, pace))
+            fg = build("S0").fg
+            if cost_ms is not None:                              # constant frame cost (ms alone at 1800 MHz) instead of the scenario's
+                import dataclasses
+                fg = dataclasses.replace(fg, cost_ms=lambda t, c=float(cost_ms): c)
+            loop = FrameLoop(fg, FmaFrameRunner(w, cal), FramePublisher(frames, pace))
             recs = loop.run(duration_s=seconds)
         else:
             loop = type("NoFg", (), {"t0": time.perf_counter()})()
@@ -370,7 +374,34 @@ def step_overrun(d):
     save(d, "overrun", out)
 
 
-STEPS = dict(warm=step_warm, clock=step_clock, daemon=step_daemon, frame=step_frame, driver=step_driver, governor=step_governor, overrun=step_overrun)
+GATE_RUNS = (("aligned_g0_d1_cost4", [1.0, 1.0, 0.0], 4.0), ("aligned_g1_d1_cost4", [1.0, 1.0, 1.0], 4.0), ("aligned_g0_d1_cost7", [1.0, 1.0, 0.0], 7.0),
+             ("aligned_g1_d1_cost7", [1.0, 1.0, 1.0], 7.0), ("aligned_g1_d1_cost9", [1.0, 1.0, 1.0], 9.0), ("unaligned_d1_cost9", [0.0, 1.0, 0.5], 9.0))
+
+
+def step_gate(d):
+    """Smoke 3 (not a result): after the pace-view fix (journal 0041) the fit test really gates. Constant frame costs 4 / 7 / 9 ms (slack 12.7 / 9.7 / 7.6 ms against a 10 ms token):
+    aligned guard 0 and 1 ms, plus an unaligned reference at 9 ms. Raw rings to overrun_raw_<label>.json, summary to overrun.json (same layout as step overrun, analysis/smoke2_report.py <dir>)."""
+    from analysis.smoke_overrun import overrun_stats
+    from workloads.common.w2lib import W2
+    w = W2(); cl = SafeClient(); hb = Heartbeat(cl); hb.start(); out = []
+    try:
+        reset_clocks(cl, is_admin=False)
+        cal = calibrate(w, cl)
+        cl.reset(); time.sleep(1.1)
+        for label, vals, cost in GATE_RUNS:
+            r = run_driver(w, cal, d, label, vals, seconds=25, cost_ms=cost)
+            raw = r.pop("_raw")
+            (d / f"overrun_raw_{label}.json").write_text(json.dumps(raw), encoding="utf-8")
+            r["cost_ms"], r["overrun"] = cost, overrun_stats(raw["arrivals"], raw["tok_end"], raw["tok_ms"], PERIOD)
+            out.append(r)
+            print(json.dumps(r, default=str)[:900], flush=True)
+            time.sleep(3)
+    finally:
+        hb.stop(); cl.reset(); cl.close()
+    save(d, "overrun", out)
+
+
+STEPS = dict(warm=step_warm, clock=step_clock, daemon=step_daemon, frame=step_frame, driver=step_driver, governor=step_governor, overrun=step_overrun, gate=step_gate)
 
 def write_meta(d, armoury_mode):
     """meta.json for every smoke/run directory: Armoury Crate mode (NOT_RECORDED is flagged), Chrome state, process list with CPU%, git head, exe hash, helper state."""

@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 #include "llama.h"
+#include "pace_view.h"
 #include "pacing.h"
 #include "shm.h"
 
@@ -86,7 +87,8 @@ int main(int argc, char **argv) {
     while (qpc_now() < t_sync) Sleep(1);
 
     // the governor must have written a control block within 10 s of the start, otherwise decoding would run unpaced against a deadline task
-    double c[3] = {0, 0, 0}, pc[3] = {0, 0, 0};
+    double c[3] = {0, 0, 0};
+    shm::PaceView pview;
     double t_wait0 = qpc_now();
     while (!ctrl.read(c)) {
         if (qpc_now() - t_wait0 > 10.0) return die("no control block written by the governor within 10 s");
@@ -104,7 +106,7 @@ int main(int argc, char **argv) {
                 ctrl.read(c);
                 if (c[0] < 0.5) break;                            // the governor switched to duty pacing
                 bool busy = false; double next_ms = inf;
-                if (pace.read(pc) && now_s - pc[2] <= 0.1) { busy = pc[0] != 0.0; next_ms = pc[1] * 1000.0; }
+                pview.get(pace, now_s, 0.1, busy, next_ms);                  // a failed (mid-write) read keeps the last good value; it is NOT 'fg idle' (journal 0041)
                 if (c[1] > 0.0 && now_s * 1000.0 >= wake_ms && pacing::aligned_may_start(now_s * 1000.0, busy, have_est ? tok_est_ms : 0.0, c[2], next_ms)) break;     // aligned also honours the duty gap (power budget throttle)
                 YieldProcessor();
             }

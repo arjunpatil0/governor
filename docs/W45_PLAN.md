@@ -150,3 +150,13 @@ About 20 min of GPU time with the helper: token durations and overrun past the n
 
 ## F4. reset_probe result (journal 0040)
 12 of 12 resets succeeded (busy and idle GPU, lock held and not held, repeated resets): neither "reset of an unlocked clock errors" (H1) nor "reset on an idle GPU errors" (H2) reproduced. The two smoke-1 errors are unexplained; helper handling stays (reset-not-needed logging, governor-side `nvidia-smi -rgc` fallback).
+
+
+---
+# ADDENDUM G 2026-10-22 (after smoke 2; recorded BEFORE smoke 3, W5a and any W5b data)
+- **Smoke-2 finding:** the guard-0 overrun was a driver bug, not a guard problem: a failed (mid-write) seqlock read of the pace block was treated as "fg idle", so tokens started at every fg publish whatever the guard. Fixed (workloads/background/pace_view.h; mechanism test with the real C++ reader); data/w45_smoke/smoke2_report.md; journal 0041. Everything measured with the old driver (smoke 1 token timing, smoke 2) describes a driver that ignored its own fit test.
+- **Smoke 3** (docs/W45_SMOKE3_SETUP.md) before W5a: the fixed gate at constant frame costs 4 / 7 / 9 ms. Diagnostic, no hypothesis.
+- **Learned guard:** design kept (journal 0041 recommendation 1-4); the possible "clean-token-only" token estimate in the driver is decided after smoke 3.
+- **Hybrid d'B** implemented (controllers/hybrid.py, tests/test_hybrid.py); not simulated.
+- **S2 non-inferiority** kept as a hand-over safety check (reviewer answer).
+- **HW0 note:** at the nominal cost 7 ms arm a does not miss on hardware (fg p99 13.5 ms with a token running), so c0 will have to be raised on the tuning blocks for the registered feasibility gate to be satisfiable.

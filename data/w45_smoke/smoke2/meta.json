@@ -1,0 +1,136 @@
+{
+ "utc": "2026-10-22T18:03:32.486324+00:00",
+ "armoury_mode": "Performance",
+ "armoury_mode_recorded": true,
+ "chrome_running": false,
+ "git_head": "371214fe3978fa763e75a078a9ee8ce8a5c1b7b6",
+ "exe_sha256": "44427ca4ce92e30306984a5279e4bbfbdc82a28ea7b77bb17ba35fbbe6a68cee",
+ "helper_ping": "OK none",
+ "processes": [
+  {
+   "name": "System Idle Process",
+   "count": 1,
+   "cpu_pct": 1469.0
+  },
+  {
+   "name": "python.exe",
+   "count": 2,
+   "cpu_pct": 57.9
+  },
+  {
+   "name": "explorer.exe",
+   "count": 1,
+   "cpu_pct": 11.9
+  },
+  {
+   "name": "System",
+   "count": 1,
+   "cpu_pct": 7.1
+  },
+  {
+   "name": "dwm.exe",
+   "count": 1,
+   "cpu_pct": 6.2
+  },
+  {
+   "name": "ctfmon.exe",
+   "count": 1,
+   "cpu_pct": 2.0
+  },
+  {
+   "name": "AcPowerNotification.exe",
+   "count": 1,
+   "cpu_pct": 1.4
+  },
+  {
+   "name": "ArmouryCrate.UserSessionHelper.exe",
+   "count": 1,
+   "cpu_pct": 1.4
+  },
+  {
+   "name": "conhost.exe",
+   "count": 5,
+   "cpu_pct": 1.4
+  },
+  {
+   "name": "AvastSvc.exe",
+   "count": 1,
+   "cpu_pct": 1.2
+  },
+  {
+   "name": "mc-fw-host.exe",
+   "count": 2,
+   "cpu_pct": 1.2
+  },
+  {
+   "name": "nvcontainer.exe",
+   "count": 3,
+   "cpu_pct": 1.2
+  },
+  {
+   "name": "TextInputHost.exe",
+   "count": 1,
+   "cpu_pct": 0.7
+  },
+  {
+   "name": "WindowsTerminal.exe",
+   "count": 1,
+   "cpu_pct": 0.7
+  },
+  {
+   "name": "claude.exe",
+   "count": 9,
+   "cpu_pct": 0.7
+  },
+  {
+   "name": "NVDisplay.Container.exe",
+   "count": 2,
+   "cpu_pct": 0.6
+  },
+  {
+   "name": "aswidsagent.exe",
+   "count": 1,
+   "cpu_pct": 0.6
+  },
+  {
+   "name": "svchost.exe",
+   "count": 95,
+   "cpu_pct": 0.6
+  },
+  {
+   "name": "?",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSServ.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSSrcExt.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ASUSSmartDisplayControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AacAmbientLighting.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AdobeCollabSync.exe",
+   "count": 2,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AggregatorHost.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  }
+ ]
+}
