@@ -81,11 +81,11 @@ def test_pi_backs_off_hard_on_a_miss_and_clamps_duty(P):
 
 
 def test_pi_clock_rule_picks_lowest_clock_whose_predicted_frame_fits_the_margin(P):
-    c = PIController(P, "unaligned"); c.reset(ctx(P))
+    c = PIController(P, "unaligned"); a0 = c.reset(ctx(P))
     a = None
     for i in range(9):
         a = c.act(obs(100 + 100 * i, [7.0] * 6))
-    assert a.clock == 1800                                              # clock decisions only every 10 ticks
+    assert a.clock == a0.clock                                          # clock decisions only every 10 ticks
     a = c.act(obs(1000, [7.0] * 6))
     assert a.clock == 1500                                              # 7.0 ms x ratio(1500) = 8.4 ms <= (0.6 - 0.05) x 16.7 ms; 1350 gives 9.3 ms
 
