@@ -223,3 +223,16 @@ def p3_ripple(binned, drop_ms=0.04, tol=1e-6):
     h1, d1 = one(0.35, 0.0, 0.35)
     h2, d2 = one(0.80, 0.40, 0.80)
     return dict(held=bool(h1 and h2), min1_ok=h1, min2_ok=h2, drop1_ms=d1, drop2_ms=d2)
+
+
+def restrict_rec(rec, keep):
+    """Sub-record of the blocks where `keep` is true (boolean over records); gap list remapped to the new record indices."""
+    keep = np.asarray(keep, dtype=bool)
+    idx = np.flatnonzero(keep)
+    remap = -np.ones(len(keep), dtype=np.int64); remap[idx] = np.arange(len(idx))
+    out = {k: v[keep] for k, v in rec.items() if isinstance(v, np.ndarray) and len(v) == len(keep) and k != "gaps"}
+    gi = np.asarray(rec["gaps"]["rec_idx"]).astype(np.int64)
+    g = keep[gi]
+    out["gaps"] = dict(rec_idx=remap[gi[g]].astype(np.uint32), off=np.asarray(rec["gaps"]["off"])[g], len=np.asarray(rec["gaps"]["len"])[g])
+    out["dropped"] = rec.get("dropped", 0); out["gap_lost"] = rec.get("gap_lost", 0)
+    return out

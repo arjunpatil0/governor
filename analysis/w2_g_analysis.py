@@ -16,7 +16,7 @@ import sys  # noqa: E402
 sys.path.insert(0, str(ROOT / "analysis")); sys.path.insert(0, str(ROOT / "workloads" / "common"))
 from w2_analysis import _tte_points, bin_by_time_to_end, fit_capped_wait  # noqa: E402
 from w2_g_timeline import (count_overlaps, launch_table, offset_at, p3_ripple, preempted_fraction, q_and_s, recorded_interval,  # noqa: E402
-                           sliced_mask)
+                           restrict_rec, sliced_mask)
 from w2_timeline import g_thr_ns, overhead_check, unpack_rec  # noqa: E402
 
 A_WAIT = {0.5: 0.226, 1: 0.255, 2: 0.287, 8: 0.298}      # A's cell-median observed waits (ms), as quoted in the G addendum P1
@@ -27,6 +27,8 @@ P5_RANGE = (0.2, 0.3)
 P7_MIN = 0.01
 P8_MAX_MS = 0.4
 SLICE_EXTRA_MS = 2 * 0.243
+WITNESS_BLOCKS = 108        # blockIdx < 108 = the first three blocks per SM (addendum 3): gap-free when the kernel runs alone; blocks beyond them show intra-SM arbitration gaps
+BLOCK_SET = {"witness": True}
 FENCE, FENCE_END = "```" + chr(10), chr(10) + "```"
 FG_SIZE = {"g_baseline": 0.1, "g_T1": 1, "g_T4": 4, "g_T1_alone": 1, "g_T4_alone": 4}
 
@@ -38,7 +40,10 @@ def _tab(df, nd=4):
 def load_rec(path):
     z = np.load(path)
     keys = [k for k in z.files if k not in ("sync0", "sync1", "sms")]
-    return unpack_rec({k: z[k] for k in keys}), tuple(z["sync0"]), tuple(z["sync1"])
+    rec = unpack_rec({k: z[k] for k in keys})
+    if BLOCK_SET["witness"]:
+        rec = restrict_rec(rec, rec["blk"] < WITNESS_BLOCKS)
+    return rec, tuple(z["sync0"]), tuple(z["sync1"])
 
 
 def _fg_size(cell_id):
@@ -99,9 +104,8 @@ def timeline_cells(run_dir, df):
         arr = fgw["arrival"][k[ok]]
         off = np.array([offset_at(t, fs0, fs1) for t in arr])
         delay_ms = (ft["span_start"][ok] * 1e-9 - off - arr) * 1e3
-        window_s = float(fgw["arrival"].max() - fgw["arrival"].min())
         rows.append(dict(block=b, cell=r.cell_id, n_fg_in_interval=int(inside.sum()), n_bg_launches=iv["n_bg_launches"],
-                         interval_s=(iv["end_ns"] - iv["start_ns"]) * 1e-9, window_share=(iv["end_ns"] - iv["start_ns"]) * 1e-9 / window_s,
+                         interval_s=(iv["end_ns"] - iv["start_ns"]) * 1e-9, fg_share=int(inside.sum()) / max(len(fgw["arrival"]), 1),
                          bg_launches_dropped=int(r.get("rec_dropped_bg", 0) or 0), alone_span_ms=a_span * 1e-6, n_sliced=qs["n_sliced"],
                          q_pooled_ms=qs["q_pooled_ms"], q_fg_ms=qs["q_fg_ms"], q_bg_ms=qs["q_bg_ms"], s_ms=qs["s_ms"], n_neg_s=qs["n_neg_s"],
                          n_overlap=ov["n_overlap"], n_overlap_same_sm=ov["n_overlap_same_sm"], n_overlap_diff_sm=ov["n_overlap_diff_sm"], n_ties=ov["n_ties"],
@@ -188,14 +192,16 @@ def _verdict(held):
     return "HELD" if held else "DID NOT HOLD"
 
 
-def build_report(run_dir):
+def build_report(run_dir, witness=True):
+    BLOCK_SET["witness"] = witness
     run_dir = Path(run_dir)
     meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8")); df = pd.read_csv(run_dir / "results.csv")
     smoke = bool(meta.get("smoke"))
     L = [f"# Experiment G report{' (SMOKE: not a result)' if smoke else ''}", "",
          f"Source `{run_dir}` | admin {meta['admin']} | AC {meta['ac_plugged']} | ambient {meta['ambient_c']} C | Armoury {meta.get('armoury_mode')} | {meta['gpu']} driver {meta['driver']} | "
          f"yaml {meta['yaml_sha']} | dll {meta['dll_sha']} | git {meta['git_head'][:8]} | blocks {meta['blocks']} | cells {len(df)}",
-         "Addenda: experiments/w2_colocation_addendum_globaltimer_2026-10-22.md and ..._prerun_2026-10-22.md. Each prediction: held / did not hold, with the numbers.", ""]
+         "Addenda: experiments/w2_colocation_addendum_globaltimer_2026-10-22.md and ..._prerun_2026-10-22.md (and _witness_ if registered). Each prediction: held / did not hold, with the numbers.",
+         f"Block set for gap, run, overlap and preemption analyses: {'WITNESS blocks only (blockIdx < %d, the first three blocks per SM)' % WITNESS_BLOCKS if witness else 'ALL blocks (secondary view; blocks beyond three per SM show intra-SM arbitration gaps even with no other context)'}.", ""]
     t3, chk = precheck_iii(df)
     L += ["## Pre-check (iii): instrumentation overhead (registered acceptance; if it fails the timeline is NOT interpreted)", "", _tab(t3)]
     gate = True
@@ -227,9 +233,9 @@ def build_report(run_dir):
     if not len(tl):
         L += ["(no cell had both fg and bg records)"]
     else:
-        cov = tl[["block", "cell", "n_fg_in_interval", "n_bg_launches", "interval_s", "window_share", "bg_launches_dropped", "n_untrusted_fg", "n_untrusted_bg", "gap_lost"]]
-        L += ["Coverage and trust (untrusted = blocks with gap-log overflow; gap_lost = gaps lost to a full global list):", "", _tab(cov, 3), ""]
-        L += ["Per block results:", "", _tab(tl.drop(columns=["n_fg_in_interval", "n_bg_launches", "interval_s", "window_share", "bg_launches_dropped", "n_untrusted_fg", "n_untrusted_bg", "gap_lost"]), 4), ""]
+        cov = tl[["block", "cell", "n_fg_in_interval", "n_bg_launches", "interval_s", "fg_share", "bg_launches_dropped", "n_untrusted_fg", "n_untrusted_bg", "gap_lost"]]
+        L += ["Coverage and trust (fg_share = share of the cell's measured fg requests wholly inside the recorded interval; untrusted = blocks with gap-log overflow; gap_lost = gaps lost to a full global list):", "", _tab(cov, 3), ""]
+        L += ["Per block results:", "", _tab(tl.drop(columns=["n_fg_in_interval", "n_bg_launches", "interval_s", "fg_share", "bg_launches_dropped", "n_untrusted_fg", "n_untrusted_bg", "gap_lost"]), 4), ""]
         verdict_note = "" if gate else " (pre-check (iii) FAILED: shown for completeness, NOT interpreted)"
         # P4/P5: pooled over the cells with sliced spans
         allq = np.array([x for c in raw.values() for x in c["q"]]); alls = np.array([x for c in raw.values() for x in c["s"]])
@@ -266,7 +272,7 @@ def build_report(run_dir):
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--dir"); a = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument("--dir"); ap.add_argument("--all-blocks", action="store_true", help="secondary view: do not restrict to the witness blocks"); a = ap.parse_args()
     if a.dir:
         d = Path(a.dir)
     else:
@@ -274,8 +280,8 @@ def main():
         if not runs:
             sys.exit("no full-run results under data/raw/w2_G (pass --dir for a smoke directory)")
         d = runs[-1].parent
-    L, smoke = build_report(d)
-    out = ROOT / "data" / ("w2_G_smoke_report.md" if smoke else "w2_G_results.md")
+    L, smoke = build_report(d, witness=not a.all_blocks)
+    out = ROOT / "data" / (("w2_G_smoke_report" if smoke else "w2_G_results") + ("_allblocks" if a.all_blocks else "") + ".md")
     out.write_text("\n".join(L), encoding="utf-8"); print("\n".join(L)); print("written:", out)
 
 

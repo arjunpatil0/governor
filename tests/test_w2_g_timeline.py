@@ -184,3 +184,25 @@ def test_p3_ripple_needs_two_local_minima_at_least_0p04_below_the_preceding_maxi
     assert r["held"] and r["drop1_ms"] == pytest.approx(0.30 - 0.214, abs=1e-9) and r["drop2_ms"] == pytest.approx(0.364 - 0.232, abs=1e-9)
     flat = df.assign(mean_wait_ms=0.28)
     assert not p3_ripple(flat)["held"]
+
+
+# ---------------------------------------------------------------- witness blocks (smoke finding: blocks beyond 3 per SM show intra-SM arbitration gaps alone)
+def test_restrict_rec_keeps_the_selected_blocks_and_remaps_their_gaps():
+    from w2_g_timeline import restrict_rec
+    rec = make_launches([(0, [(0, 100 * US), (200 * US, 400 * US)])], n_blocks=200)       # every block has one gap
+    keep = rec["blk"] < 108
+    r = restrict_rec(rec, keep)
+    assert len(r["t0"]) == 108 and len(r["gaps"]["len"]) == 108 and r["gaps"]["rec_idx"].max() == 107
+    assert (r["blk"] < 108).all() and r["ngaps"].sum() == 108
+
+
+def test_arbitration_gaps_of_late_blocks_inflate_preemption_unless_restricted_to_witness_blocks():
+    from w2_g_timeline import restrict_rec
+    rec = make_launches([(0, [(0, 100 * US), (200 * US, 400 * US)])], n_blocks=200)
+    keep_gap = rec["gaps"]["rec_idx"] >= 108                                              # only blocks 108+ have gaps (alone-cell arbitration)
+    rec["gaps"] = {k: v[keep_gap] for k, v in rec["gaps"].items()}
+    rec["ngaps"] = np.where(rec["blk"] >= 108, 1, 0).astype(np.uint32)
+    fg = make_launches([(0, [(0, 50 * US)])], n_blocks=4)
+    full = preempted_fraction(rec, fg, g_thr_ns=41 * US)["fraction"]
+    wit = preempted_fraction(restrict_rec(rec, rec["blk"] < 108), fg, g_thr_ns=41 * US)["fraction"]
+    assert full == pytest.approx(92 / 200) and wit == 0.0
