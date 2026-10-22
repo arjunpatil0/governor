@@ -5,8 +5,10 @@ retried on the next apply because the commanded clock is only recorded after the
 
 
 class ControlActuator:
-    def __init__(self, block, clock_client, unlocked_mhz):
+    def __init__(self, block, clock_client, unlocked_mhz, fallback_reset=None, now=None, fallback_every_s=5.0):
+        import time
         self.block, self.clk, self.unlocked = block, clock_client, float(unlocked_mhz)
+        self.fallback_reset, self.now, self.fallback_every_s, self._last_fb = fallback_reset, now or time.monotonic, fallback_every_s, -1e18
         self.cur = None                                        # last clock accepted by the helper (None before the first apply)
 
     def apply(self, action):
@@ -17,3 +19,6 @@ class ControlActuator:
             if ok:
                 self.cur = want
         self.clk.heartbeat()
+        if self.fallback_reset is not None and getattr(self.clk, "last_response", None) == "OK dirty" and self.now() - self._last_fb >= self.fallback_every_s:
+            self._last_fb = self.now()
+            self.fallback_reset()          # the helper could not release a lock (it has no subprocess by design): e.g. actuators.startup_reset.reset_clocks -> nvidia-smi -rgc / -rmc

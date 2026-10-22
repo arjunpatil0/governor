@@ -47,3 +47,21 @@ def test_smi_timeout_returns_failure_not_a_hang(monkeypatch):
     monkeypatch.setattr(R.subprocess, "run", boom)
     rc, out = R.smi("-rgc")
     assert rc != 0 and "timed out" in out
+
+
+# ---------------------------------------------------------------- reviewer note 2026-10-22: Armoury mode must exist for every full run; chrome state is recorded
+def test_full_runs_are_refused_without_an_armoury_mode_before_any_other_requirement():
+    from run import full_run_refusal
+    assert full_run_refusal(smoke=False, admin=False, armoury_mode=None, plugged=True).startswith("Full run refused: pass --armoury-mode")
+    assert full_run_refusal(smoke=False, admin=True, armoury_mode="  ", plugged=True).startswith("Full run refused: pass --armoury-mode")
+    assert "battery" in full_run_refusal(smoke=False, admin=True, armoury_mode="Performance", plugged=False)
+    assert "Administrator" in full_run_refusal(smoke=False, admin=False, armoury_mode="Performance", plugged=True)
+    assert full_run_refusal(smoke=False, admin=True, armoury_mode="Performance", plugged=True) is None
+    assert full_run_refusal(smoke=True, admin=False, armoury_mode=None, plugged=False) is None            # smoke runs are not results
+
+
+def test_chrome_state_is_derived_from_the_process_snapshot():
+    from procsnap import chrome_running
+    assert chrome_running([{"name": "chrome.exe", "count": 9, "cpu_pct": 1.0}, {"name": "python.exe", "count": 1, "cpu_pct": 5.0}]) is True
+    assert chrome_running([{"name": "Chrome.exe", "count": 1, "cpu_pct": 0.0}]) is True
+    assert chrome_running([{"name": "python.exe", "count": 1, "cpu_pct": 5.0}]) is False

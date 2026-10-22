@@ -22,3 +22,8 @@ def snapshot(interval=1.0, procs=psutil.process_iter):
             continue
         e = agg.setdefault(n, {"name": n, "count": 0, "cpu_pct": 0.0}); e["count"] += 1; e["cpu_pct"] += c
     return sorted(agg.values(), key=lambda e: (-e["cpu_pct"], e["name"]))
+
+
+def chrome_running(processes):
+    """True if any browser process of the snapshot is Chrome (the run checklist requires it closed; the state is recorded in meta.json of every run)."""
+    return any(str(e.get("name", "")).lower().startswith("chrome") for e in processes)

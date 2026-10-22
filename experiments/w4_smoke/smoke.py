@@ -340,11 +340,31 @@ def step_governor(d):
 
 STEPS = dict(warm=step_warm, clock=step_clock, daemon=step_daemon, frame=step_frame, driver=step_driver, governor=step_governor)
 
+def write_meta(d, armoury_mode):
+    """meta.json for every smoke/run directory: Armoury Crate mode (NOT_RECORDED is flagged), Chrome state, process list with CPU%, git head, exe hash, helper state."""
+    import procsnap
+    procs = procsnap.snapshot(interval=1.0)
+    git = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    try:
+        helper = ClockClient().ping()
+    except Exception as e:                                   # noqa: BLE001
+        helper = f"unreachable: {type(e).__name__}"
+    from workloads.common.exe_warm import sha256
+    meta = dict(utc=datetime.now(timezone.utc).isoformat(), armoury_mode=armoury_mode or "NOT_RECORDED", armoury_mode_recorded=bool(armoury_mode), chrome_running=procsnap.chrome_running(procs),
+                git_head=git, exe_sha256=sha256(EXE) if EXE.exists() else None, helper_ping=helper, processes=procs[:25])
+    (d / "meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
+    if not meta["armoury_mode_recorded"] or meta["chrome_running"]:
+        print("WARNING: " + ("Armoury Crate mode NOT recorded; " if not meta["armoury_mode_recorded"] else "") + ("Chrome is running; " if meta["chrome_running"] else "") + "(smoke only; a full run would refuse)")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("step", choices=list(STEPS))
     ap.add_argument("--run", default=None)
+    ap.add_argument("--armoury-mode", default=None, help="Armoury Crate mode now active; recorded in meta.json (NOT_RECORDED is flagged)")
     a = ap.parse_args()
     d = run_dir(a.run)
     print("run dir", d)
+    if not (d / "meta.json").exists():
+        write_meta(d, a.armoury_mode)
     STEPS[a.step](d)

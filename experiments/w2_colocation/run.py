@@ -356,6 +356,19 @@ def run_cell(cell, block, idx, h, ctx):
     return row
 
 
+def full_run_refusal(smoke, admin, armoury_mode, plugged):
+    """Reason a FULL run must not start, or None. The Armoury Crate mode is checked first: it changes the GPU memory clock, cannot be detected (journal 0021) and must be on record for every run."""
+    if smoke:
+        return None
+    if not armoury_mode or not str(armoury_mode).strip():
+        return "Full run refused: pass --armoury-mode <the Armoury Crate mode now active> (it changes the GPU memory clock; journal 0021)."
+    if plugged is False:
+        return "Full run refused: the laptop is on battery. The registration (hardware: AC power) requires AC; plug in and retry."
+    if not admin:
+        return "Full run needs an Administrator shell (clock locks). Use --smoke to test without admin."
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--part", choices=["A", "A2", "B", "C", "L", "G"])
@@ -383,8 +396,9 @@ def main():
     T = dict(tmax=cfg["common"]["gpu_start_temp_max_c"], warmup=cfg["common"]["warmup_s"], idle=cfg["common"]["idle_between_cells_s"],
              lead=5.0, lead_llama=25.0, preroll=cfg["experiment_C"]["preroll_s"], window=cfg["experiment_C"]["window_s"], child_timeout=90)
     batt0 = psutil.sensors_battery()
-    if not a.smoke and batt0 is not None and not batt0.power_plugged:
-        sys.exit("Full run refused: the laptop is on battery. The registration (hardware: AC power) requires AC; plug in and retry.")
+    refusal = full_run_refusal(a.smoke, admin, a.armoury_mode, None if batt0 is None else batt0.power_plugged)
+    if refusal:
+        sys.exit(refusal)
     if a.smoke:
         NO_CLOCK_CONTROL = not admin
         if a.precheck:
@@ -393,10 +407,6 @@ def main():
         else:
             blocks, T["warmup"], T["preroll"], T["window"], T["idle"] = 1, 0.5, 0.5, 1.5, 0.5
             print("SMOKE: one block, first 3 cells plus one per other fg stream, short windows. Not a result.")
-    elif not admin:
-        sys.exit("Full run needs an Administrator shell (clock locks). Use --smoke to test without admin.")
-    if not a.smoke and not a.armoury_mode:
-        sys.exit("Full run refused: pass --armoury-mode <the Armoury Crate mode now active> (it changes the GPU memory clock; journal 0021).")
     git_head = check_run_provenance(ROOT, smoke=a.smoke)
     dll = ROOT / "workloads" / "background" / "build" / "w2_kernels.dll"
     if not dll.exists():
@@ -440,11 +450,12 @@ def main():
     out_dir = ROOT / "data" / "raw" / (f"w2_{a.part}_precheck" if a.precheck else f"w2_{a.part}_smoke" if a.smoke else f"w2_{a.part}") / stamp
     out_dir.mkdir(parents=True)
     batt = psutil.sensors_battery()
+    procs_snapshot = procsnap.snapshot()
     meta = dict(utc=stamp, part=a.part, smoke=a.smoke, precheck=a.precheck, admin=admin, ac_plugged=None if batt is None else batt.power_plugged, ambient_c=a.ambient_c, armoury_mode=a.armoury_mode,
                 yaml_sha=sha(CFG_PATH), dll_sha=sha(dll), git_head=git_head, git_dirty=bool(git_state(ROOT)[1]) if a.smoke else False,
                 gpu=nv.nvmlDeviceGetName(h), driver=nv.nvmlSystemGetDriverVersion(), hags=hags,
                 execution_mode=("llama.cpp CUDA build, all layers offloaded (checked per cell from the driver log; a cell with any CPU layer aborts the run)" if a.part == "L" else "CUDA native kernels via w2_kernels.dll (no CPU fallback)"), llama=llama_meta, os=platform.platform(), python=sys.version.split()[0],
-                blocks=blocks, timing=T, processes=procsnap.snapshot())
+                blocks=blocks, timing=T, processes=procs_snapshot, chrome_running=procsnap.chrome_running(procs_snapshot))
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(f"HAGS: {hags['line']} | git {git_head[:8]} | out {out_dir}")
     if not hags["enabled"]:

@@ -68,6 +68,8 @@ class HelperCore:
         self.be, self.allowed, self.watchdog_s, self.min_interval_s, self.now, self.retry_s = backend, frozenset(int(x) for x in allowed_mhz), watchdog_s, min_interval_s, now, retry_s
         self.locked = None
         self.dirty = False                                     # a reset failed and must be retried
+        self.known_unlocked = False                            # True only after a successful reset and until the next LOCK attempt
+        self.reset_kind = "ok"
         self.closed = False
         self.last_seen = self.now()
         self.last_lock = -1e18
@@ -86,14 +88,23 @@ class HelperCore:
             self._suppressed += 1
 
     def _reset_backend(self):
+        """True = the clock is unlocked (reset done, or not needed). self.reset_kind is 'ok', 'not needed' or 'FAILED' (logged distinctly).
+        'not needed': NVML raised on the reset while this helper knows no lock is held (smoke incident 2026-10-22: Unknown Error on a reset after an earlier successful reset).
+        Anything else that raises - a held lock, a dirty state, or an unknown state such as at start-up - is a real failure: remembered and retried."""
         try:
             self.be.reset()
-        except Exception:                                      # noqa: BLE001  a failing reset must be remembered and retried, never forgotten
-            log.exception("backend reset failed; will retry")
+        except Exception:                                      # noqa: BLE001
+            if self.known_unlocked and not self.dirty and self.locked is None:
+                self.reset_kind = "not needed"
+                log.info("reset not needed: NVML raised on the reset while no lock is held by this helper (state known unlocked)")
+                return True
+            self.reset_kind = "FAILED"
+            log.exception("backend reset FAILED; will retry")
             self.dirty = True
             self.last_retry = self.now()
             return False
-        self.locked, self.dirty = None, False
+        self.reset_kind = "ok"
+        self.locked, self.dirty, self.known_unlocked = None, False, True
         return True
 
     def _state(self):
@@ -102,7 +113,7 @@ class HelperCore:
     def startup(self):
         with self.lk:
             ok = self._reset_backend()
-            log.info("startup: lock reset %s", "ok" if ok else "FAILED")
+            log.info("startup: lock reset %s", self.reset_kind)
             return ok
 
     def handle(self, cmd: Command) -> str:
@@ -114,7 +125,7 @@ class HelperCore:
                 return f"OK {self._state()}"
             if cmd.verb == "RESET":
                 ok = self._reset_backend()
-                self._note(logging.INFO, "RESET %s", "ok" if ok else "FAILED")
+                self._note(logging.INFO, "RESET %s", self.reset_kind)
                 return "OK" if ok else "ERR BACKEND"
             if cmd.arg not in self.allowed:
                 self._note(logging.WARNING, "rejected LOCK %s (not in allowlist)", cmd.arg)
@@ -122,6 +133,7 @@ class HelperCore:
             if self.now() - self.last_lock < self.min_interval_s:
                 return "ERR RATE"
             self.last_lock = self.now()                        # failed attempts count too: a client cannot hammer the driver
+            self.known_unlocked = False
             try:
                 self.be.lock(cmd.arg)
             except Exception:                                  # noqa: BLE001
@@ -146,13 +158,13 @@ class HelperCore:
     def on_disconnect(self):
         with self.lk:
             ok = self._reset_backend()
-            self._note(logging.INFO, "client disconnected: lock reset %s", "ok" if ok else "FAILED")
+            self._note(logging.INFO, "client disconnected: lock reset %s", self.reset_kind)
 
     def shutdown(self):
         with self.lk:
             self.closed = True
             ok = self._reset_backend()
-            log.info("shutdown: lock reset %s", "ok" if ok else "FAILED")
+            log.info("shutdown: lock reset %s", self.reset_kind)
             return ok
 
 

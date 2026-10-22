@@ -141,3 +141,19 @@ def test_obs_builder_and_governor_pass_token_durations_from_a_two_field_token_ri
     tokens.push([1.0, 9.9]); tokens.push([1.02, 10.1])
     gov.step(t_ms=100.0, energy_j=1.0, clock_mhz=1800.0)
     assert gov.last_obs.tokens == 2 and gov.last_obs.tok_ms.tolist() == [9.9, 10.1]
+
+
+def test_control_actuator_runs_the_fallback_reset_when_the_helper_reports_a_dirty_lock(P):
+    class DirtyClient(FakeClock):
+        last_response = "OK dirty"
+    calls = []
+    t = [100.0]
+    act = ControlActuator(SeqBlock(nm(), 3, create=True), DirtyClient(), unlocked_mhz=P.UNLOCKED_MHZ, fallback_reset=lambda: calls.append("nvidia-smi -rgc"), now=lambda: t[0])
+    act.apply(Action(clock=1500.0)); act.apply(Action(clock=1500.0))
+    assert calls == ["nvidia-smi -rgc"]                                # once, not on every tick
+    t[0] += 6.0
+    act.apply(Action(clock=1500.0))
+    assert len(calls) == 2
+    ok = ControlActuator(SeqBlock(nm(), 3, create=True), FakeClock(), unlocked_mhz=P.UNLOCKED_MHZ, fallback_reset=lambda: calls.append("x"))
+    ok.apply(Action(clock=1500.0))
+    assert "x" not in calls

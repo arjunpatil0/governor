@@ -350,3 +350,35 @@ def test_an_idle_client_is_booted_so_it_cannot_squat_on_the_only_pipe_instance()
         again.close(); squatter.close()
     finally:
         srv.stop(); th.join(5)
+
+
+# ---------------------------------------------------------------- smoke incident 2026-10-22 18:07:35 / 18:31:57: NVML reset raised while no lock was held
+def test_a_reset_error_while_the_state_is_known_unlocked_is_logged_as_not_needed_and_is_not_a_failure(caplog):
+    import logging
+    be = FakeBackend()
+    c, be, clk = core(backend=be)
+    c.handle(Command("LOCK", 1500))
+    assert c.handle(Command("RESET")) == "OK"                      # real reset, state now known unlocked
+    be.fail_reset = True
+    with caplog.at_level(logging.INFO, logger="clock_helper"):
+        c.on_disconnect()
+        assert c.shutdown() is True
+    assert c.dirty is False and c.handle(Command("PING")) == "ERR SHUTDOWN"
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("reset not needed" in m for m in msgs) and not any("FAILED" in m for m in msgs)
+
+
+def test_a_reset_error_while_a_lock_is_held_or_the_state_is_unknown_is_still_a_failure():
+    c, be, clk = core(backend=FakeBackend(fail_reset=True))
+    assert c.startup() is False and c.dirty is True                  # unknown state at start: a failing reset is real
+    c2, be2, clk2 = core()
+    c2.handle(Command("LOCK", 1500)); be2.fail_reset = True
+    assert c2.handle(Command("RESET")) == "ERR BACKEND" and c2.dirty is True
+
+
+def test_a_lock_attempt_makes_the_state_unknown_again():
+    c, be, clk = core()
+    c.handle(Command("RESET")); clk.t += 2
+    be.fail_reset = True
+    c.handle(Command("LOCK", 1200))                                  # lock issued: a later reset error is real
+    assert c.handle(Command("RESET")) == "ERR BACKEND"
