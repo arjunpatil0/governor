@@ -55,7 +55,15 @@ def test_fg_power_from_W1_fma_rows(P):
 
 def test_q_s_from_G_and_share_divisor(P):
     assert P.q_ms == pytest.approx(0.374) and P.s_ms == pytest.approx(0.148)
-    assert P.share_divisor == pytest.approx(2 + 2 * 0.148 / 0.374)
+    assert P.share_divisor_G == pytest.approx(2 + 2 * 0.148 / 0.374)
+
+
+def test_plant_share_divisor_is_the_committed_A2_fit_and_stays_near_the_G_value(P):
+    import json
+    cal = json.loads((ROOT / "data" / "sim_calibration.json").read_text(encoding="utf-8"))
+    assert P.share_divisor == pytest.approx(cal["share_divisor_fit"])
+    assert min(cal["rmse_log_by_S"].values()) < 0.05
+    assert abs(P.share_divisor / P.share_divisor_G - 1) < 0.15
 
 
 def test_knee_from_L_table_is_1500(P):
@@ -72,3 +80,7 @@ def test_idle_power_comes_from_a_quoted_source_that_exists(P):
     assert P.p_idle_w == pytest.approx(5.0)
     for name, (path, quote) in P.CONSTANT_SOURCES.items():
         assert quote in (ROOT / path).read_text(encoding="utf-8"), name
+
+
+def test_clock_actuation_latency_is_the_audit_value(P):
+    assert P.clock_latency_ms == pytest.approx(443.2346)

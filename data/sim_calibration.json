@@ -1,0 +1,27 @@
+{
+ "share_divisor_fit": 2.5,
+ "rmse_log_by_S": {
+  "2.2": 0.09454093976670327,
+  "2.3": 0.06858500383626893,
+  "2.4": 0.04460782166962465,
+  "2.5": 0.029541464644354223,
+  "2.6": 0.034713748333802544,
+  "2.7": 0.05337133326942267,
+  "2.8": 0.07600304383830582
+ },
+ "anchors": [
+  "sa4_fg4_alone",
+  "duty_fg4_d0.25",
+  "duty_fg4_d0.5",
+  "duty_fg4_d0.75",
+  "sa4_fg4_m2",
+  "sa4_fg9_alone",
+  "duty_fg9_d0.25"
+ ],
+ "seeds": [
+  1,
+  2
+ ],
+ "share_divisor_G": 2.7914438502673797,
+ "note": "rmse of log(sim mean latency / measured mean latency) over the SA4 anchors; fitted S replaces the G-derived 2+2s/q in the plant"
+}

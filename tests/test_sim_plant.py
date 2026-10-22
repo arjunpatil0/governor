@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from sim.anchors import a2_run
 from sim.params import load_params
 from sim.plant import Action, BgSpec, FgSpec, Plant, Scenario, summarise
 
@@ -76,14 +77,7 @@ def test_fg_latency_monotone_in_duty(P):
 
 
 def _a2(P, cid, seed=1):
-    row = P.sa4[cid]
-    d = row["duty"]
-    if row["fg_ms"] == 4.0:
-        fg = FgSpec(period_ms=25.0, arrivals="poisson", cost_ms=lambda t: P.sa4["sa4_fg4_alone"]["fg_gpu_p50_ms"], jitter_sigma=0.05, deadline_ms=1e9, active=lambda t: True)
-    else:
-        fg = FgSpec(period_ms=PERIOD, arrivals="periodic", cost_ms=lambda t: P.sa4["sa4_fg9_alone"]["fg_gpu_p50_ms"], jitter_sigma=0.01, deadline_ms=1e9, active=lambda t: True)
-    bg = BgSpec(kind="slice", slice_ms=row["m_ms"]) if d > 0 else None
-    return summarise(run(P, scen(fg, bg, dur=60000.0), Action(clock=1800, pacing="unaligned", duty=d if d > 0 else 1.0), seed=seed))
+    return a2_run(P, cid, seed=seed)
 
 
 @pytest.mark.parametrize("cid", ["sa4_fg4_alone", "duty_fg4_d0.25", "duty_fg4_d0.5", "duty_fg4_d0.75", "sa4_fg4_m2", "sa4_fg9_alone", "duty_fg9_d0.25"])

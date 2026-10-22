@@ -2,6 +2,7 @@
 the few values that live in prose are read from an exact quoted sentence (CONSTANT_SOURCES), and a test checks the quote exists.
 Sources: data/w1_downclock_results.md (fg speed and power vs clock), data/w2_L_results.md (llama.cpp decode tok/s, power),
 data/w2_G_results.md (q, s), data/w2_A_secondary_results.md SA4 (anchor rows for the plant tests), journal/0011 (idle power)."""
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,13 +38,20 @@ class Params:
     s_ms: float
     p_idle_w: float
     sa4: dict
+    clock_latency_ms: float = 0.0
+    share_override: float = None
     CONSTANT_SOURCES: dict = field(default_factory=lambda: dict(CONSTANT_SOURCES))
     levels: tuple = ()
 
     @property
-    def share_divisor(self):
-        """Time-sliced co-run: each context progresses at 1/S of its solo speed, S = 2 + 2s/q (journal 0033; slowdown of a long fg with an always-on bg)."""
+    def share_divisor_G(self):
+        """G-derived: S = 2 + 2s/q (journal 0033; slowdown of a long fg with an always-on bg). Independent of the A2 anchors."""
         return 2 + 2 * self.s_ms / self.q_ms
+
+    @property
+    def share_divisor(self):
+        """Time-sliced co-run: each context progresses at 1/S of its solo speed. S is fitted to the A2 SA4 anchors (sim/calibrate.py -> data/sim_calibration.json); the G value is the sensitivity setting."""
+        return self.share_override if self.share_override is not None else self.share_divisor_G
 
     def _check(self, f):
         if not (self._fg_x[0] - 1e-9 <= f <= self.UNLOCKED_MHZ + 1e-9):
@@ -111,6 +119,14 @@ def load_params(root=ROOT):
     assert quote in _read(root, path)
     p_idle = float(m.group(1))
 
+    audit = json.loads(_read(root, "data/capability_audit.json"))
+    rows_a = audit if isinstance(audit, list) else audit.get("rows", audit)
+    lat = [r["latency_ms"] for r in rows_a if r["item"].startswith("nvidia-smi -lgc")]
+    assert lat and lat[0], "no clock-lock latency in capability audit"
+
+    cal = Path(root) / "data" / "sim_calibration.json"
+    share = json.loads(cal.read_text(encoding="utf-8"))["share_divisor_fit"] if cal.exists() else None
+
     lv = tuple(sorted(int(k) for k in rel_l if k != "unlocked")) + (unlocked,)
     return Params(UNLOCKED_MHZ=unlocked, _fg_x=fx, _fg_rel=fr, _fg_p=fp, _bg_x=np.array(bx)[o], _bg_tok=np.array(bt)[o], _bg_p=np.array(bp)[o],
-                  rel_thr_L=rel_l, q_ms=q, s_ms=s, p_idle_w=p_idle, sa4=sa4, levels=lv)
+                  rel_thr_L=rel_l, q_ms=q, s_ms=s, p_idle_w=p_idle, sa4=sa4, clock_latency_ms=float(lat[0]), share_override=share, levels=lv)
