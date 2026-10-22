@@ -1,15 +1,19 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-23 · Phase: W4-5. Smoke 3 recorded; reviewer notes 1-4 applied. Yaml draft 3b is UNCOMMITTED (excluded from git) and PRESENTED FOR FINAL REVIEW before commit and W5a.
+Updated 2026-10-23 · Phase: W4-5. W5 yaml COMMITTED (1683d3c, blockers 1-4 + changes 5-6). W5a tooling built. Blocked on ONE decision of yours: the model downloads (below).
 
-## Just did (journal 0043; report data/w45_smoke/smoke3_report.md)
-- Smoke 3 (final driver): measured frame alone 3.0 / 5.2 / 6.7 ms for nominal 4 / 7 / 9 ms. Aligned gates correctly: 60 tok/s (1 token per frame) at 3.0 and 5.2 ms, 0 tok/s at 6.7 ms, 0 misses; overrun 0% / 0.5% (max 3.3 ms). Unaligned duty 1 at nominal 9 overloads the fg (100% misses, p50 308.6 ms). Clean-token estimate steady at 10.1 ms.
-- My unit error corrected: the 6.8 ms I used for nominal 7 was the contended smoke-2 median; alone it is 5.2 ms, so aligned pacing works at nominal 7 (my earlier expectation was wrong). The 6.57 ms boundary is in measured time (about nominal 8.8 ms).
-- Yaml: gate needs bg tok/s >= 20% of background-alone; c0 = nominal cost, measured frame time recorded per block, grid {7..11} nominal; HW7 pre-states the clean-estimate staleness check around clock changes.
-- Helper: 3 NVML reset errors in this log (first reset after a successful RESET) were handled as "reset not needed"; cause still unexplained (probe passed 12/12).
+## Just did (journal 0044; response reviews/2026-10-23_w5_yaml_final_review_response.md)
+- Yaml committed with the dated commit_note. Change 7 explained: the ~5% admission mismatch was a join artefact in MY report (6-decimal rounding on 100 ns ticks); 0 of 5375 aligned starts violate the fit test.
+- analysis/w5_analysis.py written test-first (13 tests): HW1, HW2 (infeasible = 0, exact Wilcoxon, Holm, NI ratios, HW1 for d'B), HW3, HW7.
+- W5a tooling test-first: experiments/w5a/w5a_design.py (cell list, 280 cells), w5a_metrics.py, run.py (hardware runner, no hardware run yet).
+- Driver: context shift so 35 s cells never end early (not yet verified on hardware); the build test no longer changes the exe hash. Exe hash now bb875fbc... (needs one warm).
+- 8B load pre-check NOT run: only the 3B is on disk.
 
-## Waiting for
-1. Reviewer: FINAL review of experiments/w5_governor.yaml (draft 3b). No open questions.
-2. Then (after your go): commit the yaml with a dated addendum, then W5a starts with its load pre-check addendum (8B load check, held-out choice) first.
+## Decision needed from you (one)
+Accept the Llama 3.2 / 3.1 Community Licences and approve downloading 8.1 GB (sha256 verified): Llama-3.2-1B-Instruct Q4_K_M (0.8 GB), Llama-3.1-8B-Instruct Q4_K_M (4.9 GB, held out), Phi-3.5-mini-instruct Q4_K_M (2.4 GB, MIT, my proposal for the 'other LLM family'). Yes / no / different other-family model.
+
+## Then (my side, before W5a)
+Download + checksum, models.json, 8B load pre-check (all layers on the GPU at context 2048) and the held-out addendum, freeze the cell list (seed, sha256) in an addendum, then W5a session-1 commands (first: `warm`, the `shift` smoke, one trial cell with --limit 1).
 
 ## Notes
-- Simulator frozen. Run checklist: Administrator PowerShell; AC power; clean committed tree; Armoury mode stated; Chrome closed; tray apps quit; no clicking; warm every new exe.
+- Windows Update and NVIDIA driver updates paused by you for the study. Do NOT rebuild the driver or run `git clean` between sessions.
+- Simulator frozen. Run checklist: Administrator PowerShell for the helper; AC power; clean committed tree; Armoury mode stated; Chrome closed; tray apps quit; no clicking; warm every new exe.

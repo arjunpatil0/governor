@@ -1,6 +1,6 @@
 """W4-5 hardware smoke (NOT a result; no hypothesis is tested): checks that the pieces work on the real GPU and NVML. Run step by step, unelevated, with the admin clock helper
 already running in its own Administrator window. Writes data/w45_smoke/<run>/<step>.json.   python experiments/w4_smoke/smoke.py <step> [--run RUNDIR]
-steps: warm | clock | daemon | frame | driver | governor | overrun (smoke 2) | gate (smoke 3)
+steps: warm | clock | daemon | frame | driver | governor | overrun (smoke 2) | gate (smoke 3) | shift (context shift check)
 Always resets the clock lock in a finally block (helper RESET) and stops child processes."""
 import argparse
 import json
@@ -401,7 +401,26 @@ def step_gate(d):
     save(d, "overrun", out)
 
 
-STEPS = dict(warm=step_warm, clock=step_clock, daemon=step_daemon, frame=step_frame, driver=step_driver, governor=step_governor, overrun=step_overrun, gate=step_gate)
+def step_shift(d):
+    """Context-shift check (journal 0044, not a result): the background alone for 40 s must run past the old 1534-token limit; the shifted tokens are flagged in the driver CSV."""
+    import pandas as pd
+    from workloads.common.w2lib import W2
+    w = W2(); cl = SafeClient(); hb = Heartbeat(cl); hb.start()
+    try:
+        reset_clocks(cl, is_admin=False)
+        cl.reset(); time.sleep(1.1)
+        r = run_driver(w, None, d, "shift_bg_alone", [0.0, 1.0, 0.5], seconds=40, with_fg=False)
+        r.pop("_raw", None)
+    finally:
+        hb.stop(); cl.reset(); cl.close()
+    lg = pd.read_csv(d / "driver_shift_bg_alone.csv")
+    done = next(x for x in r["driver_output_tail"] if x.startswith("DONE"))
+    out = dict(run=r, tokens=int(len(lg)), shifted_tokens=int(lg.shifted.sum()), tok_ms_p50=float(lg.tok_ms.median()), tok_ms_p99=float(lg.tok_ms.quantile(0.99)), tok_ms_max=float(lg.tok_ms.max()),
+               tok_ms_shifted_median=float(lg[lg.shifted == 1].tok_ms.median()) if lg.shifted.sum() else None, done_line=done)
+    save(d, "shift", out)
+
+
+STEPS = dict(warm=step_warm, clock=step_clock, daemon=step_daemon, frame=step_frame, driver=step_driver, governor=step_governor, overrun=step_overrun, gate=step_gate, shift=step_shift)
 
 def write_meta(d, armoury_mode):
     """meta.json for every smoke/run directory: Armoury Crate mode (NOT_RECORDED is flagged), Chrome state, process list with CPU%, git head, exe hash, helper state."""

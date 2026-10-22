@@ -177,3 +177,12 @@ About 20 min of GPU time with the helper: token durations and overrun past the n
 - **Feasibility gate:** a static setting passes only if it meets the SLO, the budget AND bg tok/s >= 20% of the background-alone tok/s (measured in each tuning block).
 - **c0:** grid in nominal cost {7..11} ms; the measured frame time alone is recorded for every block; the boundary is judged in measured time.
 - **Clean-token estimate staleness:** untested; check pre-stated in the yaml (HW7); W5a logs est_clean_ms around every clock change.
+
+
+---
+# ADDENDUM J 2026-10-23 (after the final review; recorded BEFORE W5a and any W5b data)
+- The W5 yaml is committed (1683d3c) with blockers 1-4 and changes 5-6; see its `commit_note` and reviews/2026-10-23_w5_yaml_final_review_response.md.
+- **Change 7:** the ~5% admission mismatch was an analysis artefact (6-decimal join on 100 ns timestamps); 0 of 5375 aligned starts violate the fit test.
+- **Driver:** context shift (drop the oldest 512 generated tokens when the 2048 context is full) so that 35 s cells never end early; the exe hash changes (bb875fbc...); verified on hardware by the `shift` smoke step before W5a; no rebuild between W5 sessions (the build test now restores the exe).
+- **Tooling:** analysis/w5_analysis.py (HW1/HW2/HW3/HW7), experiments/w5a/{w5a_design,w5a_metrics,run}.py. The W5a cell list is frozen by a further addendum (seed, other-family name, sha256) after the model downloads and the 8B load pre-check.
+- **Still open before W5a:** download + checksum of Llama-3.2-1B, Llama-3.1-8B (held out) and the other LLM family (proposed: Phi-3.5-mini Q4_K_M, MIT); the 8B load pre-check; the `shift` smoke; the list-freezing addendum.

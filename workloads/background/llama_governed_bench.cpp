@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
     llama_sampler *smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
     llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
     llama_token cur = llama_sampler_sample(smpl, ctx, -1);
-    std::vector<double> te, tl_ms, tl_ewma, tl_clean; std::vector<char> tl_ov; std::vector<llama_token> ids; te.reserve(1 << 18); ids.reserve(1 << 18);
+    std::vector<double> te, tl_ms, tl_ewma, tl_clean; std::vector<char> tl_ov, tl_shift; std::vector<llama_token> ids; te.reserve(1 << 18); ids.reserve(1 << 18);
     if (t_sync < 0) { t_stop = qpc_now() + t_stop; t_sync = 0; }
     while (qpc_now() < t_sync) Sleep(1);
 
@@ -98,7 +98,11 @@ int main(int argc, char **argv) {
     double wake_ms = 0.0;
     tokest::TokenEstimate west;                                  // fit-test estimate: median of recent tokens not overlapped by a frame (journal 0042); the EWMA of all tokens is logged beside it
     const double inf = std::numeric_limits<double>::infinity();
-    while (qpc_now() < t_stop && (int)ids.size() + n_prompt + 2 < (int)cp.n_ctx) {
+    int n_past = n_prompt;                                       // positions currently in the KV cache
+    llama_memory_t mem = llama_get_memory(ctx);
+    if (!llama_memory_can_shift(mem)) return die("this context cannot shift its KV cache");
+    const int n_keep = n_prompt, n_discard = 512;                // context shift (journal 0044): when the 2048-token context is full drop the oldest 512 generated tokens, keep the prompt
+    while (qpc_now() < t_stop) {
         ctrl.read(c);
         if (c[0] >= 0.5) {                                        // aligned: wait for slack
             for (;;) {
@@ -121,6 +125,12 @@ int main(int argc, char **argv) {
             }
         }
         if (qpc_now() >= t_stop) break;
+        bool shifted = false;
+        if (n_past + 2 >= (int)cp.n_ctx) {                       // the shift itself is applied inside the next decode call, so it shows up as one longer token (flagged in the CSV)
+            llama_memory_seq_rm(mem, 0, n_keep, n_keep + n_discard);
+            llama_memory_seq_add(mem, 0, n_keep + n_discard, -1, -n_discard);
+            n_past -= n_discard; shifted = true;
+        }
         bool b0 = false; double nx0 = inf;
         pview.get(pace, qpc_now(), 0.1, b0, nx0);                   // the arrival this token is gated against (inf = fg idle)
         const double est_ewma = west.ewma(), est_clean = west.clean();
@@ -128,7 +138,7 @@ int main(int argc, char **argv) {
         if (llama_decode(ctx, llama_batch_get_one(&cur, 1)) != 0) return die("decode failed");
         cur = llama_sampler_sample(smpl, ctx, -1);                // reads logits: synchronises with the GPU
         double t1 = qpc_now();
-        te.push_back(t1); ids.push_back(cur);
+        te.push_back(t1); ids.push_back(cur); n_past++;
         double tok_ms = (t1 - t0) * 1000.0;
         double rec[2] = {t1, tok_ms};
         ring.push(rec);
@@ -136,14 +146,14 @@ int main(int argc, char **argv) {
         pview.get(pace, t1, 0.1, b1, nx1);
         const bool ov = tokest::token_overlapped(t1 * 1000.0, nx0, t0 * 1000.0, pview.have, pview.last[2] * 1000.0);
         west.push(tok_ms, ov);
-        tl_ms.push_back(tok_ms); tl_ov.push_back(ov ? 1 : 0); tl_ewma.push_back(est_ewma); tl_clean.push_back(est_clean);
+        tl_ms.push_back(tok_ms); tl_ov.push_back(ov ? 1 : 0); tl_ewma.push_back(est_ewma); tl_clean.push_back(est_clean); tl_shift.push_back(shifted ? 1 : 0);
         ctrl.read(c);
         wake_ms = pacing::unaligned_wake(t0 * 1000.0, t1 * 1000.0, c[1]);
     }
     FILE *o = fopen(out_path, "w");
     if (!o) return die("cannot open output");
-    fprintf(o, "t_tok_end,token,tok_ms,overlapped,est_ewma_ms,est_clean_ms\n");          // the estimates are the values in force when the token STARTED (est_clean_ms is nan until a clean token exists)
-    for (size_t i = 0; i < te.size(); i++) fprintf(o, "%.9f,%d,%.4f,%d,%.4f,%.4f\n", te[i], (int)ids[i], tl_ms[i], (int)tl_ov[i], tl_ewma[i], tl_clean[i]);
+    fprintf(o, "t_tok_end,token,tok_ms,overlapped,est_ewma_ms,est_clean_ms,shifted\n");          // the estimates are the values in force when the token STARTED (est_clean_ms is nan until a clean token exists)
+    for (size_t i = 0; i < te.size(); i++) fprintf(o, "%.9f,%d,%.4f,%d,%.4f,%.4f,%d\n", te[i], (int)ids[i], tl_ms[i], (int)tl_ov[i], tl_ewma[i], tl_clean[i], (int)tl_shift[i]);
     fclose(o);
     printf("DONE tokens=%zu t_first=%.6f t_last=%.6f ctx_end=%d\n", te.size(), te.empty() ? 0.0 : te.front(), te.empty() ? 0.0 : te.back(), n_prompt + (int)ids.size());
     llama_sampler_free(smpl); llama_free(ctx); llama_model_free(model); llama_backend_free();

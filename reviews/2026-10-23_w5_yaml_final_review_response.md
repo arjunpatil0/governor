@@ -1,0 +1,10 @@
+# Response to reviews/2026-10-23_w5_yaml_final_review.md (written 2026-10-23; the review file is untouched)
+1. [BLOCKER] W5a/c0 order: FIXED. W5a uses absolute nominal costs {5, 7, 9, 11, 14} ms + varying (base 9 ms); 18 strata, 280 cells, three 2 h sessions (yaml W5a design; committed 1683d3c; experiments/w5a/w5a_design.py, 8 tests).
+2. [BLOCKER] g'B straw man: FIXED. g'B/eB = best static over the full pacing space (aligned and unaligned) x clock; c'B may fall back to unaligned pacing (yaml controllers).
+3. [BLOCKER] Unequal information: FIXED. Statics, c'B and d'B constants are tuned on the same three known workloads via the tuning blocks (two-stage static search); the W5a table is not used for the statics; the held-out workload never touches them (yaml blocks).
+4. [BLOCKER] Pairing hid infeasibility: FIXED. Infeasible cell = 0 tok/s, no dropping; ties/inconclusive rule; ratio rule; d'B must pass HW1 in every primary scene (yaml HW2; analysis/w5_analysis.py, 13 tests).
+5. [CHANGE] Withdrawn claim: REMOVED from d'B, inputs_from_earlier_work and HW4; replaced by the driver-bug statement and the guard-as-safety-margin wording.
+6. [CHANGE] 8B pre-check timing: yaml now says BEFORE W5a, recorded in an addendum. The check itself is NOT done yet: the models must be downloaded first (waiting for Arjun's licence/download go; journal 0044).
+7. [CHANGE] Admission mismatch: EXPLAINED OFFLINE. It was my analysis (a 6-decimal rounding join lost 4.6% of the rows on 100 ns ticks); with an exact join 0 of 5375 aligned starts violate the fit test, the logged estimate is the one used (journal 0044; tests/test_smoke2_report.py).
+8. [NOTE] Configuration stability: Arjun pauses Windows Update and driver updates; found and fixed a trap that would have changed the exe hash between sessions (the build test rebuilt the exe on every test run; it now restores it).
+9. [NOTE] Reset errors: still logged and handled; three more 'reset not needed' events in the smoke-3 helper log (journal 0043); no action.
