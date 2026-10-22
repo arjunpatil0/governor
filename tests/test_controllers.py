@@ -280,3 +280,66 @@ def test_v2_learns_the_token_curve_of_an_unseen_workload_and_keeps_its_plan_insi
 def test_v1_is_unchanged_when_v2_is_off(P):
     a = ModelController(P, "aligned", power_budget_w=60.0); a.reset(ctx(P)); run_ticks(a, [4.9] * 6, 30)
     assert a.plan["duty"] in tuple(np.round(np.arange(0.1, 1.001, 0.1), 2)) and not hasattr(a, "tok_model")
+
+
+# ---------------------------------------------------------------- d'B v3 (round 3): learned guard from observed overrun, budget-respecting idle branch, power loop on top of the model duty
+def _v3(P, budget=60.0, **kw):
+    m = ModelController(P, "aligned", power_budget_w=budget, v2=True, v3=True, **kw); m.reset(ctx(P))
+    return m
+
+
+def _tick(m, i, clock=2460.0, overrun=None, power=0.0, lat=4.9, tok=9.9):
+    o = pobs(100 + 100 * i, [lat] * 6, power, clock=clock)
+    o.tok_ms = np.full(3, tok)
+    o.overrun_ms = np.array(overrun if overrun is not None else [0.0, 0.0, 0.0])
+    return m.act(o)
+
+
+def test_v3_guard_grows_by_the_observed_overrun_and_decays_slowly_when_there_is_none(P):
+    m = _v3(P)
+    for i in range(30):
+        _tick(m, i)
+    g0 = m.plan["guard_ms"]
+    for i in range(30, 36):
+        _tick(m, i, overrun=[2.0, 0.0, 0.0])
+    g1 = m.plan["guard_ms"]
+    assert g1 > g0 + 1.5
+    for i in range(36, 136):
+        _tick(m, i)
+    assert m.plan["guard_ms"] < g1 and m.plan["guard_ms"] >= g0 - 1e-9
+
+
+def test_v3_idle_branch_obeys_the_power_budget_and_prefers_the_clock_with_most_tokens(P):
+    for budget in (60.0, 35.0):
+        m = _v3(P, budget)
+        for i in range(12):
+            o = pobs(100 + 100 * i, [], 0.0); o.n_arrived = 0
+            a = m.act(o)
+        assert m.plan.get("idle") and m.plan["pred_power"] + m.pbias <= budget + 1e-6 and a.duty <= 1.0 and m.plan["pred_tok"] > 0
+        assert a.clock in (900.0, 1050.0, 1200.0, 1350.0, 1500.0, 1800.0, P.UNLOCKED_MHZ)
+    hi = _v3(P, 60.0); lo = _v3(P, 35.0)
+    for m in (hi, lo):
+        for i in range(12):
+            o = pobs(100 + 100 * i, [], 0.0); o.n_arrived = 0
+            m.act(o)
+    assert hi.plan["pred_tok"] > lo.plan["pred_tok"]
+
+
+def test_v3_power_loop_moves_the_commanded_duty_against_the_measured_power_error(P):
+    m = _v3(P, 60.0, power_gain=0.05)
+    for i in range(30):
+        _tick(m, i, clock=2460.0, power=m.plan["pred_power"] if m.plan else 0.0)
+    d_nominal = m.plan["duty"]
+    a_hi = None
+    for i in range(30, 80):
+        a_hi = _tick(m, i, clock=2460.0, power=80.0)
+    assert a_hi.duty < d_nominal - 0.05
+    for i in range(80, 300):
+        a_lo = _tick(m, i, clock=2460.0, power=20.0)
+    assert a_lo.duty > a_hi.duty + 0.05 and a_lo.duty <= 1.0
+
+
+def test_v1_and_v2_are_unchanged_when_v3_is_off(P):
+    m = ModelController(P, "aligned", power_budget_w=60.0, v2=True); m.reset(ctx(P))
+    run_ticks(m, [4.9] * 6, 30)
+    assert not hasattr(m, "guard_fb")

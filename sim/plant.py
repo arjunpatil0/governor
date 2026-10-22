@@ -50,6 +50,7 @@ class Obs:
     period_ms: float
     deadline_ms: float
     tok_ms: np.ndarray = None        # wall durations (ms) of the bg tokens completed in the tick
+    overrun_ms: np.ndarray = None    # per completed token: how far it ended AFTER the fg arrival that was next when it started (0 = it fitted the slack)
 
 
 @dataclass
@@ -159,6 +160,8 @@ class Plant:
         bg_prog = 0.0
         bg_t0 = 0.0
         bg_f = 1.0
+        bg_na = float("inf")
+        tick_over = []
         jit = P.token_jitter if (bg is not None and bg.jitter) else None
         bg_wake = 0.0
         tok_t = []
@@ -192,9 +195,9 @@ class Plant:
             if bg is not None and not bg_run:
                 if act.pacing == "aligned":
                     if act.duty > 0 and t >= bg_wake - eps and aligned_may_start(t, bool(q), bgdur(eff), act.guard_ms, next_arrival(t)):
-                        bg_run, bg_prog, bg_t0, bg_f = True, 0.0, t, (float(jit[rng.integers(len(jit))]) if jit is not None else 1.0)
+                        bg_run, bg_prog, bg_t0, bg_f, bg_na = True, 0.0, t, (float(jit[rng.integers(len(jit))]) if jit is not None else 1.0), next_arrival(t)
                 elif act.duty > 0 and t >= bg_wake - eps:
-                    bg_run, bg_prog, bg_t0, bg_f = True, 0.0, t, (float(jit[rng.integers(len(jit))]) if jit is not None else 1.0)
+                    bg_run, bg_prog, bg_t0, bg_f, bg_na = True, 0.0, t, (float(jit[rng.integers(len(jit))]) if jit is not None else 1.0), next_arrival(t)
             fg_on = bool(q)
             share = 1.0 / (S * (1.0 + sc.interaction * (1800.0 / eff - 1.0))) if (fg_on and bg_run) else 1.0
             fgd = w[q[0]] * P.fg_ratio(eff) if fg_on else 0.0
@@ -237,7 +240,7 @@ class Plant:
                     tick_missed += 1
             if bg_run and bg_prog >= 1 - 1e-9:
                 bg_run, bg_prog = False, 0.0
-                tok_t.append(t); tick_tok += 1; tick_tokms.append(t - bg_t0)
+                tok_t.append(t); tick_tok += 1; tick_tokms.append(t - bg_t0); tick_over.append(max(0.0, t - bg_na) if bg_na != float("inf") else 0.0)
                 bg_wake = unaligned_wake(bg_t0, t, act.duty) if act.duty > 0 else t     # gap from the MEASURED token time, as the A2 DLL (w2_kernels.cu bg_loop)
             while ai < n and arr[ai] <= t + eps:
                 q.append(ai); ai += 1; tick_arr += 1
@@ -246,9 +249,9 @@ class Plant:
             if t >= next_tick - eps:
                 dtk = t - tick_t0
                 obs = Obs(t_ms=t, lat_ms=np.array(tick_lat), n_missed=tick_missed, n_arrived=tick_arr, tokens=tick_tok,
-                          power_w=(energy - tick_e0) / (dtk * 1e-3) if dtk > 0 else 0.0, clock_mhz=eff, period_ms=fg.period_ms, deadline_ms=fg.deadline_ms, tok_ms=np.array(tick_tokms))
+                          power_w=(energy - tick_e0) / (dtk * 1e-3) if dtk > 0 else 0.0, clock_mhz=eff, period_ms=fg.period_ms, deadline_ms=fg.deadline_ms, tok_ms=np.array(tick_tokms), overrun_ms=np.array(tick_over))
                 tick_lat, tick_missed, tick_arr, tick_tok, tick_e0, tick_t0 = [], 0, 0, 0, energy, t
-                tick_tokms = []
+                tick_tokms, tick_over = [], []
                 tick_t_list.append(t); tick_e_list.append(energy)
                 act = policy.act(obs)
                 actions.append((t, act))

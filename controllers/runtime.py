@@ -24,8 +24,9 @@ class Governor:
         dt = (t_ms - self._t) / 1000.0
         de = 0.0 if self._e is None else energy_j - self._e
         self._t, self._e = t_ms, energy_j
-        tok_ms = tk[:, 1] if tk.ndim == 2 and tk.shape[1] >= 2 else None          # token ring record [t_end_s, token_ms] (older one-field rings: no durations)
-        self.last_obs = self.ob.build(fr, len(tk), de, dt, clock_mhz, t_ms, tok_ms=tok_ms)
+        tok_ms = tk[:, 1] if tk.ndim == 2 and tk.shape[1] >= 2 else None
+        tok_end = tk[:, 0] if tok_ms is not None else None          # token ring record [t_end_s, token_ms] (older one-field rings: no durations)
+        self.last_obs = self.ob.build(fr, len(tk), de, dt, clock_mhz, t_ms, tok_ms=tok_ms, tok_end=tok_end)
         a = self.ctl.act(self.last_obs)
         self.act_.apply(a)
         return a

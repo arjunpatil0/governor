@@ -157,3 +157,13 @@ def test_control_actuator_runs_the_fallback_reset_when_the_helper_reports_a_dirt
     ok = ControlActuator(SeqBlock(nm(), 3, create=True), FakeClock(), unlocked_mhz=P.UNLOCKED_MHZ, fallback_reset=lambda: calls.append("x"))
     ok.apply(Action(clock=1500.0))
     assert "x" not in calls
+
+
+def test_obs_builder_derives_the_slack_overrun_of_each_token_from_the_frame_schedule():
+    ob = ObsBuilder(PERIOD, PERIOD)
+    frames = np.array([[10.000, 10.0005, 10.006], [10.0167, 10.017, 10.023]])               # schedule anchor 10.0167 + k * 16.667 ms
+    # token A: started 10.024, ended 10.0345 (next arrival 10.0333): overran by about 1.2 ms; token B: ended 10.030 before the next arrival
+    o = ob.build(frames, 2, 0.0, 0.1, 1800.0, 100.0, tok_ms=np.array([10.5, 6.0]), tok_end=np.array([10.0345, 10.030]))
+    assert o.overrun_ms[0] == pytest.approx(1.2, abs=0.15) and o.overrun_ms[1] == 0.0
+    idle = ObsBuilder(PERIOD, PERIOD).build(np.empty((0, 3)), 1, 0.0, 0.1, 1800.0, 100.0, tok_ms=np.array([10.0]), tok_end=np.array([20.0]))
+    assert idle.overrun_ms.tolist() == [0.0]                                                # no frames seen yet: no schedule, so no overrun is claimed

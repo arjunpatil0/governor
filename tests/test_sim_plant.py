@@ -222,3 +222,24 @@ def test_observations_carry_the_measured_token_durations(P):
     spy = Spy()
     run(P, scen(fg_periodic(4.0, active=lambda t: False), LLAMA, dur=3000.0), spy)
     assert len(spy.tok_ms) > 150 and np.median(spy.tok_ms) == pytest.approx(1000.0 / P.tok_s(1500), rel=0.02)
+
+
+# ---------------------------------------------------------------- slack overrun observations (round 3, 2026-10-22: the smoke showed tokens ending after the next frame start)
+class OverrunSpy:
+    def __init__(self, guard):
+        self.guard, self.over = guard, []
+
+    def reset(self, ctx=None):
+        return Action(clock=1800, pacing="aligned", duty=1.0, guard_ms=self.guard)
+
+    def act(self, obs):
+        self.over += list(obs.overrun_ms)
+        return Action(clock=1800, pacing="aligned", duty=1.0, guard_ms=self.guard)
+
+
+def test_observations_report_how_far_tokens_end_after_the_next_frame_arrival(P):
+    loose, tight = OverrunSpy(-3.0), OverrunSpy(1.0)
+    run(P, scen(fg_periodic(8.0), LLAMA, dur=5000.0), loose)
+    run(P, scen(fg_periodic(8.0), LLAMA, dur=5000.0), tight)
+    assert max(loose.over) > 1.0 and sum(x > 0 for x in loose.over) > 20
+    assert max(tight.over) == 0.0 and len(tight.over) > 20
