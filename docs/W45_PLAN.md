@@ -89,3 +89,15 @@ High: roughly six working sessions (my estimate, not a measurement), plus one ad
 
 ## Commit plan
 One commit per RED, GREEN, refactor checkpoint (tdd-workflow), a docs commit per phase, a journal entry per session, STATUS.md at every stop, push each session.
+
+---
+# APPROVED 2026-10-22 with three modifications (Arjun + reviewer). Supersedes the unmodified parts of this plan where they conflict.
+Instruction (verbatim): "approve the W4-5 plan with three changes, recorded in the plan and journal ... Then start: simulator -> controllers vs simulator (test-first). Stop before hardware smoke."
+
+1. **Frame-synchronous ("slack-filling") pacing is an actuator option.** Pacing mode `aligned`: bg decode tokens are released right after each fg frame completes, into the predicted slack before the next frame (n tokens such that n x token time <= predicted slack x margin). Mode `unaligned`: the plan's duty cycle (gap after each token = token time x (1/duty - 1), as workloads/common/loadgen.py duty_gap). Both are compared in the simulator and in the W5 evaluation as a pacing-mode factor: controllers c (PI -> duty, unaligned), c' (PI on the slack budget, aligned), d (model-based, unaligned), d' (model-based, aligned).
+2. **Fg-variability scenario.** Frame cost steps/drifts by about +/-30% (light/heavy phases), so adaptation is needed. Best-static is tuned on the tuning seeds only and evaluated on held-out seeds.
+3. **Synthetic frame-paced FMA fg for the MVP, with the feasibility gate** (no governor clearly above 1% misses; best static below 1%). A real application as fg is W6.
+
+Execution scope now: simulator, then controllers vs simulator, test-first. STOP before the hardware smoke (needs Arjun's go, Administrator shell, Armoury Crate mode stated).
+
+Backup: the w2_G copy hash B4581EA7...BEEE3 matches the REC_MANIFEST.sha256 line for cells/b00_00_g_R2/bg_rec.npz (checked by string comparison). That verifies that ONE file; the pasted path was truncated and the other 189 files are not checked.
