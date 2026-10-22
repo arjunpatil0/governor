@@ -1,0 +1,157 @@
+{
+ "meta": {
+  "seeds": [
+   100,
+   101,
+   102,
+   103,
+   104,
+   105,
+   106,
+   107,
+   108,
+   109
+  ],
+  "lam": 0.5,
+  "note": "post-hoc follow-up; chosen on tuning seeds only"
+ },
+ "global_": {},
+ "static_jit": {
+  "S0": {
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   },
+   "_meta": {
+    "tok_s": 59.980000000000004,
+    "power_w": 79.61958587824707,
+    "miss_max_seen": 0.0,
+    "feasible": true
+   }
+  },
+  "S1": {
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   },
+   "_meta": {
+    "tok_s": 53.09818181818181,
+    "power_w": 73.72994094838562,
+    "miss_max_seen": 0.0,
+    "feasible": true
+   }
+  },
+  "S1d": {
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   },
+   "_meta": {
+    "tok_s": 59.04545454545455,
+    "power_w": 79.40004289746233,
+    "miss_max_seen": 0.0,
+    "feasible": true
+   }
+  },
+  "S2": {
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   },
+   "_meta": {
+    "tok_s": 74.93090909090908,
+    "power_w": 84.1093609262112,
+    "miss_max_seen": 0.0,
+    "feasible": true
+   }
+  },
+  "S3": {
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   },
+   "_meta": {
+    "tok_s": 27.25818181818182,
+    "power_w": 46.66481969607992,
+    "miss_max_seen": 0.0,
+    "feasible": true
+   }
+  },
+  "S4": {
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   },
+   "_meta": {
+    "tok_s": 53.239999999999995,
+    "power_w": 73.83541502998128,
+    "miss_max_seen": 0.0,
+    "feasible": true
+   }
+  }
+ },
+ "global_nojit": {
+  "g": {
+   "action": {
+    "clock": 2460.0,
+    "pacing": "unaligned",
+    "duty": 0.05,
+    "guard_ms": 0.5
+   },
+   "tok_s": 3.483333333333333,
+   "power_w": 29.1968215421761,
+   "miss_max_seen": 0.013636363636363636,
+   "feasible": false
+  },
+  "g'": {
+   "action": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   },
+   "tok_s": 54.92636363636365,
+   "power_w": 73.16811832788328,
+   "miss_max_seen": 0.0,
+   "feasible": true
+  }
+ },
+ "global_jit": {
+  "g": {
+   "action": {
+    "clock": 2460.0,
+    "pacing": "unaligned",
+    "duty": 0.05,
+    "guard_ms": 0.5
+   },
+   "tok_s": 3.4615151515151514,
+   "power_w": 29.18240579149921,
+   "miss_max_seen": 0.011212121212121211,
+   "feasible": false
+  },
+  "g'": {
+   "action": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   },
+   "tok_s": 54.592121212121214,
+   "power_w": 72.89319422939457,
+   "miss_max_seen": 0.0,
+   "feasible": true
+  }
+ }
+}
