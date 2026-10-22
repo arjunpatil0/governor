@@ -1,0 +1,217 @@
+{
+ "meta": {
+  "seeds": [
+   100,
+   101,
+   102,
+   103,
+   104,
+   105,
+   106,
+   107,
+   108,
+   109
+  ],
+  "budgets": [
+   60.0,
+   35.0
+  ],
+  "note": "chosen on tuning seeds only; docs/W45_PLAN.md addendum 2026-10-22"
+ },
+ "budget": {
+  "60": {
+   "static": {
+    "S0": {
+     "clock": 2460.0,
+     "pacing": "aligned",
+     "duty": 0.3,
+     "guard_ms": 0.0
+    },
+    "S1": {
+     "clock": 2460.0,
+     "pacing": "aligned",
+     "duty": 0.5,
+     "guard_ms": 0.0
+    },
+    "S1d": {
+     "clock": 2460.0,
+     "pacing": "aligned",
+     "duty": 0.5,
+     "guard_ms": 0.0
+    },
+    "S2": {
+     "clock": 2460.0,
+     "pacing": "aligned",
+     "duty": 0.5,
+     "guard_ms": 0.0
+    },
+    "S3": {
+     "clock": 2460.0,
+     "pacing": "aligned",
+     "duty": 0.6,
+     "guard_ms": 0.0
+    },
+    "S4": {
+     "clock": 2460.0,
+     "pacing": "aligned",
+     "duty": 0.5,
+     "guard_ms": 0.0
+    }
+   },
+   "tuning": {
+    "S0": {
+     "tok_s": 30.0,
+     "power_w": 53.826284852340336,
+     "power_max_seen": 53.8451103827357,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "S1": {
+     "tok_s": 31.352727272727275,
+     "power_w": 54.99954304180386,
+     "power_max_seen": 55.288152142336095,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "S1d": {
+     "tok_s": 29.807272727272725,
+     "power_w": 54.243456900134426,
+     "power_max_seen": 54.298536385099844,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "S2": {
+     "tok_s": 37.49090909090909,
+     "power_w": 51.89784473754189,
+     "power_max_seen": 51.90912787933853,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "S3": {
+     "tok_s": 27.272727272727273,
+     "power_w": 46.6666990776403,
+     "power_max_seen": 46.68242426341618,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "S4": {
+     "tok_s": 31.352727272727275,
+     "power_w": 54.99954304180386,
+     "power_max_seen": 55.288152142336095,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "GLOBAL": {
+     "tok_s": 28.939999999999998,
+     "power_w": 50.81981747376974,
+     "power_max_seen": 55.288152142336095,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    }
+   },
+   "global": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 0.5,
+    "guard_ms": 0.0
+   }
+  },
+  "35": {
+   "static": {
+    "S0": {
+     "clock": 1800,
+     "pacing": "aligned",
+     "duty": 0.7,
+     "guard_ms": 0.0
+    },
+    "S1": {
+     "clock": 1800,
+     "pacing": "aligned",
+     "duty": 0.7,
+     "guard_ms": 0.5
+    },
+    "S1d": {
+     "clock": 1800,
+     "pacing": "aligned",
+     "duty": 0.6,
+     "guard_ms": 0.0
+    },
+    "S2": {
+     "clock": 1500,
+     "pacing": "aligned",
+     "duty": 1.0,
+     "guard_ms": 0.0
+    },
+    "S3": {
+     "clock": 2460.0,
+     "pacing": "aligned",
+     "duty": 0.3,
+     "guard_ms": 0.0
+    },
+    "S4": {
+     "clock": 1800,
+     "pacing": "aligned",
+     "duty": 0.7,
+     "guard_ms": 0.5
+    }
+   },
+   "tuning": {
+    "S0": {
+     "tok_s": 1.6381818181818182,
+     "power_w": 22.5981937824859,
+     "power_max_seen": 22.776051278161507,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "S1": {
+     "tok_s": 21.818181818181817,
+     "power_w": 34.90622326763862,
+     "power_max_seen": 34.92116897258264,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "S1d": {
+     "tok_s": 18.08727272727273,
+     "power_w": 33.04317314551032,
+     "power_max_seen": 33.14197484833261,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "S2": {
+     "tok_s": 35.38181818181818,
+     "power_w": 32.69364822439365,
+     "power_max_seen": 32.70092897219404,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "S3": {
+     "tok_s": 13.636363636363637,
+     "power_w": 34.938836396439676,
+     "power_max_seen": 34.95456158221534,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "S4": {
+     "tok_s": 21.818181818181817,
+     "power_w": 34.90622326763862,
+     "power_max_seen": 34.92116897258264,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    },
+    "GLOBAL": {
+     "tok_s": 14.311515151515152,
+     "power_w": 29.172558255965072,
+     "power_max_seen": 34.921168972582635,
+     "miss_max_seen": 0.0,
+     "feasible": true
+    }
+   },
+   "global": {
+    "clock": 1800,
+    "pacing": "aligned",
+    "duty": 0.8,
+    "guard_ms": 0.5
+   }
+  }
+ }
+}
