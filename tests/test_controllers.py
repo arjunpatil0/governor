@@ -29,7 +29,7 @@ def ctx(P):
 def obs(t, lat, clock=1800.0, n_arrived=None, n_missed=None):
     lat = np.asarray(lat, float)
     return Obs(t_ms=float(t), lat_ms=lat, n_missed=int((lat > PERIOD).sum()) if n_missed is None else n_missed, n_arrived=len(lat) if n_arrived is None else n_arrived,
-               tokens=0, power_w=60.0, clock_mhz=clock, period_ms=PERIOD, deadline_ms=PERIOD)
+               tokens=0, power_w=0.0, clock_mhz=clock, period_ms=PERIOD, deadline_ms=PERIOD)
 
 
 def run_ticks(c, lat, n, clock=1800.0, t0=100.0, n_arrived=None):
@@ -171,3 +171,63 @@ def test_global_static_holds_the_slo_in_every_listed_scenario(P):
     from controllers.static import tune_static_global
     r = tune_static_global(P, "aligned", (100,), ("S0", "S1"), duration_ms=15000.0, clocks=(1800.0, P.UNLOCKED_MHZ))
     assert r["feasible"] and r["miss_max_seen"] <= 0.01 and r["action"].pacing == "aligned"
+
+
+# ---------------------------------------------------------------- power-budget variants (primary objective since 2026-10-22; post-hoc sensitivity on the frozen simulator study)
+def pobs(t, lat, power, clock=1800.0):
+    o = obs(t, lat, clock=clock)
+    o.power_w = power
+    return o
+
+
+def test_pi_aligned_without_a_budget_never_throttles(P):
+    c = PIController(P, "aligned"); c.reset(ctx(P))
+    a = None
+    for i in range(40):
+        a = c.act(pobs(100 + 100 * i, [5.0] * 6, 95.0))
+    assert a.duty == 1.0
+
+
+def test_pi_aligned_throttles_the_token_rate_when_power_exceeds_the_budget_and_releases_it_when_below(P):
+    c = PIController(P, "aligned", power_budget_w=60.0); c.reset(ctx(P))
+    a = None
+    for i in range(40):
+        a = c.act(pobs(100 + 100 * i, [5.0] * 6, 80.0))
+    assert a.duty < 0.9 and a.pacing == "aligned"
+    for i in range(200):
+        a = c.act(pobs(5000 + 100 * i, [5.0] * 6, 30.0))
+    assert a.duty == pytest.approx(1.0)
+
+
+def test_model_without_a_budget_is_unchanged_full_duty_in_aligned_mode(P):
+    m = ModelController(P, "aligned"); m.reset(ctx(P))
+    run_ticks(m, [4.9] * 6, 30)
+    assert m.plan["duty"] == 1.0
+
+
+def test_model_with_a_budget_plans_within_it_and_keeps_the_token_when_the_budget_allows(P):
+    for budget in (60.0, 35.0):
+        m = ModelController(P, "aligned", power_budget_w=budget); m.reset(ctx(P))
+        run_ticks(m, [4.9] * 6, 30)
+        assert m.plan["pred_power"] + m.pbias <= budget + 1e-6 and m.plan["pred_q95_ms"] <= m.safety * PERIOD
+    hi = ModelController(P, "aligned", power_budget_w=60.0); hi.reset(ctx(P)); run_ticks(hi, [4.9] * 6, 30)
+    lo = ModelController(P, "aligned", power_budget_w=35.0); lo.reset(ctx(P)); run_ticks(lo, [4.9] * 6, 30)
+    assert hi.plan["pred_tok"] > lo.plan["pred_tok"] > 0
+
+
+def test_model_learns_a_power_bias_and_keeps_its_plan_inside_the_budget_with_it(P):
+    m = ModelController(P, "aligned", power_budget_w=40.0); m.reset(ctx(P))
+    run_ticks(m, [4.9] * 6, 30)
+    for i in range(80):
+        m.act(pobs(5000 + 100 * i, [4.9] * 6, m.plan["pred_power"] + 10.0))
+    assert m.pbias > 7.0 and m.plan["pred_power"] + m.pbias <= 40.0 + 1e-6
+
+
+def test_statics_tuned_under_a_power_budget_respect_it_and_a_lower_budget_gives_fewer_tokens(P):
+    from controllers.static import tune_static, tune_static_global
+    clocks = (900.0, 1200.0, 1500.0, 1800.0, P.UNLOCKED_MHZ)
+    hi = tune_static_global(P, "aligned", (100,), ("S0", "S1"), duration_ms=15000.0, clocks=clocks, power_budget_w=60.0)
+    lo = tune_static_global(P, "aligned", (100,), ("S0", "S1"), duration_ms=15000.0, clocks=clocks, power_budget_w=35.0)
+    assert hi["feasible"] and lo["feasible"] and hi["power_max_seen"] <= 60.0 and lo["power_max_seen"] <= 35.0 and 0 < lo["tok_s"] < hi["tok_s"]
+    one = tune_static(P, "S1", "aligned", (100,), duration_ms=15000.0, clocks=clocks, power_budget_w=60.0)
+    assert one["feasible"] and one["power_max_seen"] <= 60.0

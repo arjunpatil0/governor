@@ -176,3 +176,23 @@ def test_token_jitter_keeps_the_L_throughput_but_makes_a_zero_guard_overrun(P):
     g0 = summarise(run(P, sc, Action(clock=P.UNLOCKED_MHZ, pacing="aligned", guard_ms=0.0)))
     g3 = summarise(run(P, sc, Action(clock=P.UNLOCKED_MHZ, pacing="aligned", guard_ms=3.0)))
     assert g0["lat_p99_ms"] > g3["lat_p99_ms"] + 0.1
+
+
+# ---------------------------------------------------------------- aligned pacing with a duty throttle (power-budget follow-up)
+def test_aligned_duty_throttle_scales_free_running_tokens(P):
+    sc = scen(fg_periodic(4.0, active=lambda t: False), LLAMA, dur=10000.0)
+    full = summarise(run(P, sc, Action(clock=1500, pacing="aligned", duty=1.0, guard_ms=0.0)))
+    half = summarise(run(P, sc, Action(clock=1500, pacing="aligned", duty=0.5, guard_ms=0.0)))
+    assert half["bg_tok_s"] == pytest.approx(0.5 * full["bg_tok_s"], rel=0.03) and half["power_w"] < full["power_w"]
+
+
+def test_aligned_duty_throttle_cuts_tokens_per_frame_and_leaves_the_fg_alone(P):
+    sc = scen(fg_periodic(4.0), LLAMA, dur=20000.0)
+    full = summarise(run(P, sc, Action(clock=P.UNLOCKED_MHZ, pacing="aligned", duty=1.0, guard_ms=0.5)))
+    thr = summarise(run(P, sc, Action(clock=P.UNLOCKED_MHZ, pacing="aligned", duty=0.3, guard_ms=0.5)))
+    assert 25.0 < thr["bg_tok_s"] < 35.0 < full["bg_tok_s"] and thr["lat_p99_ms"] == pytest.approx(full["lat_p99_ms"], rel=1e-3) and thr["power_w"] < full["power_w"]
+
+
+def test_aligned_duty_zero_pauses_the_background(P):
+    s = summarise(run(P, scen(fg_periodic(4.0), LLAMA, dur=5000.0), Action(clock=1800, pacing="aligned", duty=0.0, guard_ms=0.5)))
+    assert s["bg_tok_s"] == 0.0

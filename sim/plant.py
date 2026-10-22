@@ -34,7 +34,7 @@ ASSUMPTIONS = (
 class Action:
     clock: float = 1800.0
     pacing: str = "unaligned"        # "unaligned" | "aligned"
-    duty: float = 1.0                # unaligned: fraction of time the bg may run
+    duty: float = 1.0                # fraction of time the bg may run (gap after each token); aligned mode: power-budget throttle on top of the slack test
     guard_ms: float = 0.5            # aligned: slack kept free before the next fg arrival
 
 
@@ -188,7 +188,7 @@ class Plant:
             # ---- bg start rule
             if bg is not None and not bg_run:
                 if act.pacing == "aligned":
-                    if aligned_may_start(t, bool(q), bgdur(eff), act.guard_ms, next_arrival(t)):
+                    if act.duty > 0 and t >= bg_wake - eps and aligned_may_start(t, bool(q), bgdur(eff), act.guard_ms, next_arrival(t)):
                         bg_run, bg_prog, bg_t0, bg_f = True, 0.0, t, (float(jit[rng.integers(len(jit))]) if jit is not None else 1.0)
                 elif act.duty > 0 and t >= bg_wake - eps:
                     bg_run, bg_prog, bg_t0, bg_f = True, 0.0, t, (float(jit[rng.integers(len(jit))]) if jit is not None else 1.0)
@@ -206,7 +206,7 @@ class Plant:
                 cand.append(t + (1 - prog) * fgd / share)
             if bg_run:
                 cand.append(t + (1 - bg_prog) * bgd / share)
-            elif bg is not None and act.pacing == "unaligned" and act.duty > 0 and bg_wake > t + eps:
+            elif bg is not None and act.duty > 0 and bg_wake > t + eps:
                 cand.append(bg_wake)
             tn = min(cand)
             dt = max(tn - t, 0.0)

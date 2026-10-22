@@ -13,11 +13,13 @@ from controllers.common import ALLOWED_CLOCKS, IdleDetector, Window, knee_clock
 from sim.plant import Action
 
 DUTIES = tuple(np.round(np.arange(0.02, 1.001, 0.02), 2))
+A_DUTIES = tuple(np.round(np.arange(0.1, 1.001, 0.1), 2))        # aligned-mode throttle grid (only with a power budget)
 
 
 class ModelController:
-    def __init__(self, P, pacing="unaligned", lam=0.5, safety=0.9, alpha=0.2, gamma_alpha=0.1, sigma0=0.03, clock_every=10, switch_gain=0.5, win=5):
+    def __init__(self, P, pacing="unaligned", lam=0.5, safety=0.9, alpha=0.2, gamma_alpha=0.1, sigma0=0.03, clock_every=10, switch_gain=0.5, win=5, power_budget_w=None):
         self.P, self.pacing, self.lam, self.safety = P, pacing, lam, safety
+        self.power_budget_w = power_budget_w
         self.alpha, self.gamma_alpha, self.sigma0, self.clock_every, self.switch_gain, self.win = alpha, gamma_alpha, sigma0, clock_every, switch_gain, win
         self.name = "d" if pacing == "unaligned" else "d'"
         base = P.sa4["sa4_fg4_alone"]["lat_p99_ms"]
@@ -35,6 +37,7 @@ class ModelController:
         self.w5, self.idle = Window(self.win), IdleDetector()
         self.plan = {}
         self._prev_pred = None
+        self.pbias, self._prev_power = 0.0, None
         return Action(clock=self.clock, pacing=self.pacing, duty=0.2, guard_ms=1.0)
 
     # ---- calibration
@@ -52,6 +55,8 @@ class ModelController:
         if self.pacing == "unaligned" and self._prev_pred and len(lat) >= 3:
             r = float(np.percentile(lat, 95)) / self._prev_pred
             self.gamma = float(np.clip(self.gamma * r ** self.gamma_alpha, 0.3, 6.0))
+        if self.power_budget_w is not None and self._prev_power is not None and obs.power_w > 0:
+            self.pbias += 0.05 * ((obs.power_w - self._prev_power) - self.pbias)         # observed minus planned GPU power, EWMA
         if obs.n_missed > 0:
             self.extra = min(self.extra + 1.0, 6.0)
         else:
@@ -77,8 +82,10 @@ class ModelController:
                 guard = max(0.3, 3.0 * self.sigma * alone + 0.2) + self.extra
                 n = max(0, int(np.floor((self.period - alone - guard) / tok_ms)))
                 q95 = alone * (1 + 1.64 * self.sigma)
-                tok = n * 1000.0 / self.period
-                yield f, dict(clock=f, duty=1.0, guard_ms=float(guard), n_tok=n, pred_q95_ms=q95, pred_tok=tok, pred_power=self._power(f, u, n * tok_ms / self.period))
+                for d in (A_DUTIES if self.power_budget_w is not None else (1.0,)):
+                    n_eff = min(n, d * self.period / tok_ms) if self.power_budget_w is not None else n         # duty gap limits the tokens per frame
+                    tok = n_eff * 1000.0 / self.period
+                    yield f, dict(clock=f, duty=float(d), guard_ms=float(guard), n_tok=n, pred_q95_ms=q95, pred_tok=tok, pred_power=self._power(f, u, n_eff * tok_ms / self.period))
 
     def _decide(self, search_all):
         P = self.P
@@ -87,7 +94,9 @@ class ModelController:
         for f, c in self._candidates(clocks):
             if c["pred_q95_ms"] > self.safety * self.deadline:
                 continue
-            c["objective"] = c["pred_tok"] - self.lam * c["pred_power"]
+            if self.power_budget_w is not None and c["pred_power"] + self.pbias > self.power_budget_w:
+                continue
+            c["objective"] = c["pred_tok"] - (1e-3 if self.power_budget_w is not None else self.lam) * c["pred_power"]       # budget mode: maximise tokens, power only breaks ties
             if best is None or c["objective"] > best["objective"] + 1e-9:
                 best = c
             if f == self.clock and (best_cur is None or c["objective"] > best_cur["objective"]):
@@ -115,5 +124,6 @@ class ModelController:
         best = self._decide(search_all=(self.tick % self.clock_every == 0))
         self.clock = float(best["clock"])
         self.plan = best
+        self._prev_power = best["pred_power"]
         self._prev_pred = best["pred_q95_ms"] if self.pacing == "unaligned" else None
         return Action(clock=self.clock, pacing=self.pacing, duty=best["duty"], guard_ms=best["guard_ms"])

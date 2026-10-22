@@ -6,6 +6,8 @@ Pacing loop, every tick (100 ms): error e = (target x deadline - q95 of recent f
 Clock rule, every clock_every ticks (1 s; the clock actuator takes ~443 ms and is rate-limited): estimate the alone frame cost at 1800 MHz from the low
 quantile (unaligned) / median (aligned) of recent latencies and pick the LOWEST allowed clock whose predicted frame time fits clock_margin x deadline
 (aligned: and a bg token still fits before the next frame). Hysteresis on downward moves. fg idle (no arrivals) -> knee clock, bg free."""
+from collections import deque
+
 import numpy as np
 
 from controllers.common import ALLOWED_CLOCKS, IdleDetector, Window, knee_clock
@@ -14,11 +16,12 @@ from sim.plant import Action
 
 class PIController:
     def __init__(self, P, pacing="unaligned", kp=0.5, ki=0.15, target=0.8, clock_margin=0.6, hyst=0.05, duty0=0.2, dmin=0.02, guard0=1.0,
-                 gmin=0.5, gmax=8.0, clock_every=10, win=5, fit_hyst_ms=0.3):
+                 gmin=0.5, gmax=8.0, clock_every=10, win=5, fit_hyst_ms=0.3, power_budget_w=None, power_gain=0.03):
         self.P, self.pacing = P, pacing
         self.kp, self.ki, self.target, self.clock_margin, self.hyst = kp, ki, target, clock_margin, hyst
         self.duty0, self.dmin, self.guard0, self.gmin, self.gmax = duty0, dmin, guard0, gmin, gmax
         self.clock_every, self.win, self.fit_hyst_ms = clock_every, win, fit_hyst_ms
+        self.power_budget_w, self.power_gain = power_budget_w, power_gain      # aligned only: a PI loop on mean GPU power throttles the token rate (duty gap) to meet the budget
         self.name = "c" if pacing == "unaligned" else "c'"
 
     def reset(self, ctx):
@@ -26,16 +29,22 @@ class PIController:
         self.duty, self.guard, self.e_prev, self.tick = self.duty0, self.guard0, 0.0, 0
         self.clock = float(self.P.UNLOCKED_MHZ)
         self.w5, self.w20, self.idle = Window(self.win), Window(20), IdleDetector()
+        self.pduty, self.pw = 1.0, deque(maxlen=10)
         return self._action()
 
     def _action(self, idle=False):
         if self.pacing == "unaligned":
             return Action(clock=self.clock, pacing="unaligned", duty=1.0 if idle else self.duty)
-        return Action(clock=self.clock, pacing="aligned", guard_ms=self.guard)
+        return Action(clock=self.clock, pacing="aligned", duty=self.pduty, guard_ms=self.guard)
 
     def act(self, obs):
         self.tick += 1
         self.w5.add(obs.lat_ms); self.w20.add(obs.lat_ms)
+        if self.power_budget_w is not None and self.pacing == "aligned":
+            self.pw.append(obs.power_w)
+            if len(self.pw) >= 5:
+                e_p = (0.97 * self.power_budget_w - float(np.mean(self.pw))) / self.power_budget_w
+                self.pduty = float(np.clip(self.pduty + self.power_gain * e_p, 0.05, 1.0))
         if self.idle.update(obs):
             self.clock = float(knee_clock(self.P))
             return self._action(idle=True)

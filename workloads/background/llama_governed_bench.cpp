@@ -6,7 +6,7 @@
 //   pace_block (fg -> driver, 3 doubles): [fg_busy (0/1), t_next_arrival_s, t_updated_s]; older than 100 ms = the fg is idle -> the background runs free
 //   token_ring (driver -> daemon, 1 double per token): QPC end time of each token (seconds)
 // Pacing decisions are the shared pure functions in pacing.h (mirror of sim/pacing.py): unaligned = gap of measured_token_time * (1/duty - 1) after each token;
-// aligned = start a token only while no fg frame is busy and now + token_estimate + guard <= next fg arrival.
+// aligned = start a token only while no fg frame is busy and now + token_estimate + guard <= next fg arrival AND the duty gap since the previous token has passed (duty 1 = no gap; used as the power-budget throttle).
 #include <windows.h>
 #include <intrin.h>
 #include <cstdio>
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
                 if (c[0] < 0.5) break;                            // the governor switched to duty pacing
                 bool busy = false; double next_ms = inf;
                 if (pace.read(pc) && now_s - pc[2] <= 0.1) { busy = pc[0] != 0.0; next_ms = pc[1] * 1000.0; }
-                if (pacing::aligned_may_start(now_s * 1000.0, busy, have_est ? tok_est_ms : 0.0, c[2], next_ms)) break;
+                if (c[1] > 0.0 && now_s * 1000.0 >= wake_ms && pacing::aligned_may_start(now_s * 1000.0, busy, have_est ? tok_est_ms : 0.0, c[2], next_ms)) break;     // aligned also honours the duty gap (power budget throttle)
                 YieldProcessor();
             }
         } else {                                                  // unaligned duty cycle
