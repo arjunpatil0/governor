@@ -53,3 +53,16 @@ def test_pareto_front_keeps_non_dominated_points_with_more_tokens_and_less_power
     from w45_sim_report import pareto_front
     pts = {"x": (50.0, 80.0), "y": (30.0, 45.0), "z": (30.0, 60.0), "w": (50.0, 80.0)}
     assert pareto_front(pts) == {"x", "y", "w"}          # z is dominated by y; ties are not dominated
+
+
+def test_round3_reading_requires_s5_wins_and_non_inferiority_by_the_ci_lower_bound():
+    from w45_sim_round3 import earns_place_r3, paired_ratio
+    df = pd.DataFrame([dict(controller=c, scenario="S0", seed=300 + i, feasible=True, bg_tok_s=v) for i in range(30) for c, v in (("A", 96.0 + 0.01 * i), ("B", 100.0 + 0.01 * i))])
+    r = paired_ratio(df, "A", "B", "S0", seed=1)
+    assert r["n"] == 30 and 0.95 < r["median"] < 0.97 and r["lo"] > 0.95
+    win = dict(n=30, lo=0.5, hi=1.0, median=0.7)
+    ni_ok, ni_bad = dict(n=30, lo=0.96, hi=1.0, median=0.98), dict(n=30, lo=0.90, hi=0.94, median=0.92)
+    base = dict(s5_wins={"c'B": win, "g'B": win, "eB": win}, ni={"S0": ni_ok, "S2": ni_ok})
+    assert earns_place_r3(base)
+    assert not earns_place_r3(dict(base, ni={"S0": ni_bad, "S2": ni_ok}))
+    assert not earns_place_r3(dict(base, s5_wins={"c'B": win, "g'B": dict(win, lo=-0.1), "eB": win}))
