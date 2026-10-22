@@ -1,19 +1,18 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-22 · Phase: W4-5. Smoke 2 analysed; driver bug fixed; hybrid d'B written test-first; smoke 3 READY for you. Yaml draft 3b is UNCOMMITTED (excluded from git) for re-review.
+Updated 2026-10-23 · Phase: W4-5. Reviewer decisions on smoke 2 applied; the FINAL driver (pace-view fix + clean-token estimate) is built; smoke 3 READY for you. Yaml draft 3b is UNCOMMITTED (excluded from git) for re-review.
 
-## Just did (journal 0041; report data/w45_smoke/smoke2_report.md)
-- Guard-0 overrun explained: not the guard. The driver treated a failed (mid-write) pace-block read as "fg idle", so tokens started at every fg publish (all stretched tokens start exactly 1.0 ms before an arrival; guard 0/0.5/1/2 ms give the same 27-30% long tokens; the driver's own fit test would admit 0-0.3% of the logged starts). Mechanism reproduced with the real C++ reader (25368 phantom-idle polls in 5 s vs 0 after the fix). Fixed in workloads/background/pace_view.h, exe rebuilt (needs a warm). Not proven per token.
-- Measured: clean token 10.1 ms, overlapped token 20.7 ms (2.05x), overlapped frame 13.1 ms (1.95x); fg met the deadline in every run (p99 13.5 ms). My smoke-script tok/s for the background alone (57) was wrong (context limit); true 100.2 tok/s.
-- Learned-guard recommendation: keep the design; confirm with smoke 3; possible clean-token-only estimate in the driver afterwards (journal 0041).
-- Hybrid d'B implemented test-first (controllers/hybrid.py, tests/test_hybrid.py 6 tests); NOT simulated, not in sim/run.py. Yaml: S2 relabelled hand-over safety check; two new reviewer questions.
+## Just did (journal 0042)
+- Correction recorded: smoke-1 "guard must be learned / guard 0 unsafe" WITHDRAWN; smoke-1 aligned-driver and governor numbers (c'B 5.7% miss, tok/s) INVALID (data/w45_smoke/smoke1/README_INVALID.md); the learned controller is justified by the unseen workload and the per-workload clock choice under a power budget. No W1/W2 experiment used the pace-block reader (shm/ring code first committed 2026-10-22, after W2 closed).
+- Granularity limitation recorded (plan addendum H, yaml limitations, PAPER_MAP 23, CONCEPTS): a clean token (10.1 ms) exceeds the slack at c0 >= about 6.6 ms; aligned admits <= 1 token/frame (about 60 tok/s) at light frames and about none at heavier ones; sub-token pacing = future work.
+- Yaml: HW0 unchanged + c0 grid {7, 8, 9, 10, 11} ms (smallest meeting the gate); no open reviewer questions.
+- Clean-token estimate implemented test-first (workloads/background/tok_estimate.h; 4 C++-vs-Python tests + source test), driver rebuilt, both estimates and the overlap flag logged per token in the driver CSV.
 
 ## Waiting for
-1. You: smoke 3 (docs/W45_SMOKE3_SETUP.md: Admin window restarts the helper; second window `warm` then `gate`; hands off), then in the ADMIN window paste `nvidia-smi -q -d CLOCK | Select-String "Applications|SM"` and `Get-Content C:\ProgramData\governor\clock_helper.log -Tail 30`.
-2. Reviewer: re-review yaml draft 3b (HW0 gate needs a larger c0 than 7 ms; driver token-estimate question).
+1. You: smoke 3 with the commands in docs/W45_SMOKE3_SETUP.md (given again in chat, including warm).
+2. Reviewer: re-review yaml draft 3b.
 
 ## Next (after smoke 3)
-Addendum with the smoke-3 result, decide the driver token estimate, then W5a (load pre-check addendum first).
+Addendum with the smoke-3 result (fit test at costs 4 / 7 / 9 ms, both estimates), then W5a (load pre-check addendum first).
 
 ## Notes
-- Simulator frozen. Everything measured with the old driver describes a driver that ignored its own fit test.
-- Run checklist: Administrator PowerShell; AC power; clean committed tree; Armoury mode stated; Chrome closed; tray apps quit; no clicking; warm every new exe (the driver exe was rebuilt again).
+- Simulator frozen. Run checklist: Administrator PowerShell; AC power; clean committed tree; Armoury mode stated; Chrome closed; tray apps quit; no clicking; warm every new exe (the driver exe was rebuilt twice since smoke 2; `warm` is step 1).

@@ -1,6 +1,6 @@
 # W4-5 hardware smoke 3 (diagnostic, NOT a result; written 2026-10-22)
 Question: with the pace-view fix (journal 0041), does the driver's fit test gate the tokens? Aligned guard 0 and 1 ms at constant frame cost 4 ms (slack about 12.7 ms), 7 ms (about 9.7 ms) and 9 ms (about 7.6 ms) against a 10.1 ms token, plus an unaligned reference at 9 ms (does overlap break the deadline there?).
-Expected (an expectation, not a result): cost 4: tokens fit, few long tokens; cost 7: almost no tokens start; cost 9: none start. 6 runs of 25 s, clock unlocked. Records tok_ms, overrun and fg latency per run; analysis: python analysis/smoke2_report.py data/w45_smoke/smoke3
+Expected (an expectation, not a result): cost 4: tokens fit, few long tokens; cost 7: almost no tokens start; cost 9: none start. 6 runs of 25 s, clock unlocked. Records tok_ms, overrun, fg latency, both token estimates and the overlap flag per run; analysis: python analysis/smoke2_report.py data/w45_smoke/smoke3
 
 ## Before you start (hands off the machine during the run)
 AC power; Armoury Crate mode Performance; Chrome closed; tray apps quit.

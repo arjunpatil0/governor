@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 D = (ROOT / sys.argv[1]) if len(sys.argv) > 1 else ROOT / "data" / "w45_smoke" / "smoke2"      # run directory with overrun.json
@@ -31,7 +32,7 @@ def main():
     L = ["# W4-5 hardware smoke 2: token durations and overrun (DIAGNOSTIC, not a registered result; journal 0041)", "",
          f"Source: {D.relative_to(ROOT).as_posix()}/overrun.json and overrun_raw_*.json. Long token = tok_ms > {LONG_MS:.0f} ms. 'fit test would admit' = the driver's rule now + EWMA estimate + guard <= next arrival, "
          "evaluated at the logged token start with the estimate reconstructed from the logged durations (the driver's own 0.9/0.1 EWMA).", "",
-         "| run | cost ms | tokens | true tok/s (DONE line) | fg p50 / p99 ms | fg miss | long tokens | clean tok_ms p50 | long tok_ms p50 | start phase after arrival, clean p50 [p10, p90] | long p50 | fit test would admit |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+         "| run | cost ms | tokens | true tok/s (DONE line) | fg p50 / p99 ms | fg miss | long tokens | clean tok_ms p50 | long tok_ms p50 | start phase after arrival, clean p50 [p10, p90] | long p50 | fit test would admit | driver overlap flag | est EWMA / clean p50 (logged) |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in runs:
         raw = json.loads((D / f"overrun_raw_{r['label']}.json").read_text(encoding="utf-8"))
         te, tm, a = np.array(raw["tok_end"]), np.array(raw["tok_ms"]), np.array(raw["arrivals"])
@@ -51,8 +52,15 @@ def main():
             ph_l = f"{q(ph[lng], 50):.2f}" if lng.any() else "-"
         else:
             ph_s = ph_l = admit = "-"
+        dc = D / f"driver_{r['label']}.csv"
+        lg = pd.read_csv(dc) if dc.exists() else pd.DataFrame()
+        if "est_clean_ms" in lg.columns:          # smoke 3 driver: both estimates and the overlap flag are logged per token
+            ovf = f"{100 * float(lg.overlapped.mean()):.0f}%"
+            ests = f"{lg.est_ewma_ms.median():.2f} / {lg.est_clean_ms.median():.2f}"
+        else:
+            ovf = ests = "-"
         fg = "-" if not r["frames"] else f"{r['fg_p50_ms']:.2f} / {r['fg_p99_ms']:.2f}"
-        L.append(f"| {r['label']} | {r.get('cost_ms', 'S0 (7)')} | {int(n)} | {tok_s:.1f} | {fg} | {r['fg_miss_frac']:.3f} | {100 * float(lng.mean()):.0f}% | {q(tm[~lng], 50):.2f} | {q(tm[lng], 50):.2f} | {ph_s} | {ph_l} | {admit} |")
+        L.append(f"| {r['label']} | {r.get('cost_ms', 'S0 (7)')} | {int(n)} | {tok_s:.1f} | {fg} | {r['fg_miss_frac']:.3f} | {100 * float(lng.mean()):.0f}% | {q(tm[~lng], 50):.2f} | {q(tm[lng], 50):.2f} | {ph_s} | {ph_l} | {admit} | {ovf} | {ests} |")
     L += ["", "Reading: see journal 0041. The table is produced by analysis/smoke2_report.py from the files above; nothing in it is estimated."]
     (D.parent / f"{D.name}_report.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     print("\n".join(L))

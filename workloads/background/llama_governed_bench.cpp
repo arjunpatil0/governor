@@ -20,6 +20,7 @@
 #include "llama.h"
 #include "pace_view.h"
 #include "pacing.h"
+#include "tok_estimate.h"
 #include "shm.h"
 
 static std::string g_log;
@@ -82,7 +83,7 @@ int main(int argc, char **argv) {
     llama_sampler *smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
     llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
     llama_token cur = llama_sampler_sample(smpl, ctx, -1);
-    std::vector<double> te; std::vector<llama_token> ids; te.reserve(1 << 18); ids.reserve(1 << 18);
+    std::vector<double> te, tl_ms, tl_ewma, tl_clean; std::vector<char> tl_ov; std::vector<llama_token> ids; te.reserve(1 << 18); ids.reserve(1 << 18);
     if (t_sync < 0) { t_stop = qpc_now() + t_stop; t_sync = 0; }
     while (qpc_now() < t_sync) Sleep(1);
 
@@ -94,8 +95,8 @@ int main(int argc, char **argv) {
         if (qpc_now() - t_wait0 > 10.0) return die("no control block written by the governor within 10 s");
         Sleep(5);
     }
-    double tok_est_ms = 0.0, wake_ms = 0.0;
-    bool have_est = false;
+    double wake_ms = 0.0;
+    tokest::TokenEstimate west;                                  // fit-test estimate: median of recent tokens not overlapped by a frame (journal 0042); the EWMA of all tokens is logged beside it
     const double inf = std::numeric_limits<double>::infinity();
     while (qpc_now() < t_stop && (int)ids.size() + n_prompt + 2 < (int)cp.n_ctx) {
         ctrl.read(c);
@@ -107,7 +108,7 @@ int main(int argc, char **argv) {
                 if (c[0] < 0.5) break;                            // the governor switched to duty pacing
                 bool busy = false; double next_ms = inf;
                 pview.get(pace, now_s, 0.1, busy, next_ms);                  // a failed (mid-write) read keeps the last good value; it is NOT 'fg idle' (journal 0041)
-                if (c[1] > 0.0 && now_s * 1000.0 >= wake_ms && pacing::aligned_may_start(now_s * 1000.0, busy, have_est ? tok_est_ms : 0.0, c[2], next_ms)) break;     // aligned also honours the duty gap (power budget throttle)
+                if (c[1] > 0.0 && now_s * 1000.0 >= wake_ms && pacing::aligned_may_start(now_s * 1000.0, busy, west.have() ? west.value() : 0.0, c[2], next_ms)) break;     // aligned also honours the duty gap (power budget throttle)
                 YieldProcessor();
             }
         } else {                                                  // unaligned duty cycle
@@ -120,6 +121,9 @@ int main(int argc, char **argv) {
             }
         }
         if (qpc_now() >= t_stop) break;
+        bool b0 = false; double nx0 = inf;
+        pview.get(pace, qpc_now(), 0.1, b0, nx0);                   // the arrival this token is gated against (inf = fg idle)
+        const double est_ewma = west.ewma(), est_clean = west.clean();
         double t0 = qpc_now();
         if (llama_decode(ctx, llama_batch_get_one(&cur, 1)) != 0) return die("decode failed");
         cur = llama_sampler_sample(smpl, ctx, -1);                // reads logits: synchronises with the GPU
@@ -128,15 +132,18 @@ int main(int argc, char **argv) {
         double tok_ms = (t1 - t0) * 1000.0;
         double rec[2] = {t1, tok_ms};
         ring.push(rec);
-        tok_est_ms = have_est ? 0.9 * tok_est_ms + 0.1 * tok_ms : tok_ms;
-        have_est = true;
+        bool b1 = false; double nx1 = inf;
+        pview.get(pace, t1, 0.1, b1, nx1);
+        const bool ov = tokest::token_overlapped(t1 * 1000.0, nx0, t0 * 1000.0, pview.have, pview.last[2] * 1000.0);
+        west.push(tok_ms, ov);
+        tl_ms.push_back(tok_ms); tl_ov.push_back(ov ? 1 : 0); tl_ewma.push_back(est_ewma); tl_clean.push_back(est_clean);
         ctrl.read(c);
         wake_ms = pacing::unaligned_wake(t0 * 1000.0, t1 * 1000.0, c[1]);
     }
     FILE *o = fopen(out_path, "w");
     if (!o) return die("cannot open output");
-    fprintf(o, "t_tok_end,token\n");
-    for (size_t i = 0; i < te.size(); i++) fprintf(o, "%.9f,%d\n", te[i], (int)ids[i]);
+    fprintf(o, "t_tok_end,token,tok_ms,overlapped,est_ewma_ms,est_clean_ms\n");          // the estimates are the values in force when the token STARTED (est_clean_ms is nan until a clean token exists)
+    for (size_t i = 0; i < te.size(); i++) fprintf(o, "%.9f,%d,%.4f,%d,%.4f,%.4f\n", te[i], (int)ids[i], tl_ms[i], (int)tl_ov[i], tl_ewma[i], tl_clean[i]);
     fclose(o);
     printf("DONE tokens=%zu t_first=%.6f t_last=%.6f ctx_end=%d\n", te.size(), te.empty() ? 0.0 : te.front(), te.empty() ? 0.0 : te.back(), n_prompt + (int)ids.size());
     llama_sampler_free(smpl); llama_free(ctx); llama_model_free(model); llama_backend_free();

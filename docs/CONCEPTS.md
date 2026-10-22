@@ -92,3 +92,10 @@ Duty cycle (unaligned): the background sleeps measured_token_time x (1/d - 1) af
 
 ## Time-slice share divisor S (simulator)
 While both contexts have work each runs at 1/S of its solo speed. G gives 2 + 2s/q = 2.79 from the slice and gap lengths; fitting the plant to the A2 SA4 anchors gives S = 2.5 (data/sim_calibration.json, RMSE of log mean latency 0.030). The A2 duty gap is computed from the MEASURED slice time (w2_kernels.cu bg_loop), which is why a duty-cycled background interferes less than a fixed-gap model predicts.
+
+
+## Seqlock read failure is not 'idle' (torn read)
+A shared-memory block with a sequence counter (seqlock) is read by retrying while the writer is mid-write (odd counter). After a bounded number of retries the reader gives up. A reader that treats 'gave up' as 'no data / the other side is idle' acts on the WRONG state exactly when the writer is busy publishing. Here the governed driver read 'fg idle', so it started tokens at every fg publish and ignored the guard (journal 0041). Rule: a failed read keeps the last good value; only 'never written' or 'older than the staleness bound' means idle.
+
+## Granularity of aligned (slack-filling) pacing
+Slack filling can only start whole tokens. If one token (10.1 ms for the 3B model) is longer than the slack (period minus frame time), no token is admitted; if the slack holds exactly one, throughput is capped at one token per frame (60 tok/s at 60 Hz) even though the background alone does 100 tok/s. Pacing inside a token (layer level) would remove the limit and is future work (journal 0042).

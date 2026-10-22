@@ -57,3 +57,9 @@ def test_pace_view_never_reports_idle_while_the_fg_publishes_a_finite_next_arriv
 def test_the_governed_driver_uses_the_pace_view_not_a_bare_read():
     src = (ROOT / "workloads" / "background" / "llama_governed_bench.cpp").read_text(encoding="utf-8")
     assert "pview.get(" in src and "pace.read(" not in src
+
+
+def test_the_governed_driver_uses_the_clean_token_estimate_and_logs_both_estimates():
+    src = (ROOT / "workloads" / "background" / "llama_governed_bench.cpp").read_text(encoding="utf-8")
+    assert "tokest::TokenEstimate" in src and "west.value()" in src and "tok_est_ms" not in src
+    assert "est_ewma_ms" in src and "est_clean_ms" in src and "overlapped" in src

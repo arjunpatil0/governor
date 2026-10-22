@@ -160,3 +160,11 @@ About 20 min of GPU time with the helper: token durations and overrun past the n
 - **Hybrid d'B** implemented (controllers/hybrid.py, tests/test_hybrid.py); not simulated.
 - **S2 non-inferiority** kept as a hand-over safety check (reviewer answer).
 - **HW0 note:** at the nominal cost 7 ms arm a does not miss on hardware (fg p99 13.5 ms with a token running), so c0 will have to be raised on the tuning blocks for the registered feasibility gate to be satisfiable.
+
+
+---
+# ADDENDUM H 2026-10-23 (reviewer decisions on smoke 2; recorded BEFORE smoke 3, W5a and any W5b data)
+- **Withdrawn:** the smoke-1 conclusion "the guard must be learned / aligned guard 0 is unsafe on hardware" (cause: the driver's torn-read-as-idle bug, addendum G). The justification for a learned controller is the unseen workload (sim S5) and the per-workload clock choice under a power budget. Smoke-1 aligned-driver and governor numbers (c'B 5.7% miss) are INVALID (data/w45_smoke/smoke1/README_INVALID.md). No W1/W2 experiment used the pace-block reader.
+- **Granularity limitation:** a clean token (10.1 ms) is longer than the slack once the frame cost is >= about 6.6 ms; aligned pacing admits at most one token per frame (about 60 tok/s at 60 Hz) at light frames and about none at heavier ones, where the controller must choose unaligned pacing. Sub-token (layer-level) pacing is future work and a stated limitation.
+- **Feasibility gate:** unchanged; the tuning blocks search c0 over {7, 8, 9, 10, 11} ms and take the smallest c0 meeting the registered gate.
+- **Driver token estimate:** median of the last 8 non-overlapped tokens (both estimates logged); implemented test-first and rebuilt before smoke 3 (journal 0042).
