@@ -32,3 +32,15 @@ def test_feasibility_gate_no_governor_misses_over_5_percent_in_s1_but_a_static_s
     for pacing in ("unaligned", "aligned"):
         r = tune_static(P, "S1", pacing, TUNING_SEEDS[:2])
         assert r["feasible"] and r["miss_max_seen"] <= 0.01 and r["action"].pacing == pacing
+
+
+def test_budgeted_controller_names_build_from_a_tuned_dict(P):
+    from sim.plant import Action
+    from sim.run import make_controller
+    act = dict(clock=1500.0, pacing="aligned", duty=0.5, guard_ms=0.0)
+    tuned = {"params": {"c'": {"ki": 0.05}, "d'": {"safety": 0.8}}, "budget": {"60": {"global": act, "static": {"S1": act}}}}
+    assert make_controller(P, "g'B", "S1", tuned, budget=60.0).reset({}) == Action(**act)
+    assert make_controller(P, "b'B", "S1", tuned, budget=60.0).reset({}) == Action(**act)
+    assert make_controller(P, "eB", "S1", tuned, budget=60.0).reset({}) == Action(**act)
+    assert make_controller(P, "c'B", "S1", tuned, budget=60.0).power_budget_w == 60.0
+    assert make_controller(P, "d'B", "S1", tuned, budget=35.0).power_budget_w == 35.0
