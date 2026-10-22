@@ -16,6 +16,8 @@ from typing import Callable, Optional
 
 import numpy as np
 
+from sim.pacing import aligned_may_start, unaligned_wake
+
 TICK_MS = 100.0                     # governor / daemon period (10 Hz)
 ASSUMPTIONS = (
     "fg and bg effects separable: no joint (clock, duty) measurement exists",
@@ -186,7 +188,7 @@ class Plant:
             # ---- bg start rule
             if bg is not None and not bg_run:
                 if act.pacing == "aligned":
-                    if not q and t + bgdur(eff) + act.guard_ms <= next_arrival(t) + eps:
+                    if aligned_may_start(t, bool(q), bgdur(eff), act.guard_ms, next_arrival(t)):
                         bg_run, bg_prog, bg_t0, bg_f = True, 0.0, t, (float(jit[rng.integers(len(jit))]) if jit is not None else 1.0)
                 elif act.duty > 0 and t >= bg_wake - eps:
                     bg_run, bg_prog, bg_t0, bg_f = True, 0.0, t, (float(jit[rng.integers(len(jit))]) if jit is not None else 1.0)
@@ -233,7 +235,7 @@ class Plant:
             if bg_run and bg_prog >= 1 - 1e-9:
                 bg_run, bg_prog = False, 0.0
                 tok_t.append(t); tick_tok += 1
-                bg_wake = t + ((t - bg_t0) * (1.0 / act.duty - 1.0) if 0 < act.duty < 1 else 0.0)     # gap from the MEASURED token time, as the A2 DLL (w2_kernels.cu bg_loop)
+                bg_wake = unaligned_wake(bg_t0, t, act.duty) if act.duty > 0 else t     # gap from the MEASURED token time, as the A2 DLL (w2_kernels.cu bg_loop)
             while ai < n and arr[ai] <= t + eps:
                 q.append(ai); ai += 1; tick_arr += 1
             if pending is not None and pending[0] <= t + eps:
