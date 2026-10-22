@@ -291,14 +291,14 @@ g_R0.5        0.0000                0.0000
 
 - g_T4: 19.26% of recorded bg blocks preempted (registered: >= 1%); P7 HELD
 
-### P8 arrival -> on-GPU start delay of the 0.1 ms fg (p99, ms)
+### P8 arrival -> on-GPU start delay of the 0.1 ms fg (ms; the registered test is the p99; p50 and p90 added for context, review 2026-10-22 finding 5)
 
 ```
-  cell  p99_ms
-  g_R2  1.0056
-  g_R8  1.0252
-g_R0.5  0.6590
-  g_R1  0.8802
+  cell  p50_ms  p90_ms  p99_ms
+  g_R2  0.2712  0.4677  1.0056
+  g_R8  0.2683  0.4833  1.0252
+g_R0.5  0.2071  0.4093  0.6590
+  g_R1  0.2104  0.4284  0.8802
 ```
 
 - registered: p99 <= 0.4 ms for every m; P8 DID NOT HOLD

@@ -80,3 +80,9 @@ Inside the instrumented kernel one thread per warp reads %globaltimer every 64 l
 
 ## Instrumentation overhead pre-check
 Before interpreting a timeline you check that recording it did not change the thing recorded. G's first recording kernel was 1.6x slower because a branch inside the FMA loop broke its instruction scheduling; moving the timer read outside the inner loop brought the cost to 0.4% (journal 0029).
+
+## Time-slice quantum (q) and switch gap (s)
+Under WDDM time-slicing two GPU contexts alternate: one runs for a quantum q, the GPU switches (gap s), the other runs. In G, q (median complete run, %globaltimer) is 0.374 ms and s 0.148 ms. A long foreground kernel that always competes with a ready background takes about 2 + 2s/q times longer (2.79 with these values; post-hoc reading, journal 0033).
+
+## Staggered switch (rejected) and block-edge artefact (open)
+Staggered switch: save/restore proceeding SM by SM, so the incoming context starts on some SMs while the outgoing one still runs on others. Test: per-switch spread of the outgoing last on-time across SMs. In G it is 1-5 us, so the switch is nearly synchronous. Block-edge artefact: a block on-interval runs from the earliest warp start to the latest warp end while gaps are logged from thread 0 only, so stalls of the other warps at the block edges are invisible and can look like overlap. In G no overlap is between two interior intervals. This is consistent with an artefact, not proof (per-warp times were not recorded).
