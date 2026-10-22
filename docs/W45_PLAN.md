@@ -131,3 +131,22 @@ Every governor start first resets clock locks: helper RESET plus, when elevated,
 
 ## E. Order of work
 Admin setup commands -> this addendum + journal 0037 -> exe quirk investigation -> start-up reset -> power-budget rerun (post-hoc) -> synthetic foreground frame loop (test-first, no GPU run) -> W5 yaml DRAFT (uncommitted, for review). Stop for review before committing the yaml.
+
+
+---
+# ADDENDUM F 2026-10-22 (decisions by Arjun + reviewer; recorded BEFORE any W5b data and before smoke 2)
+
+## F1. d'B becomes a hybrid
+- **Idle branch = the eB rule** (idle detector of eB, 5 ticks without frames -> clock to the knee 1500 MHz with a free background, eB's constants). **Active branch = the learned model with the learned guard** (guard grows by the observed token-end overrun past the next frame arrival, decays slowly).
+- Rationale: simulator round 3 (post-hoc; plant token timing known to be wrong) showed the learned model winning on the unseen workload (S5: +10.6 tok/s vs c'B, +5.2 vs g'B/eB) and losing only in the idle branch (S2 non-inferiority 0.726 vs eB: the pscale/pdelta power attribution made the idle plan timid), which a rule already handles.
+- The hybrid has not been simulated (simulator frozen). Further fixes to the active branch use W5a hardware data and the W5b tuning blocks only.
+- Honest consequence: in S2 d'B and eB use the same idle rule, so S2 checks the hand-over, not learning.
+
+## F2. Non-inferiority comparator fixed in advance
+d'B must reach >= 95% of EACH of c'B, g'B and eB in S0 and S2 (90% CI lower bound of the paired tok/s ratio), plus the required S5 superiority against each (HW2).
+
+## F3. Smoke 2 before W5a
+About 20 min of GPU time with the helper: token durations and overrun past the next frame arrival for aligned guard 0 / 0.5 / 1 / 2 ms at duty 1, guard 0 at duty 0.5, unaligned duty 1, and the background alone (does contention stretch tokens?). Diagnostic, not a result, no hypothesis tested; analysis/smoke_overrun.py (tested). Its outcome goes into a dated addendum before W5a.
+
+## F4. reset_probe result (journal 0040)
+12 of 12 resets succeeded (busy and idle GPU, lock held and not held, repeated resets): neither "reset of an unlocked clock errors" (H1) nor "reset on an idle GPU errors" (H2) reproduced. The two smoke-1 errors are unexplained; helper handling stays (reset-not-needed logging, governor-side `nvidia-smi -rgc` fallback).

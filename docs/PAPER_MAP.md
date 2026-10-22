@@ -1,4 +1,4 @@
-# PAPER_MAP: claim -> evidence (updated at the end of W2, 2026-10-22)
+# PAPER_MAP: claim -> evidence (updated at the end of W2, 2026-10-22; rows 15-19 added 2026-10-22 as W4-5 interim entries, simulation rows labelled)
 Rule (CLAUDE.md, phase-end step 5): every claim names its results file, journal entry and commit. "Not supported" claims are included; they are results too. Citations to papers are NOT listed here until verified to exist.
 
 | # | Claim | Status | Evidence |
@@ -17,3 +17,8 @@ Rule (CLAUDE.md, phase-end step 5): every claim names its results file, journal 
 | 12 | llama.cpp Q4_K_M decode (Llama-3.2-3B) knee 1500 MHz, energy optimum 1050 MHz at 0.526 J/token vs 0.915 unlocked; 97.25 tok/s at 56.3 W (1500 MHz) vs 101.1 tok/s at 92.0 W (unlocked) | measured, one model, batch 1 | data/w2_L_results.md; journal 0027; 47a64be |
 | 13 | A proxy brackets a real engine; the clock policy must be measured on the actual workload | lesson from claims 11-12 | ADR-0002; journals 0014, 0027 |
 | 14 | Instrumenting with %globaltimer/%smid changed fg-alone latency by 1.2% and the R2 wait by 0.006 ms in the full run (pre-check (iii) PASS) once the recording loop is branch-free; a branch inside the FMA loop cost 1.6x | measured | data/w2_G_results.md; data/w2_G_prechecks.md; journal 0029 |
+| 15 | Under a 60 W mean-power budget the best static setting must be chosen per scene; static unlocked is infeasible (74 W in S1) | SIMULATION ONLY (post-hoc, frozen simulator); not a hardware result | data/w45_sim_budget.md; docs/W45_PLAN.md addendum A; journal 0037 |
+| 16 | The learned controller (d'B v3) beats c'B/g'B/eB on an unseen workload (S5: +10.6 / +5.2 tok/s) but fails S2 non-inferiority (ratio 0.726) | SIMULATION ONLY, post-hoc round 3 (last); verdict "does not earn its place"; plant token timing known to be wrong | data/w45_sim_round3.md; journal 0039; 81346b9 |
+| 17 | On real hardware, aligned pacing with guard 0 lets tokens end past the next frame start (tokens end 1-4 ms after it; duty 0.5 gave 20 tok/s vs the plant's 31) | measured in smoke 1 (plumbing check, not a registered result); cause NOT established; smoke 2 planned | data/w45_smoke/smoke1; journal 0038 |
+| 18 | NVML nvmlDeviceResetGpuLockedClocks errors in smoke 1 are explained by resetting an already-unlocked clock, or by an idle GPU | NOT supported: reset_probe, 12/12 resets succeeded in busy/idle, locked/unlocked states; the smoke-1 errors remain unexplained | data/w45_smoke/reset_probe.json; journals 0039, 0040 |
+| 19 | A never-seen exe runs its body twice on first launch (side effects doubled) | observed (Avast pre-execution analysis suspected, not proven); rule: warm every new exe once; part L's first launch checked clean (90/90 cells) | data/exe_first_run_probe.md; data/w2_L_first_launch_check.md; journals 0037, 0038 |

@@ -1,0 +1,89 @@
+{
+ "utc": "2026-10-22T17:52:57.003059+00:00",
+ "cases": [
+  {
+   "case": "busy: reset #1 with no lock held",
+   "result": "ok",
+   "sm_mhz_after": 2415,
+   "util_gpu": 98,
+   "seconds": 0.0
+  },
+  {
+   "case": "busy: reset #2 with no lock held",
+   "result": "ok",
+   "sm_mhz_after": 2430,
+   "util_gpu": 98,
+   "seconds": 0.0
+  },
+  {
+   "case": "busy: reset #3 with no lock held",
+   "result": "ok",
+   "sm_mhz_after": 2430,
+   "util_gpu": 99,
+   "seconds": 0.0032
+  },
+  {
+   "case": "busy: lock 1500",
+   "result": "ok",
+   "sm_mhz_after": 2430,
+   "util_gpu": 99,
+   "seconds": 0.002
+  },
+  {
+   "case": "busy: reset after lock",
+   "result": "ok",
+   "sm_mhz_after": 1500,
+   "util_gpu": 99,
+   "seconds": 0.0
+  },
+  {
+   "case": "busy: reset again (already unlocked)",
+   "result": "ok",
+   "sm_mhz_after": 2445,
+   "util_gpu": 97,
+   "seconds": 0.0082
+  },
+  {
+   "case": "idle 2 s more: reset with no lock held",
+   "result": "ok",
+   "sm_mhz_after": 210,
+   "util_gpu": 0,
+   "seconds": 0.0023
+  },
+  {
+   "case": "idle 10 s more: reset with no lock held",
+   "result": "ok",
+   "sm_mhz_after": 210,
+   "util_gpu": 0,
+   "seconds": 0.0
+  },
+  {
+   "case": "idle 30 s more: reset with no lock held",
+   "result": "ok",
+   "sm_mhz_after": 210,
+   "util_gpu": 0,
+   "seconds": 0.0
+  },
+  {
+   "case": "idle: lock 1500",
+   "result": "ok",
+   "sm_mhz_after": 210,
+   "util_gpu": 0,
+   "seconds": 0.0111
+  },
+  {
+   "case": "idle: reset 10 s after lock",
+   "result": "ok",
+   "sm_mhz_after": 1500,
+   "util_gpu": 0,
+   "seconds": 0.0
+  },
+  {
+   "case": "idle 30 s: reset (already unlocked)",
+   "result": "ok",
+   "sm_mhz_after": 210,
+   "util_gpu": 0,
+   "seconds": 0.0
+  }
+ ]
+}

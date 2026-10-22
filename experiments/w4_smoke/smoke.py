@@ -1,6 +1,6 @@
 """W4-5 hardware smoke (NOT a result; no hypothesis is tested): checks that the pieces work on the real GPU and NVML. Run step by step, unelevated, with the admin clock helper
 already running in its own Administrator window. Writes data/w45_smoke/<run>/<step>.json.   python experiments/w4_smoke/smoke.py <step> [--run RUNDIR]
-steps: warm | clock | daemon | frame | driver | governor
+steps: warm | clock | daemon | frame | driver | governor | overrun (smoke 2)
 Always resets the clock lock in a finally block (helper RESET) and stops child processes."""
 import argparse
 import json
@@ -221,8 +221,8 @@ def step_frame(d):
     save(d, "frame", out)
 
 
-def run_driver(w, cal, d, label, ctrl_vals, seconds=30):
-    """One governed-driver run against the synthetic fg: returns metrics."""
+def run_driver(w, cal, d, label, ctrl_vals, seconds=30, with_fg=True):
+    """One governed-driver run against the synthetic fg (with_fg=False: background alone): returns metrics; raw frames/tokens are kept in out['_raw'] for step_overrun."""
     frames, tokens = SharedRing(nm("fr"), 8192, 3, True), SharedRing(nm("tk"), 65536, 2, True)
     ctrl, pace = SeqBlock(nm("ct"), 3, True), SeqBlock(nm("pc"), 3, True)
     ctrl.write(ctrl_vals)
@@ -241,9 +241,13 @@ def run_driver(w, cal, d, label, ctrl_vals, seconds=30):
             time.sleep(0.2)
         tokens.read_new()
         smp = NvmlSampler(); smp.start()
-        loop = FrameLoop(build("S0").fg, FmaFrameRunner(w, cal), FramePublisher(frames, pace))
         e0 = smp.nv.nvmlDeviceGetTotalEnergyConsumption(smp.h)
-        recs = loop.run(duration_s=seconds)
+        if with_fg:
+            loop = FrameLoop(build("S0").fg, FmaFrameRunner(w, cal), FramePublisher(frames, pace))
+            recs = loop.run(duration_s=seconds)
+        else:
+            loop = type("NoFg", (), {"t0": time.perf_counter()})()
+            time.sleep(seconds)
         e1 = smp.nv.nvmlDeviceGetTotalEnergyConsumption(smp.h); smp.stop()
         tk, dropped = tokens.read_new()
     finally:
@@ -257,12 +261,13 @@ def run_driver(w, cal, d, label, ctrl_vals, seconds=30):
             if line.startswith("EXEC_MODE"):
                 exec_line = line
     keep = [r for r in recs if r["t_sched"] >= loop.t0 + TRIM_S]
-    lat = np.array([r["lat_ms"] for r in keep])
+    lat = np.array([r["lat_ms"] for r in keep]) if keep else np.array([float("nan")])
     tk_t = tk[:, 0] if len(tk) else np.array([])
     win = tk_t[tk_t >= loop.t0 + TRIM_S]
     ph = ((win - loop.t0) % (PERIOD / 1000.0)) * 1000.0
     dur = seconds - TRIM_S
     return dict(label=label, ctrl=ctrl_vals, exec_mode=exec_line, frames=len(keep), fg_p50_ms=float(np.percentile(lat, 50)), fg_p99_ms=float(np.percentile(lat, 99)), fg_miss_frac=float((lat > PERIOD).mean()),
+                _raw=dict(arrivals=[r["t_sched"] for r in keep], tok_end=tk_t[tk_t >= loop.t0 + TRIM_S].tolist(), tok_ms=(tk[tk_t >= loop.t0 + TRIM_S, 1].tolist() if len(tk) else [])),
                 bg_tok_s=len(win) / dur, mean_power_w_whole_run=(e1 - e0) / 1000.0 / seconds, token_end_phase_ms_p10_p50_p90=[float(x) for x in np.percentile(ph, [10, 50, 90])] if len(ph) else None,
                 ring_dropped=dropped, driver_output_tail=out_txt.splitlines()[-3:])
 
@@ -275,7 +280,7 @@ def step_driver(d):
         cal = calibrate(w, cl)
         cl.reset(); time.sleep(1.1)
         for label, vals in (("aligned_g0_d1", [1.0, 1.0, 0.0]), ("aligned_g0_d0.5", [1.0, 0.5, 0.0]), ("unaligned_d1", [0.0, 1.0, 0.5])):
-            out.append(run_driver(w, cal, d, label, vals))
+            out.append(run_driver(w, cal, d, label, vals)); out[-1].pop("_raw", None)
             print(json.dumps(out[-1], default=str)[:1500], flush=True)
             time.sleep(3)
     finally:
@@ -338,7 +343,34 @@ def step_governor(d):
     save(d, "governor", out)
 
 
-STEPS = dict(warm=step_warm, clock=step_clock, daemon=step_daemon, frame=step_frame, driver=step_driver, governor=step_governor)
+OVERRUN_RUNS = (("bg_alone_unaligned_d1", [0.0, 1.0, 0.5], False), ("aligned_g0_d1", [1.0, 1.0, 0.0], True), ("aligned_g0.5_d1", [1.0, 1.0, 0.5], True), ("aligned_g1_d1", [1.0, 1.0, 1.0], True),
+                ("aligned_g2_d1", [1.0, 1.0, 2.0], True), ("aligned_g0_d0.5", [1.0, 0.5, 0.0], True), ("unaligned_d1", [0.0, 1.0, 0.5], True))
+
+
+def step_overrun(d):
+    """Smoke 2 (not a result): token durations and overrun past the next frame arrival for guard 0 / 0.5 / 1 / 2 ms and for the background alone (does contention stretch tokens?).
+    Raw frame arrivals and token rings go to overrun_raw_<label>.json; the summary to overrun.json."""
+    from analysis.smoke_overrun import overrun_stats
+    from workloads.common.w2lib import W2
+    w = W2(); cl = SafeClient(); hb = Heartbeat(cl); hb.start(); out = []
+    try:
+        reset_clocks(cl, is_admin=False)
+        cal = calibrate(w, cl)
+        cl.reset(); time.sleep(1.1)
+        for label, vals, with_fg in OVERRUN_RUNS:
+            r = run_driver(w, cal, d, label, vals, seconds=25, with_fg=with_fg)
+            raw = r.pop("_raw")
+            (d / f"overrun_raw_{label}.json").write_text(json.dumps(raw), encoding="utf-8")
+            r["overrun"] = overrun_stats(raw["arrivals"], raw["tok_end"], raw["tok_ms"], PERIOD) if with_fg else dict(tok_ms_summary=overrun_stats([0.0], raw["tok_end"], raw["tok_ms"], PERIOD))
+            out.append(r)
+            print(json.dumps(r, default=str)[:900], flush=True)
+            time.sleep(3)
+    finally:
+        hb.stop(); cl.reset(); cl.close()
+    save(d, "overrun", out)
+
+
+STEPS = dict(warm=step_warm, clock=step_clock, daemon=step_daemon, frame=step_frame, driver=step_driver, governor=step_governor, overrun=step_overrun)
 
 def write_meta(d, armoury_mode):
     """meta.json for every smoke/run directory: Armoury Crate mode (NOT_RECORDED is flagged), Chrome state, process list with CPU%, git head, exe hash, helper state."""
