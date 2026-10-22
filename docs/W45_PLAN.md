@@ -100,4 +100,34 @@ Instruction (verbatim): "approve the W4-5 plan with three changes, recorded in t
 
 Execution scope now: simulator, then controllers vs simulator, test-first. STOP before the hardware smoke (needs Arjun's go, Administrator shell, Armoury Crate mode stated).
 
-Backup: the w2_G copy hash B4581EA7...BEEE3 matches the REC_MANIFEST.sha256 line for cells/b00_00_g_R2/bg_rec.npz (checked by string comparison). That verifies that ONE file; the pasted path was truncated and the other 189 files are not checked.
+Backup: the w2_G copy hash B4581EA7...BEEE3 matches the REC_MANIFEST.sha256 line for cells/b00_00_g_R2/bg_rec.npz (checked by string comparison). That verifies that ONE file; the pasted path was truncated and the other 189 files are not checked. (Later: the whole OneDrive copy verified, 190/190, journal 0036.)
+
+---
+# ADDENDUM 2026-10-22 (decisions by Arjun + reviewer; recorded BEFORE the W5 yaml and before the power-budget rerun)
+
+## A. Primary objective changed
+Primary objective: **maximise background tok/s subject to (i) the foreground deadline SLO (miss fraction <= 1%, p99 within the deadline) and (ii) a GPU power budget** (mean GPU board power over the measurement window <= budget). Budgets: **60 W ("AC-quiet")** and **35 W ("battery-like")**. The lambda Pareto front (tok/s vs W, lambda = 0.5 marked) stays as the SECONDARY view.
+Reason: at lambda = 0.5, "unlocked + aligned" wins because power is cheap (data/w45_sim_followup.md, break-even lambda 0.75-0.88). Under a power budget the clock (and a throttle on the token rate) must be chosen per workload and scene, and a static unlocked setting is infeasible (74 W in S1 against a 60 W budget); that is where a per-workload model should be needed.
+Consequences: (1) the frozen sim evaluation is rerun post-hoc under both budgets (labelled sensitivity; the frozen results stay); (2) aligned pacing gets a duty throttle (a token may start only after the slack test AND after the duty gap), the actuator that trades tokens for watts at a fixed clock; (3) controllers get a `power_budget_w` argument (None = the frozen behaviour); (4) the W5 yaml states the budgets as the primary factor.
+
+## B. AI model-selection plan (for the learned part; replaces "start: ridge regression")
+**Requirements.** CPU-only (the GPU belongs to the workloads); < 1 ms per predict + decide (10 Hz loop, many candidate (clock, duty) points); learn a NEW workload in <~ 10 s of data; calibrated uncertainty (the SLO bound uses an upper quantile, so a wrong confidence is a violation); deterministic given a seed; no network.
+**Targets to predict, per (workload, scene, clock, pacing, duty):** fg frame-time quantiles (q50, q95, q99), bg tok/s, GPU power (energy-counter delta), and the error of each.
+**Candidates (each with a CUSUM change detector on the standardised residual that triggers re-calibration / forgetting):**
+1. grey-box + RLS: the current structure (clock law from W1/B, token time and power from L, interference multiplier) with online-calibrated scalars (c_hat, sigma_hat, gamma, power bias);
+2. LightGBM (small, monotone constraints where physics gives them) on grey-box features + an online residual learner (RLS on its residual);
+3. sparse Gaussian process (inducing points, Matern kernel) over (clock, duty, load features) with the grey-box as the mean function;
+4. small MLP (<= 2 x 32, ensemble of 5 for uncertainty) with the grey-box as a skip connection.
+**Pre-registered data collection (W5a, before any evaluation; a separate pre-registered hardware run).** Randomised factorial over SM clock level x pacing mode (aligned/unaligned) x duty/guard grid, balanced blocks, warm-up excluded, per-cell metadata (process list, Armoury Crate mode, temperatures). Workloads: Llama-3.2 1B, 3B (Q4_K_M, already in use) and 8B (only if it fits 8 GB with the context used: checked, not assumed), one other LLM family, one image generator (a diffusion model as a throughput background), and the synthetic frame-paced FMA fg in light / heavy / varying cost (the S1 steps). Logged through the daemon (QPC rows with per-source age) and the governed driver token ring.
+**Evaluation (pre-registered).** Leave-one-workload-out (LOWO): fit on all other workloads, adapt online for 10 s on the held-out one, then score: p99 absolute error of the fg latency prediction, tok/s and power error, coverage of the stated 95% bounds (target 90-98%), prediction + decision latency on this CPU (p99). Also leave-one-scene-out for the synthetic fg.
+**Selection rule.** The simplest model whose p99 error is within ~10% of the best model's p99 error AND that meets the latency bound (< 1 ms p99 for predict + decide) AND the calibration band. Order of simplicity: grey-box + RLS < LightGBM + residual < sparse GP < MLP ensemble. If grey-box + RLS meets the rule, the learned part is only the online calibration and the report says so.
+**Non-evidence.** Simulator results do not count for this selection (the plant is built from the same grey-box structure); only W5a hardware data do.
+
+## C. Fresh-exe double execution
+Journal 0036 recorded that the first run of a freshly built exe took 14 s and executed its body twice. The cause is to be found (harness retry vs endpoint scanner) before any experiment depends on it; see journal 0037.
+
+## D. Start-up clock reset
+Every governor start first resets clock locks: helper RESET plus, when elevated, `nvidia-smi -rgc` and `nvidia-smi -rmc` (covers a hard-killed helper). Tested with a fake runner.
+
+## E. Order of work
+Admin setup commands -> this addendum + journal 0037 -> exe quirk investigation -> start-up reset -> power-budget rerun (post-hoc) -> synthetic foreground frame loop (test-first, no GPU run) -> W5 yaml DRAFT (uncommitted, for review). Stop for review before committing the yaml.

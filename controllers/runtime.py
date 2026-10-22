@@ -8,7 +8,10 @@ class Governor:
         self.last_obs = None
         self._t = self._e = None
 
-    def start(self, t_ms):
+    def start(self, t_ms, startup_reset=None):
+        """startup_reset: callable run FIRST (e.g. actuators.startup_reset.reset_clocks bound to the helper client); if it raises, nothing else starts."""
+        if startup_reset is not None:
+            startup_reset()
         a = self.ctl.reset(dict(params=self.params, period_ms=self.period_ms, deadline_ms=self.deadline_ms))
         self.act_.apply(a)
         self._t = t_ms

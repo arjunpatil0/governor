@@ -4,8 +4,17 @@
 #include <cstdlib>
 #include "shm.h"
 
+#ifndef PROBE_ID
+#define PROBE_ID 0
+#endif
+static const int kProbeId = PROBE_ID;                 // /DPROBE_ID=n changes the bytes (new hash) for the first-run investigation (analysis/exe_first_run_probe.py)
+
 int main(int argc, char **argv) {
-    if (argc < 5) return 2;
+    if (argc < 5 || kProbeId < 0) return 2;
+    if (const char *lg = getenv("PROBE_LOG")) {       // optional: one line per process start (pid)
+        FILE *o = fopen(lg, "a");
+        if (o) { fprintf(o, "%lu\n", (unsigned long)GetCurrentProcessId()); fclose(o); }
+    }
     shm::Block ctrl, pace; shm::Ring ring;
     if (!ctrl.open(argv[1], 3) || !pace.open(argv[2], 3)) return 3;
     if (!ring.open(argv[3], (uint64_t)atoi(argv[4]), 1)) return 4;
