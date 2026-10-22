@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "C:\Users\arjun\governor\experiments\w2_colocation\run.py", line 500, in <module>
+    main()
+  File "C:\Users\arjun\governor\experiments\w2_colocation\run.py", line 368, in main
+    return child_main(a.child, a.spec)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\arjun\governor\experiments\w2_colocation\run.py", line 131, in child_main
+    ts, te, g, r = w.bg_until_rec(units, spec["t_stop"], t_rec0=spec["t_rec0"], cap_blocks=spec["rec_cap_blocks"], cap=spec["cap"], duty=spec["duty"], gap_k=spec["gap_k"], bps=spec.get("bps", 6))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\arjun\governor\workloads\common\w2lib.py", line 78, in bg_until_rec
+    self.chk(self.d.w2_bg_until_rec(1, i32(units), len(units), bps, ctypes.c_double(t_stop), dbl(ts), dbl(te), dbl(g), cap,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
