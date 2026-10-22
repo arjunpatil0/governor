@@ -49,6 +49,7 @@ class Obs:
     clock_mhz: float                 # effective clock at the tick
     period_ms: float
     deadline_ms: float
+    tok_ms: np.ndarray = None        # wall durations (ms) of the bg tokens completed in the tick
 
 
 @dataclass
@@ -65,6 +66,7 @@ class FgSpec:
 class BgSpec:
     kind: str = "llama"              # "llama" (token = 1/tok_s(clock)) | "slice" (fma slice of slice_ms at 1800 MHz)
     slice_ms: float = 2.0
+    profile: str = None              # alternative token-rate / power curve in sim.params (S5, unseen workload); None = the llama.cpp decode of L
     jitter: bool = False             # sample each token time from the empirical L inter-token distribution (mean 1)
 
 
@@ -163,6 +165,7 @@ class Plant:
         energy = 0.0
         next_tick = TICK_MS
         tick_lat, tick_missed, tick_arr, tick_tok, tick_e0, tick_t0 = [], 0, 0, 0, 0.0, 0.0
+        tick_tokms = []
         tick_t_list, tick_e_list, actions = [0.0], [0.0], []
         eps = 1e-9
 
@@ -174,7 +177,7 @@ class Plant:
             return c
 
         def bgdur(clock):
-            return (1000.0 / P.tok_s(clock)) if bg.kind == "llama" else bg.slice_ms * P.fg_ratio(clock)
+            return (1000.0 / P.tok_s(clock, bg.profile)) if bg.kind == "llama" else bg.slice_ms * P.fg_ratio(clock)
 
         def next_arrival(tt):
             if ai < n and arr[ai] - tt <= 2 * fg.period_ms + eps:
@@ -212,11 +215,11 @@ class Plant:
             dt = max(tn - t, 0.0)
             if dt > 0:
                 if fg_on and bg_run:
-                    pw = 0.5 * (P.fg_power_w(eff) + P.bg_power_w(eff))
+                    pw = 0.5 * (P.fg_power_w(eff) + P.bg_power_w(eff, bg.profile))
                 elif fg_on:
                     pw = P.fg_power_w(eff)
                 elif bg_run:
-                    pw = P.bg_power_w(eff)
+                    pw = P.bg_power_w(eff, bg.profile)
                 else:
                     pw = P.p_idle_w
                 energy += pw * dt * 1e-3
@@ -234,7 +237,7 @@ class Plant:
                     tick_missed += 1
             if bg_run and bg_prog >= 1 - 1e-9:
                 bg_run, bg_prog = False, 0.0
-                tok_t.append(t); tick_tok += 1
+                tok_t.append(t); tick_tok += 1; tick_tokms.append(t - bg_t0)
                 bg_wake = unaligned_wake(bg_t0, t, act.duty) if act.duty > 0 else t     # gap from the MEASURED token time, as the A2 DLL (w2_kernels.cu bg_loop)
             while ai < n and arr[ai] <= t + eps:
                 q.append(ai); ai += 1; tick_arr += 1
@@ -243,8 +246,9 @@ class Plant:
             if t >= next_tick - eps:
                 dtk = t - tick_t0
                 obs = Obs(t_ms=t, lat_ms=np.array(tick_lat), n_missed=tick_missed, n_arrived=tick_arr, tokens=tick_tok,
-                          power_w=(energy - tick_e0) / (dtk * 1e-3) if dtk > 0 else 0.0, clock_mhz=eff, period_ms=fg.period_ms, deadline_ms=fg.deadline_ms)
+                          power_w=(energy - tick_e0) / (dtk * 1e-3) if dtk > 0 else 0.0, clock_mhz=eff, period_ms=fg.period_ms, deadline_ms=fg.deadline_ms, tok_ms=np.array(tick_tokms))
                 tick_lat, tick_missed, tick_arr, tick_tok, tick_e0, tick_t0 = [], 0, 0, 0, energy, t
+                tick_tokms = []
                 tick_t_list.append(t); tick_e_list.append(energy)
                 act = policy.act(obs)
                 actions.append((t, act))

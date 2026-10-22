@@ -14,12 +14,16 @@ from sim.plant import Action
 
 DUTIES = tuple(np.round(np.arange(0.02, 1.001, 0.02), 2))
 A_DUTIES = tuple(np.round(np.arange(0.1, 1.001, 0.1), 2))        # aligned-mode throttle grid (only with a power budget)
+V2_DUTIES = tuple(np.round(np.arange(0.05, 1.001, 0.05), 2))     # finer grid used by v2
 
 
 class ModelController:
-    def __init__(self, P, pacing="unaligned", lam=0.5, safety=0.9, alpha=0.2, gamma_alpha=0.1, sigma0=0.03, clock_every=10, switch_gain=0.5, win=5, power_budget_w=None):
+    def __init__(self, P, pacing="unaligned", lam=0.5, safety=0.9, alpha=0.2, gamma_alpha=0.1, sigma0=0.03, clock_every=10, switch_gain=0.5, win=5, power_budget_w=None,
+                 v2=False, guard_k=3.0, sigma_w=1.0, guard_floor=0.05):
+        """v2 (round 2, 2026-10-22, aligned + budget only): token time from an online model (controllers/tokmodel.py) instead of the L table, a token-rate model that knows
+        tokens start only in frame slack windows, a guard learned from observed token-duration variability, a multiplicative correction of the predicted bg power and a 0.05 duty grid."""
         self.P, self.pacing, self.lam, self.safety = P, pacing, lam, safety
-        self.power_budget_w = power_budget_w
+        self.power_budget_w, self.v2, self.guard_k, self.sigma_w, self.guard_floor = power_budget_w, v2, guard_k, sigma_w, guard_floor
         self.alpha, self.gamma_alpha, self.sigma0, self.clock_every, self.switch_gain, self.win = alpha, gamma_alpha, sigma0, clock_every, switch_gain, win
         self.name = "d" if pacing == "unaligned" else "d'"
         base = P.sa4["sa4_fg4_alone"]["lat_p99_ms"]
@@ -38,13 +42,36 @@ class ModelController:
         self.plan = {}
         self._prev_pred = None
         self.pbias, self._prev_power = 0.0, None
+        if self.v2:
+            from controllers.tokmodel import TokenTimeModel
+            self.tok_model, self.tok_sd, self.pscale, self._prev_bg = TokenTimeModel(self.P), 0.0, 1.0, 0.0
         return Action(clock=self.clock, pacing=self.pacing, duty=0.2, guard_ms=1.0)
+
+    @staticmethod
+    def token_rate(n_tok, tok_ms, duty, period):
+        """Tokens/s when a token can start only in the slack window after a frame (once per frame) and only after the duty gap: a cycle (token + gap = tok_ms / duty) shorter
+        than the period allows floor(period / cycle) tokens per frame, a longer one a token every ceil(cycle / period) frames; never more than the slack holds (n_tok)."""
+        if n_tok <= 0 or duty <= 0:
+            return 0.0
+        cycle = tok_ms / duty
+        per_frame = min(n_tok, 1.0 / np.ceil(cycle / period - 1e-9)) if cycle >= period else min(n_tok, np.floor(period / cycle + 1e-9))
+        return float(per_frame * 1000.0 / period)
+
+    def _guard(self, alone):
+        if self.v2:
+            return float(np.clip(self.guard_k * self.tok_sd + self.sigma_w * self.sigma * alone + self.guard_floor, 0.0, 4.0)) + self.extra
+        return max(0.3, 3.0 * self.sigma * alone + 0.2) + self.extra
 
     # ---- calibration
     def _calibrate(self, obs):
         P = self.P
         lat = obs.lat_ms
         self.w5.add(lat)
+        if self.v2 and self.pacing == "aligned" and obs.tok_ms is not None and len(obs.tok_ms) > 0:
+            tm = float(np.median(obs.tok_ms))
+            dev = float(np.std(obs.tok_ms)) if len(obs.tok_ms) >= 2 else abs(tm - self.tok_model.predict(obs.clock_mhz))
+            self.tok_sd += 0.2 * (dev - self.tok_sd)
+            self.tok_model.update(obs.clock_mhz, tm)
         if len(lat) == 0:
             return
         w = self.w5.lat()
@@ -55,6 +82,10 @@ class ModelController:
         if self.pacing == "unaligned" and self._prev_pred and len(lat) >= 3:
             r = float(np.percentile(lat, 95)) / self._prev_pred
             self.gamma = float(np.clip(self.gamma * r ** self.gamma_alpha, 0.3, 6.0))
+        if self.v2 and self.power_budget_w is not None and self._prev_power is not None and obs.power_w > 0 and self._prev_bg > 2.0:
+            other = self._prev_power - self.pscale * self._prev_bg                       # planned fg + idle part (no bg scale)
+            self.pscale += 0.1 * (float(np.clip((obs.power_w - other) / self._prev_bg, 0.3, 2.0)) - self.pscale)
+            self._prev_power = other + self.pscale * self._prev_bg
         if self.power_budget_w is not None and self._prev_power is not None and obs.power_w > 0:
             self.pbias += 0.05 * ((obs.power_w - self._prev_power) - self.pbias)         # observed minus planned GPU power, EWMA
         if obs.n_missed > 0:
@@ -78,8 +109,19 @@ class ModelController:
                     q95 = alone * (1 + 1.64 * self.sigma) * self.M(d) * self.gamma
                     tok = d * P.tok_s(f) * max(0.0, 1.0 - u)
                     yield f, dict(clock=f, duty=float(d), guard_ms=0.0, n_tok=0, pred_q95_ms=q95, pred_tok=tok, pred_power=self._power(f, u, tok * tok_ms / 1000.0))
+            elif self.v2:
+                tok_ms = self.tok_model.predict(f)
+                guard = self._guard(alone)
+                n = max(0, int(np.floor((self.period - alone - guard) / tok_ms)))
+                q95 = alone * (1 + 1.64 * self.sigma)
+                for d in (V2_DUTIES if self.power_budget_w is not None else (1.0,)):
+                    tok = self.token_rate(n, tok_ms, d, self.period)
+                    busy = tok * tok_ms / 1000.0
+                    bgp = busy * P.bg_power_w(f)
+                    yield f, dict(clock=f, duty=float(d), guard_ms=float(guard), n_tok=n, pred_q95_ms=q95, pred_tok=tok, bg_busy_power=bgp,
+                                  pred_power=u * P.fg_power_w(f) + self.pscale * bgp + max(0.0, 1.0 - u - busy) * P.p_idle_w)
             else:
-                guard = max(0.3, 3.0 * self.sigma * alone + 0.2) + self.extra
+                guard = self._guard(alone)
                 n = max(0, int(np.floor((self.period - alone - guard) / tok_ms)))
                 q95 = alone * (1 + 1.64 * self.sigma)
                 for d in (A_DUTIES if self.power_budget_w is not None else (1.0,)):
@@ -106,7 +148,7 @@ class ModelController:
         if best is None:                                     # nothing meets the bound: fastest clock, least interference
             f = ALLOWED_CLOCKS(P)[-1]
             alone = self.c_hat * P.fg_ratio(f)
-            best = dict(clock=f, duty=DUTIES[0], guard_ms=max(0.3, 3.0 * self.sigma * alone + 0.2) + self.extra, n_tok=0,
+            best = dict(clock=f, duty=DUTIES[0], guard_ms=self._guard(alone), n_tok=0, bg_busy_power=0.0,
                         pred_q95_ms=alone * (1 + 1.64 * self.sigma) * (self.M(DUTIES[0]) * self.gamma if self.pacing == "unaligned" else 1.0), pred_tok=0.0,
                         pred_power=self._power(f, alone / self.period, 0.0), objective=float("-inf"))
         return best
@@ -125,5 +167,6 @@ class ModelController:
         self.clock = float(best["clock"])
         self.plan = best
         self._prev_power = best["pred_power"]
+        self._prev_bg = best.get("bg_busy_power", 0.0) if self.v2 else 0.0
         self._prev_pred = best["pred_q95_ms"] if self.pacing == "unaligned" else None
         return Action(clock=self.clock, pacing=self.pacing, duty=best["duty"], guard_ms=best["guard_ms"])

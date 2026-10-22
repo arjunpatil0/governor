@@ -64,3 +64,10 @@ def test_interaction_slows_the_fg_under_contention_at_low_clock_only(P):
         return summarise(Plant(P, sc, seed=1).run(Action(clock=clk, pacing="unaligned", duty=1.0)))["lat_mean_ms"]
     assert lat(0.5, 1200) > lat(0.0, 1200) * 1.1
     assert lat(0.5, 1800) == pytest.approx(lat(0.0, 1800), rel=1e-6)
+
+
+def test_s5_is_s1_with_an_unseen_background_workload_and_is_not_part_of_the_frozen_scenario_set():
+    from sim.scenarios import EXTRA_SCENARIOS
+    s1, s5 = build("S1"), build("S5")
+    assert "S5" in EXTRA_SCENARIOS and "S5" not in SCENARIOS
+    assert s5.bg.profile == "fp16" and s1.bg.profile is None and s5.fg.cost_ms(21000) == s1.fg.cost_ms(21000) and s5.interaction == 0.0

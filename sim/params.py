@@ -41,6 +41,7 @@ class Params:
     clock_latency_ms: float = 0.0
     share_override: float = None
     token_jitter: np.ndarray = None
+    profiles: dict = field(default_factory=dict)       # alternative bg profiles {name: (x_mhz, tok_s, power_w)} for the unseen-workload scene S5
     CONSTANT_SOURCES: dict = field(default_factory=lambda: dict(CONSTANT_SOURCES))
     levels: tuple = ()
 
@@ -67,13 +68,15 @@ class Params:
         self._check(f)
         return float(np.interp(f, self._fg_x, self._fg_p))
 
-    def tok_s(self, f):
+    def tok_s(self, f, profile=None):
         self._check(f)
-        return float(np.interp(f, self._bg_x, self._bg_tok))
+        x, t, _p = (self._bg_x, self._bg_tok, self._bg_p) if profile is None else self.profiles[profile]
+        return float(np.interp(f, x, t))
 
-    def bg_power_w(self, f):
+    def bg_power_w(self, f, profile=None):
         self._check(f)
-        return float(np.interp(f, self._bg_x, self._bg_p))
+        x, _t, p = (self._bg_x, self._bg_tok, self._bg_p) if profile is None else self.profiles[profile]
+        return float(np.interp(f, x, p))
 
 
 def load_token_jitter(root):
@@ -142,6 +145,17 @@ def load_params(root=ROOT):
     cal = Path(root) / "data" / "sim_calibration.json"
     share = json.loads(cal.read_text(encoding="utf-8"))["share_divisor_fit"] if cal.exists() else None
 
+    C = _read(root, "data/w2_C_results.md")
+    crows = re.findall(r"^\s*fp16\s+True\s+(\d+|unlocked)\s+([\d.]+)\s+([\d.]+)\s*$", C, re.M)
+    assert crows, "no fp16 graph rows parsed from C results"
+    cx, crel, cj = [], [], []
+    for lab, rel, jpt in crows:
+        cx.append(unlocked if lab == "unlocked" else float(lab)); crel.append(float(rel)); cj.append(float(jpt))
+    oc = np.argsort(cx)
+    cx, crel, cj = np.array(cx)[oc], np.array(crel)[oc], np.array(cj)[oc]
+    tok_ref = float(np.array(bt)[np.array(bx) == unlocked][0])                # absolute scale: the L unlocked rate; only the SHAPE (knee 1050) comes from C
+    alt = {"fp16": (cx, tok_ref * crel, cj * tok_ref * crel)}
+
     lv = tuple(sorted(int(k) for k in rel_l if k != "unlocked")) + (unlocked,)
     return Params(UNLOCKED_MHZ=unlocked, _fg_x=fx, _fg_rel=fr, _fg_p=fp, _bg_x=np.array(bx)[o], _bg_tok=np.array(bt)[o], _bg_p=np.array(bp)[o],
-                  rel_thr_L=rel_l, q_ms=q, s_ms=s, p_idle_w=p_idle, sa4=sa4, clock_latency_ms=float(lat[0]), share_override=share, token_jitter=load_token_jitter(root), levels=lv)
+                  rel_thr_L=rel_l, q_ms=q, s_ms=s, p_idle_w=p_idle, sa4=sa4, clock_latency_ms=float(lat[0]), share_override=share, token_jitter=load_token_jitter(root), profiles=alt, levels=lv)

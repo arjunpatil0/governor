@@ -10,8 +10,9 @@ class ObsBuilder:
     def __init__(self, period_ms, deadline_ms):
         self.period_ms, self.deadline_ms = period_ms, deadline_ms
 
-    def build(self, frames, n_tokens, energy_j, dt_s, clock_mhz, t_ms):
+    def build(self, frames, n_tokens, energy_j, dt_s, clock_mhz, t_ms, tok_ms=None):
         frames = np.asarray(frames, float).reshape(-1, 3)
         lat = (frames[:, 2] - frames[:, 0]) * 1000.0
         return Obs(t_ms=float(t_ms), lat_ms=lat, n_missed=int((lat > self.deadline_ms).sum()), n_arrived=int(len(lat)), tokens=int(n_tokens),
-                   power_w=float(energy_j / dt_s) if dt_s > 0 else 0.0, clock_mhz=float(clock_mhz), period_ms=self.period_ms, deadline_ms=self.deadline_ms)
+                   power_w=float(energy_j / dt_s) if dt_s > 0 else 0.0, clock_mhz=float(clock_mhz), period_ms=self.period_ms, deadline_ms=self.deadline_ms,
+                   tok_ms=None if tok_ms is None else np.asarray(tok_ms, float))

@@ -4,7 +4,7 @@
 //   t_sync < 0: start right after prefill and run for t_stop seconds (standalone use).
 //   ctrl_block (governor -> driver, 3 doubles): [pacing (0 unaligned duty, 1 aligned slack filling), duty, guard_ms]
 //   pace_block (fg -> driver, 3 doubles): [fg_busy (0/1), t_next_arrival_s, t_updated_s]; older than 100 ms = the fg is idle -> the background runs free
-//   token_ring (driver -> daemon, 1 double per token): QPC end time of each token (seconds)
+//   token_ring (driver -> daemon, 2 doubles per token): [QPC end time of the token (s), measured token duration (ms)]
 // Pacing decisions are the shared pure functions in pacing.h (mirror of sim/pacing.py): unaligned = gap of measured_token_time * (1/duty - 1) after each token;
 // aligned = start a token only while no fg frame is busy and now + token_estimate + guard <= next fg arrival AND the duty gap since the previous token has passed (duty 1 = no gap; used as the power-budget throttle).
 #include <windows.h>
@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
     const int n_prompt = atoi(argv[6]);
     shm::Block ctrl, pace; shm::Ring ring;
     if (!ctrl.open(argv[7], 3) || !pace.open(argv[8], 3)) return die("cannot open the control / pace shared memory (the governor creates them first)");
-    if (!ring.open(argv[9], (uint64_t)atoll(argv[10]), 1)) return die("cannot open the token ring");
+    if (!ring.open(argv[9], (uint64_t)atoll(argv[10]), 2)) return die("cannot open the token ring");
 
     llama_log_set(log_cb, nullptr);
     llama_backend_init();
@@ -123,8 +123,9 @@ int main(int argc, char **argv) {
         cur = llama_sampler_sample(smpl, ctx, -1);                // reads logits: synchronises with the GPU
         double t1 = qpc_now();
         te.push_back(t1); ids.push_back(cur);
-        ring.push(&t1);
         double tok_ms = (t1 - t0) * 1000.0;
+        double rec[2] = {t1, tok_ms};
+        ring.push(rec);
         tok_est_ms = have_est ? 0.9 * tok_est_ms + 0.1 * tok_ms : tok_ms;
         have_est = true;
         ctrl.read(c);

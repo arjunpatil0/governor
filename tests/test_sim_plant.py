@@ -196,3 +196,29 @@ def test_aligned_duty_throttle_cuts_tokens_per_frame_and_leaves_the_fg_alone(P):
 def test_aligned_duty_zero_pauses_the_background(P):
     s = summarise(run(P, scen(fg_periodic(4.0), LLAMA, dur=5000.0), Action(clock=1800, pacing="aligned", duty=0.0, guard_ms=0.5)))
     assert s["bg_tok_s"] == 0.0
+
+
+# ---------------------------------------------------------------- alternative bg profile (S5) and token-duration observations
+def test_bg_profile_changes_the_token_rate_and_power_curve(P):
+    sc = scen(fg_periodic(4.0, active=lambda t: False), BgSpec(kind="llama", profile="fp16"), dur=8000.0)
+    s = summarise(run(P, sc, Action(clock=600, pacing="unaligned", duty=1.0)))
+    assert s["bg_tok_s"] == pytest.approx(P.tok_s(600, profile="fp16"), rel=0.02) and s["power_w"] == pytest.approx(P.bg_power_w(600, profile="fp16"), rel=0.02)
+    assert s["bg_tok_s"] > P.tok_s(600) * 1.3
+
+
+class Spy:
+    def __init__(self):
+        self.tok_ms = []
+
+    def reset(self, ctx=None):
+        return Action(clock=1500, pacing="aligned", duty=1.0, guard_ms=0.0)
+
+    def act(self, obs):
+        self.tok_ms += list(obs.tok_ms)
+        return Action(clock=1500, pacing="aligned", duty=1.0, guard_ms=0.0)
+
+
+def test_observations_carry_the_measured_token_durations(P):
+    spy = Spy()
+    run(P, scen(fg_periodic(4.0, active=lambda t: False), LLAMA, dur=3000.0), spy)
+    assert len(spy.tok_ms) > 150 and np.median(spy.tok_ms) == pytest.approx(1000.0 / P.tok_s(1500), rel=0.02)

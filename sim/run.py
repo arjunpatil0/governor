@@ -37,7 +37,7 @@ def make_controller(P, name, scenario, tuned, budget=None):
         return StaticController(Action(**tuned["global"][name]), name=name)
     if name == "e":                                     # follow-up: aligned scenario-agnostic static + idle-triggered clock drop
         return IdleDropController(P, Action(**tuned["global"]["g'"]))
-    if name in ("b'B", "g'B", "eB", "c'B", "d'B"):       # power-budget variants (primary objective since 2026-10-22; post-hoc rerun of the frozen study)
+    if name in ("b'B", "g'B", "eB", "c'B", "d'B", "d'B2"):       # power-budget variants (primary objective since 2026-10-22; post-hoc rerun of the frozen study)
         key = str(int(budget))
         if name == "b'B":
             return StaticController(Action(**tuned["budget"][key]["static"][scenario]), name=name)
@@ -45,6 +45,8 @@ def make_controller(P, name, scenario, tuned, budget=None):
             return StaticController(Action(**tuned["budget"][key]["global"]), name=name)
         if name == "eB":
             return IdleDropController(P, Action(**tuned["budget"][key]["global"]))
+        if name == "d'B2":                                  # round 2 (2026-10-22): d' v2 with constants tuned on the tuning seeds (data/sim_tuned_round2.json)
+            return ModelController(P, "aligned", v2=True, power_budget_w=float(budget), **tuned["params_v2"])
         kw = dict(tuned.get("params", {}).get(name[:-1], {}), power_budget_w=float(budget))      # frozen constants of c' / d' plus the budget
         return PIController(P, "aligned", **kw) if name == "c'B" else ModelController(P, "aligned", **kw)
     pacing = "unaligned" if name in ("c", "d") else "aligned"

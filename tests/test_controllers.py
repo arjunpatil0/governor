@@ -231,3 +231,52 @@ def test_statics_tuned_under_a_power_budget_respect_it_and_a_lower_budget_gives_
     assert hi["feasible"] and lo["feasible"] and hi["power_max_seen"] <= 60.0 and lo["power_max_seen"] <= 35.0 and 0 < lo["tok_s"] < hi["tok_s"]
     one = tune_static(P, "S1", "aligned", (100,), duration_ms=15000.0, clocks=clocks, power_budget_w=60.0)
     assert one["feasible"] and one["power_max_seen"] <= 60.0
+
+
+# ---------------------------------------------------------------- d'B v2 (round 2, 2026-10-22): learned token-time model, quantised token-rate model, learned guard
+def test_token_time_model_starts_at_the_L_prior_and_learns_another_workload_curve_from_a_few_clocks(P):
+    from controllers.tokmodel import TokenTimeModel
+    tm = TokenTimeModel(P)
+    assert tm.predict(1500) == pytest.approx(1000.0 / P.tok_s(1500)) and tm.predict(600) == pytest.approx(1000.0 / P.tok_s(600))
+    for _ in range(12):
+        for f in (2460.0, 1350.0, 1050.0):
+            tm.update(f, 1000.0 / P.tok_s(f, profile="fp16"))
+    for f in (900.0, 1200.0, 1800.0):                                   # between / just below the visited clocks (far extrapolation, e.g. 600 MHz, is not claimed)
+        assert tm.predict(f) == pytest.approx(1000.0 / P.tok_s(f, profile="fp16"), rel=0.12)
+
+
+def test_v2_token_rate_model_is_quantised_by_the_frame_slack_windows(P):
+    m = ModelController(P, "aligned", power_budget_w=60.0, v2=True)
+    assert m.token_rate(n_tok=1, tok_ms=9.9, duty=1.0, period=PERIOD) == pytest.approx(60.0)
+    assert m.token_rate(1, 9.9, 0.5, PERIOD) == pytest.approx(30.0)       # cycle 19.8 ms -> a token every 2nd frame
+    assert m.token_rate(1, 9.9, 0.3, PERIOD) == pytest.approx(30.0)       # cycle 33 ms -> ceil(1.98) = 2 frames
+    assert m.token_rate(1, 9.9, 0.25, PERIOD) == pytest.approx(20.0)      # cycle 39.6 ms -> 3 frames
+    assert m.token_rate(0, 9.9, 1.0, PERIOD) == 0.0
+
+
+def test_v2_guard_is_learned_from_token_duration_variability(P):
+    def guard_after(sd):
+        m = ModelController(P, "aligned", power_budget_w=60.0, v2=True); m.reset(ctx(P))
+        rng = np.random.default_rng(0)
+        for i in range(60):
+            o = pobs(100 + 100 * i, [4.9] * 6, 0.0, clock=2460.0)
+            o.tok_ms = 9.9 + sd * rng.standard_normal(6)
+            m.act(o)
+        return m.plan["guard_ms"]
+    assert guard_after(0.0) < 0.3 and guard_after(1.0) > 2.0
+
+
+def test_v2_learns_the_token_curve_of_an_unseen_workload_and_keeps_its_plan_inside_the_budget(P):
+    m = ModelController(P, "aligned", power_budget_w=60.0, v2=True); m.reset(ctx(P))
+    for i in range(80):
+        clk = m.clock if i else 2460.0
+        o = pobs(100 + 100 * i, [4.9 * P.fg_ratio(clk) / P.fg_ratio(1800.0)] * 6, 0.0, clock=clk)
+        o.tok_ms = np.full(3, 1000.0 / P.tok_s(clk, profile="fp16"))
+        m.act(o)
+    assert m.plan["pred_power"] + m.pbias <= 60.0 + 1e-6 and m.plan["pred_q95_ms"] <= m.safety * PERIOD
+    assert m.tok_model.predict(1050.0) == pytest.approx(1000.0 / P.tok_s(1050.0, profile="fp16"), rel=0.1)
+
+
+def test_v1_is_unchanged_when_v2_is_off(P):
+    a = ModelController(P, "aligned", power_budget_w=60.0); a.reset(ctx(P)); run_ticks(a, [4.9] * 6, 30)
+    assert a.plan["duty"] in tuple(np.round(np.arange(0.1, 1.001, 0.1), 2)) and not hasattr(a, "tok_model")

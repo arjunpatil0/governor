@@ -90,3 +90,10 @@ def test_clock_actuation_latency_is_the_audit_value(P):
 def test_token_jitter_comes_from_the_L_per_token_logs_with_mean_one(P):
     j = P.token_jitter
     assert len(j) > 10000 and j.mean() == pytest.approx(1.0, rel=1e-9) and 0.8 < np.median(j) < 1.0 and np.percentile(j, 99) > 1.05
+
+
+def test_fp16_proxy_profile_comes_from_the_C_results_graph_rows(P):
+    assert P.tok_s(1050, profile="fp16") == pytest.approx(0.958641 * P.tok_s(P.UNLOCKED_MHZ), rel=1e-4)       # C: fp16 graph, rel. throughput 0.958641 at 1050 MHz
+    assert P.bg_power_w(1050, profile="fp16") == pytest.approx(0.534517 * P.tok_s(1050, profile="fp16"), rel=1e-4)      # J/token x tok/s
+    assert P.tok_s(600, profile="fp16") > P.tok_s(600)                      # flatter curve than the llama.cpp decode of L (knee 1050 vs 1500)
+    assert P.tok_s(1500) == pytest.approx(97.25)                           # default profile unchanged

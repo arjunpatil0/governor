@@ -129,3 +129,15 @@ def test_governor_loop_runs_the_unchanged_controller_on_ring_data(P):
         t += 100.0
         gov.step(t_ms=t, energy_j=5.0, clock_mhz=1800.0)
     assert SeqBlock(ctl.name, 3, create=False).read()[1] < d0 and gov.last_obs.n_missed > 0
+
+
+def test_obs_builder_and_governor_pass_token_durations_from_a_two_field_token_ring(P):
+    o = ObsBuilder(PERIOD, PERIOD).build(np.empty((0, 3)), 2, 0.0, 0.1, 1500.0, 100.0, tok_ms=np.array([10.0, 10.4]))
+    assert o.tok_ms.tolist() == [10.0, 10.4]
+    frames, tokens, ctl = SharedRing(nm(), 64, 3, create=True), SharedRing(nm(), 64, 2, create=True), SeqBlock(nm(), 3, create=True)
+    gov = Governor(PIController(P, "aligned"), ObsBuilder(PERIOD, PERIOD), ControlActuator(ctl, FakeClock(), unlocked_mhz=P.UNLOCKED_MHZ),
+                   frame_ring=SharedRing(frames.name, 64, 3, create=False), token_ring=SharedRing(tokens.name, 64, 2, create=False), period_ms=PERIOD, deadline_ms=PERIOD)
+    gov.start(t_ms=0.0)
+    tokens.push([1.0, 9.9]); tokens.push([1.02, 10.1])
+    gov.step(t_ms=100.0, energy_j=1.0, clock_mhz=1800.0)
+    assert gov.last_obs.tokens == 2 and gov.last_obs.tok_ms.tolist() == [9.9, 10.1]

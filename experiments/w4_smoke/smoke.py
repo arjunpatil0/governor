@@ -223,7 +223,7 @@ def step_frame(d):
 
 def run_driver(w, cal, d, label, ctrl_vals, seconds=30):
     """One governed-driver run against the synthetic fg: returns metrics."""
-    frames, tokens = SharedRing(nm("fr"), 8192, 3, True), SharedRing(nm("tk"), 65536, 1, True)
+    frames, tokens = SharedRing(nm("fr"), 8192, 3, True), SharedRing(nm("tk"), 65536, 2, True)
     ctrl, pace = SeqBlock(nm("ct"), 3, True), SeqBlock(nm("pc"), 3, True)
     ctrl.write(ctrl_vals)
     out_csv = d / f"driver_{label}.csv"
@@ -286,7 +286,7 @@ def step_driver(d):
 def step_governor(d):
     from workloads.common.w2lib import W2
     w = W2(); cl = SafeClient(); hb = Heartbeat(cl); hb.start(); params = load_params(ROOT)
-    frames, tokens = SharedRing(nm("fr"), 8192, 3, True), SharedRing(nm("tk"), 65536, 1, True)
+    frames, tokens = SharedRing(nm("fr"), 8192, 3, True), SharedRing(nm("tk"), 65536, 2, True)
     ctrl, pace = SeqBlock(nm("ct"), 3, True), SeqBlock(nm("pc"), 3, True)
     log, pr, smp = [], None, None
     try:
@@ -294,7 +294,7 @@ def step_governor(d):
         cal = calibrate(w, cl); cl.reset(); time.sleep(1.1)
         tuned = json.loads((ROOT / "data" / "sim_tuned.json").read_text())["params"]["c'"]
         ctl = PIController(params, "aligned", power_budget_w=60.0, **tuned)
-        gov = Governor(ctl, ObsBuilder(PERIOD, PERIOD), ControlActuator(ctrl, cl, params.UNLOCKED_MHZ), SharedRing(frames.name, 8192, 3, False), SharedRing(tokens.name, 65536, 1, False),
+        gov = Governor(ctl, ObsBuilder(PERIOD, PERIOD), ControlActuator(ctrl, cl, params.UNLOCKED_MHZ), SharedRing(frames.name, 8192, 3, False), SharedRing(tokens.name, 65536, 2, False),
                        PERIOD, PERIOD, params=params)
         env = dict(os.environ, PATH=str(BIN) + ";" + os.environ["PATH"])
         gov.start(0.0, startup_reset=lambda: reset_clocks(cl, is_admin=False))
