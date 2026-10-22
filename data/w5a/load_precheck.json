@@ -1,0 +1,71 @@
+{
+ "utc": "2026-10-22T19:33:30.673840+00:00",
+ "exe_sha256": "bb875fbcaa2cf792f0f015a949b9db6cacf1ac50c4491471c2e1bcd504e78044",
+ "context": 2048,
+ "results": [
+  {
+   "workload": "llama32_1b",
+   "role": "known",
+   "passed": true,
+   "offloaded": "17/17",
+   "n_layer": 16,
+   "returncode": 0,
+   "tokens": 3194,
+   "vram_peak_minus_base_mib": 1237,
+   "vram_total_mib": 8188,
+   "output_tail": [
+    "EXEC_MODE cuda offloaded=17/17 n_layer=16 model_size=799862912 governed=1",
+    "DONE tokens=3194 t_first=495114.952542 t_last=495128.945406 ctx_end=3706"
+   ],
+   "seconds": 18.1
+  },
+  {
+   "workload": "llama32_3b",
+   "role": "known",
+   "passed": true,
+   "offloaded": "29/29",
+   "n_layer": 28,
+   "returncode": 0,
+   "tokens": 1381,
+   "vram_peak_minus_base_mib": 2561,
+   "vram_total_mib": 8188,
+   "output_tail": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+    "DONE tokens=1381 t_first=495137.853081 t_last=495151.841501 ctx_end=1893"
+   ],
+   "seconds": 16.9
+  },
+  {
+   "workload": "phi35_mini",
+   "role": "known (proposed other family)",
+   "passed": true,
+   "offloaded": "33/33",
+   "n_layer": 32,
+   "returncode": 0,
+   "tokens": 1085,
+   "vram_peak_minus_base_mib": 3227,
+   "vram_total_mib": 8188,
+   "output_tail": [
+    "EXEC_MODE cuda offloaded=33/33 n_layer=32 model_size=2392493952 governed=1",
+    "DONE tokens=1085 t_first=495159.824187 t_last=495173.803741 ctx_end=1597"
+   ],
+   "seconds": 16.2
+  },
+  {
+   "workload": "llama31_8b",
+   "role": "HELD OUT",
+   "passed": true,
+   "offloaded": "33/33",
+   "n_layer": 32,
+   "returncode": 0,
+   "tokens": 674,
+   "vram_peak_minus_base_mib": 5091,
+   "vram_total_mib": 8188,
+   "output_tail": [
+    "EXEC_MODE cuda offloaded=33/33 n_layer=32 model_size=4912898304 governed=1",
+    "DONE tokens=674 t_first=495186.698646 t_last=495200.692394 ctx_end=1186"
+   ],
+   "seconds": 18.5
+  }
+ ]
+}
