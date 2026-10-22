@@ -24,6 +24,7 @@ ASSUMPTIONS = (
     "'unlocked' fg speed from W1 (2460 MHz) with no thermal throttling unless a scenario caps it",
     "fg frame jitter (jitter_sigma) is a scenario parameter, not measured",
     "idle power 5 W from a single pilot observation (journal 0011)",
+    "bg token time is deterministic at the L median rate (no token-time jitter or CPU-side stalls), so the guard only has to absorb fg jitter",
 )
 
 
