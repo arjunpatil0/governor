@@ -80,7 +80,7 @@ def build_cells(cfg, part):
         return [_cell("L", f"llama_{lv}", lv, None, None, llama=dict(model=LLAMA_MODEL, n_prompt=512)) for lv in LLAMA_LEVELS]
     if part == "G":
         rec = lambda c, on: dict(c, rec=on)
-        cells = [rec(_cell("G", "g_baseline", 1800, _fg(0.1), None), True)]
+        cells = [rec(_cell("G", "g_baseline", 1800, _fg(0.1), None), True), rec(_cell("G", "g_baseline_off", 1800, _fg(0.1), None), False)]
         for m in (0.5, 1, 2, 8):
             for on in (True, False):
                 cells.append(rec(_cell("G", f"g_R{m}" + ("" if on else "_off"), 1800, _fg(0.1), _bg(m, 0.0)), on))
@@ -93,12 +93,18 @@ def build_cells(cfg, part):
     raise ValueError(f"unknown part {part!r}; expected A, A2, B, C, L or G")
 
 
+def gap_k_for(cell, role):
+    """Per-block gap-log limit K (addendum 2 section A): 8 for the 0.1 ms foreground kernels, 32 for every other recorded kernel."""
+    if role == "fg" and cell["fg"]["size_ms"] == 0.1:
+        return 8
+    return 32
+
+
 def precheck_cells_G(cells):
-    """Cells of the Experiment G pre-check (iii) run: instrumented/uninstrumented pairs for fg alone (g_baseline_off exists only here, it is
-    not one of the 14 registered cells) and for R_2, plus bgalone and T4 so every recording code path runs. Not a result."""
+    """Cells of the Experiment G pre-check (iii) run: instrumented/uninstrumented pairs for fg alone and for R_2, plus bgalone and T4 so every
+    recording code path runs. Not a result."""
     by = {c["cell_id"]: c for c in cells}
-    twin = dict(by["g_baseline"], cell_id="g_baseline_off", rec=False)
-    return [by["g_baseline"], twin, by["g_R2"], by["g_R2_off"], by["g_bgalone"], by["g_T4"]]
+    return [by["g_baseline"], by["g_baseline_off"], by["g_R2"], by["g_R2_off"], by["g_bgalone"], by["g_T4"]]
 
 
 def order_block(cells, base_seed, block):

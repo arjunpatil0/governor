@@ -64,3 +64,60 @@ def test_two_streams_in_one_process_share_the_timebase(w):
         assert m.any()
         t0s = r["rec"]["t0"][m] * 1e-9 - off; t1s = r["rec"]["t1"][m] * 1e-9 - off
         assert (t0s >= tl - 2 * rt - 1e-4).all() and (t1s <= td + 2 * rt + 1e-4).all()
+
+
+# ---- multi-gap logging (addendum 2, section A): every gap > 20 us logged per block, up to K, with an overflow counter
+COMPETITOR = (
+    "import sys; sys.path[:0] = [r'{root}/workloads/common', r'{root}/analysis']\n"
+    "from w2lib import W2\n"
+    "w = W2(); w.bg_until(1, [40000], w.now() + 9.0)\n"
+)
+
+
+def _contended_fg(w, gap_k, n=250):
+    """fg 1 ms kernels (recording) while another PROCESS keeps the GPU busy: time-slicing suspends and resumes the resident blocks."""
+    import subprocess
+    import sys
+    from w2lib import ROOT
+    p = subprocess.Popen([sys.executable, "-c", COMPETITOR.format(root=str(ROOT).replace("\\", "/"))])
+    try:
+        import time
+        time.sleep(4.0)
+        arr = w.now() + 0.2 + np.arange(n) * 0.008
+        return w.fg_run_rec(1, arr, 20000, rec_from=0, cap_blocks=(n + 5) * w.sms * 6, gap_k=gap_k)
+    finally:
+        p.wait(timeout=60)
+
+
+def test_rec_has_gap_log_fields_without_contention(w):
+    arr = w.now() + 0.05 + np.arange(20) * 0.003
+    tl, tc, g, rec = w.fg_run_rec(1, arr, 2000, rec_from=0, cap_blocks=100000, gap_k=8)
+    n = len(rec["t0"])
+    assert n == 20 * w.sms * 6
+    for k in ("tg0", "ngaps", "novf"):
+        assert len(rec[k]) == n
+    assert set(rec["gaps"]) >= {"rec_idx", "off", "len"} and rec["gap_lost"] == 0
+    assert (rec["tg0"] >= rec["t0"]).all() and rec["ngaps"].sum() == len(rec["gaps"]["len"])
+
+
+def test_contended_blocks_log_every_gap_over_20us_in_order_inside_the_block(w):
+    tl, tc, g, rec = _contended_fg(w, gap_k=32)
+    gp = rec["gaps"]
+    assert len(gp["len"]) > 0, "no suspension seen under two-process contention"
+    assert (gp["len"] > 20000).all()
+    assert rec["novf"].sum() == 0 or rec["novf"].mean() < 0.01
+    idx = gp["rec_idx"].astype(np.int64)
+    start = rec["tg0"][idx] + gp["off"].astype(np.uint64); end = start + gp["len"].astype(np.uint64)
+    assert (start >= rec["t0"][idx]).all() and (end <= rec["t1"][idx] + 5000).all()           # a gap lies inside its own block (+ read granularity)
+    # logged counts match the list, and per block the gaps are ordered and do not overlap
+    assert (np.bincount(idx, minlength=len(rec["t0"])) == rec["ngaps"].astype(np.int64)).all()
+    order = np.lexsort((start, idx)); si, ss, se = idx[order], start[order], end[order]
+    same = si[1:] == si[:-1]
+    assert (ss[1:][same] >= se[:-1][same]).all()
+
+
+def test_contended_gap_k_limits_the_log_and_counts_the_overflow(w):
+    tl, tc, g, rec = _contended_fg(w, gap_k=1, n=200)
+    assert rec["ngaps"].max() <= 1
+    assert rec["novf"].sum() > 0, "with K = 1 some block should have a second gap"
+    assert (rec["ngaps"].astype(int) + rec["novf"].astype(int)).max() >= 2

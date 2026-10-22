@@ -71,7 +71,10 @@ __global__ void fma_kernel(float* out, int iters, float a, float b)
 // gap detector: lane 0 of every warp reads %globaltimer every kGapStride loop iterations and keeps the largest gap between consecutive
 // reads (and where it began); the block keeps the largest over its warps. A block descheduled mid-execution shows up as a large gap.
 static int g_gap_stride = 64;      // power of two; runtime-settable (w2_set_gap_stride) so the pre-check can measure the cost of the reads
-struct Rec { unsigned long long t0, t1, gmax, gbeg; unsigned int smid, tag, blk, pad; };
+// Rec: t0/t1 = earliest warp start / latest warp end; tg0 = thread 0's own start (the origin of the logged gap offsets); gmax/gbeg = largest
+// gap; ngaps = gaps stored in the gap list, novf = gaps over the per-block limit K (counted, not stored); nreads = gap reads by thread 0.
+struct Rec { unsigned long long t0, t1, tg0, gmax, gbeg; unsigned int smid, tag, blk, nreads, ngaps, novf; };
+struct GapEnt { unsigned int rec_idx, off, len; };   // off = gap start - tg0 (ns), len = gap length (ns)
 
 __device__ __forceinline__ unsigned long long gtimer_ns()
 {
@@ -86,13 +89,25 @@ __device__ __forceinline__ unsigned int smid_now()
     return s;
 }
 
-__global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec, unsigned int tag, int stride_mask)
+// Log one gap (start `st`, length `ln`) of thread 0's block: stored while the block has fewer than gap_k, else counted in novf; a full global list also counts as novf.
+#define LOG_GAP(st, ln)                                                                                              \
+    do {                                                                                                             \
+        if (ngaps < (unsigned int)gap_k) {                                                                           \
+            unsigned int gi_ = atomicAdd(gcount, 1u);                                                                \
+            if (gi_ < gcap) { GapEnt ge_; ge_.rec_idx = rec_base + blockIdx.x; ge_.off = (unsigned int)((st) - t0);   \
+                              ge_.len = (unsigned int)(ln); glist[gi_] = ge_; ++ngaps; }                              \
+            else ++novf;                                                                                             \
+        } else ++novf;                                                                                               \
+    } while (0)
+
+__global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec, unsigned int tag, int stride_mask,
+                               GapEnt* glist, unsigned int* gcount, unsigned int gcap, unsigned int rec_base, int gap_k, unsigned int log_thr)
 {
     __shared__ unsigned long long s_gmax[kThreads / 32], s_gbeg[kThreads / 32], s_t0[kThreads / 32], s_t1[kThreads / 32];
     const unsigned long long t0 = gtimer_ns();
     const bool lane0 = (threadIdx.x & 31) == 0;
     unsigned long long last = t0, gmax = 0, gbeg = t0;
-    unsigned int nreads = 0;
+    unsigned int nreads = 0, ngaps = 0, novf = 0;
     float x0 = threadIdx.x * 1e-3f, x1 = x0 + 1e-3f, x2 = x0 + 2e-3f, x3 = x0 + 3e-3f;
     float x4 = x0 + 4e-3f, x5 = x0 + 5e-3f, x6 = x0 + 6e-3f, x7 = x0 + 7e-3f;
     // chunked loop: the FMA body stays branch-free (a branch inside it costs ~1.6x by breaking the scheduling of the 8 chains); %globaltimer
@@ -109,6 +124,7 @@ __global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec
             ++nreads;
             unsigned long long t = gtimer_ns(), g = t - last;
             if (g > gmax) { gmax = g; gbeg = last; }
+            if (threadIdx.x == 0 && g > log_thr) LOG_GAP(last, g);
             last = t;
         }
     }
@@ -120,6 +136,7 @@ __global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec
     if (lane0) {
         unsigned long long t = gtimer_ns(), g = t - last;
         if (g > gmax) { gmax = g; gbeg = last; }
+        if (threadIdx.x == 0 && g > log_thr) LOG_GAP(last, g);
         s_gmax[threadIdx.x >> 5] = gmax; s_gbeg[threadIdx.x >> 5] = gbeg; s_t0[threadIdx.x >> 5] = t0; s_t1[threadIdx.x >> 5] = t;
     }
     __syncthreads();
@@ -132,13 +149,17 @@ __global__ void fma_kernel_rec(float* out, int iters, float a, float b, Rec* rec
             if (s_t1[w] > b1) b1 = s_t1[w];
         }
         Rec r;
-        r.t0 = b0; r.t1 = b1; r.gmax = m; r.gbeg = mb; r.smid = smid_now(); r.tag = tag; r.blk = blockIdx.x; r.pad = nreads + 1;   // pad = number of gap reads by warp 0's lane 0 (loop reads + the final one)
+        r.t0 = b0; r.t1 = b1; r.tg0 = t0; r.ngaps = ngaps; r.novf = novf; r.gmax = m; r.gbeg = mb; r.smid = smid_now(); r.tag = tag; r.blk = blockIdx.x; r.nreads = nreads + 1;   // gap reads by thread 0 (loop reads + the final one)
         rec[blockIdx.x] = r;
     }
 }
 
 static Rec* dRec = nullptr;
-static size_t g_rec_cap = 0, g_rec_used = 0, g_rec_dropped = 0;
+static GapEnt* dGap = nullptr;
+static unsigned int* dGapCount = nullptr;
+static size_t g_rec_cap = 0, g_rec_used = 0, g_rec_dropped = 0, g_gap_cap = 0;
+static int g_gap_k = 8;                        // per-block gap limit for the current recording call
+static unsigned int g_log_thr_ns = 20000;     // logging threshold (addendum 2: 20 us)
 static cudaStream_t g_s2 = nullptr;
 
 __global__ void gt_read_loop(unsigned long long* out, int n) { for (int i = 0; i < n; ++i) out[i] = gtimer_ns(); }
@@ -157,7 +178,8 @@ static Rec* rec_take(int blocks)
 static int launch_unit(int kind, int units, int blocks, Rec* rec = nullptr, unsigned int tag = 0, cudaStream_t st = nullptr)
 {
     if (!st) st = g_s;
-    if (kind == 1 && rec) fma_kernel_rec<<<blocks, kThreads, 0, st>>>(dOut, units, 0.9999f, 1e-4f, rec, tag, g_gap_stride - 1);
+    if (kind == 1 && rec) fma_kernel_rec<<<blocks, kThreads, 0, st>>>(dOut, units, 0.9999f, 1e-4f, rec, tag, g_gap_stride - 1, dGap, dGapCount, (unsigned int)g_gap_cap,
+                                                     (unsigned int)(rec - dRec), g_gap_k, g_log_thr_ns);
     else if (kind == 1) fma_kernel<<<blocks, kThreads, 0, st>>>(dOut, units, 0.9999f, 1e-4f);
     else {   // mem: units = chunks of 4096 float4 (64 KiB read + 64 KiB written); one full pass = kN4/4096 = 4096 chunks
         const int per_pass = (int)(kN4 / 4096);
@@ -231,8 +253,9 @@ EXPORT int w2_bg_until(int kind, const int* units, int n_units, int blocks_per_s
 // Same, with the instrumented fma kernel for slices that START at or after t_rec0 (QPC) while the record buffer (w2_rec_init) has room;
 // later slices run the plain kernel and are counted in w2_rec_dropped(). fma only (kind 1).
 EXPORT int w2_bg_until_rec(int kind, const int* units, int n_units, int blocks_per_sm, double t_stop,
-                           double* t_start, double* t_end, double* gpu_ms, int cap, int* n_done, double duty, double t_rec0)
+                           double* t_start, double* t_end, double* gpu_ms, int cap, int* n_done, double duty, double t_rec0, int gap_k)
 {
+    g_gap_k = gap_k;
     if (kind != 1) { snprintf(g_err, sizeof g_err, "recording supports the fma kernel only"); return 4; }
     return bg_loop(kind, units, n_units, blocks_per_sm, t_stop, t_start, t_end, gpu_ms, cap, n_done, duty, true, t_rec0);
 }
@@ -267,18 +290,42 @@ EXPORT int w2_fg_run(int kind, int n, const double* arrivals, int units, int blo
 
 // Same, recording requests with index >= rec_from (fma only).
 EXPORT int w2_fg_run_rec(int kind, int n, const double* arrivals, int units, int blocks_per_sm,
-                         double* t_launch, double* t_complete, double* gpu_ms, int rec_from)
+                         double* t_launch, double* t_complete, double* gpu_ms, int rec_from, int gap_k)
 {
+    g_gap_k = gap_k;
     if (kind != 1) { snprintf(g_err, sizeof g_err, "recording supports the fma kernel only"); return 4; }
     return fg_loop(kind, n, arrivals, units, blocks_per_sm, t_launch, t_complete, gpu_ms, true, rec_from);
 }
 
 // ---- record buffer and %globaltimer probes (Experiment G pre-checks)
-EXPORT int w2_rec_init(size_t cap_blocks)
+EXPORT int w2_rec_init(size_t cap_blocks, size_t gap_cap)
 {
     if (dRec) { CK(cudaFree(dRec)); dRec = nullptr; }
+    if (dGap) { CK(cudaFree(dGap)); dGap = nullptr; }
+    if (dGapCount) { CK(cudaFree(dGapCount)); dGapCount = nullptr; }
     CK(cudaMalloc(&dRec, cap_blocks * sizeof(Rec)));
-    g_rec_cap = cap_blocks; g_rec_used = 0; g_rec_dropped = 0;
+    CK(cudaMalloc(&dGap, gap_cap * sizeof(GapEnt)));
+    CK(cudaMalloc(&dGapCount, sizeof(unsigned int)));
+    CK(cudaMemset(dGapCount, 0, sizeof(unsigned int)));
+    g_rec_cap = cap_blocks; g_rec_used = 0; g_rec_dropped = 0; g_gap_cap = gap_cap;
+    return 0;
+}
+EXPORT int w2_set_log_thr(unsigned int ns) { g_log_thr_ns = ns; return 0; }
+// Number of gaps the kernels tried to store (more than the list capacity means some were lost; they are counted in the blocks' novf).
+EXPORT size_t w2_gap_count()
+{
+    unsigned int c = 0;
+    if (!dGapCount || cudaDeviceSynchronize() != cudaSuccess || cudaMemcpy(&c, dGapCount, sizeof c, cudaMemcpyDeviceToHost) != cudaSuccess) return 0;
+    return c;
+}
+EXPORT int w2_gap_fetch(unsigned int* rec_idx, unsigned int* off, unsigned int* len)
+{
+    CK(cudaDeviceSynchronize());
+    size_t n = w2_gap_count();
+    if (n > g_gap_cap) n = g_gap_cap;
+    std::vector<GapEnt> h(n);
+    if (n) CK(cudaMemcpy(h.data(), dGap, n * sizeof(GapEnt), cudaMemcpyDeviceToHost));
+    for (size_t i = 0; i < n; ++i) { rec_idx[i] = h[i].rec_idx; off[i] = h[i].off; len[i] = h[i].len; }
     return 0;
 }
 EXPORT int w2_set_gap_stride(int stride)
@@ -289,14 +336,14 @@ EXPORT int w2_set_gap_stride(int stride)
 }
 EXPORT size_t w2_rec_used() { return g_rec_used; }
 EXPORT size_t w2_rec_dropped() { return g_rec_dropped; }
-EXPORT int w2_rec_fetch(unsigned long long* t0, unsigned long long* t1, unsigned long long* gmax, unsigned long long* gbeg,
-                        unsigned int* smid, unsigned int* tag, unsigned int* blk, unsigned int* nreads)
+EXPORT int w2_rec_fetch(unsigned long long* t0, unsigned long long* t1, unsigned long long* tg0, unsigned long long* gmax, unsigned long long* gbeg,
+                        unsigned int* smid, unsigned int* tag, unsigned int* blk, unsigned int* nreads, unsigned int* ngaps, unsigned int* novf)
 {
     CK(cudaDeviceSynchronize());
     std::vector<Rec> h(g_rec_used);
     if (g_rec_used) CK(cudaMemcpy(h.data(), dRec, g_rec_used * sizeof(Rec), cudaMemcpyDeviceToHost));
     for (size_t i = 0; i < h.size(); ++i) {
-        t0[i] = h[i].t0; t1[i] = h[i].t1; gmax[i] = h[i].gmax; gbeg[i] = h[i].gbeg; smid[i] = h[i].smid; tag[i] = h[i].tag; blk[i] = h[i].blk; nreads[i] = h[i].pad;
+        t0[i] = h[i].t0; t1[i] = h[i].t1; tg0[i] = h[i].tg0; ngaps[i] = h[i].ngaps; novf[i] = h[i].novf; gmax[i] = h[i].gmax; gbeg[i] = h[i].gbeg; smid[i] = h[i].smid; tag[i] = h[i].tag; blk[i] = h[i].blk; nreads[i] = h[i].nreads;
     }
     return 0;
 }
@@ -360,7 +407,9 @@ EXPORT int w2_free()
     if (dB) CK(cudaFree(dB));
     if (dOut) CK(cudaFree(dOut));
     if (dRec) CK(cudaFree(dRec));
-    dA = dB = nullptr; dOut = nullptr; dRec = nullptr; g_rec_cap = g_rec_used = g_rec_dropped = 0;
+    if (dGap) CK(cudaFree(dGap));
+    if (dGapCount) CK(cudaFree(dGapCount));
+    dA = dB = nullptr; dOut = nullptr; dRec = nullptr; dGap = nullptr; dGapCount = nullptr; g_rec_cap = g_rec_used = g_rec_dropped = g_gap_cap = 0;
     return 0;
 }
 

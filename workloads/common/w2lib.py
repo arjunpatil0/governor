@@ -28,7 +28,8 @@ class W2:
         self.sms = sms.value
         for f in ("w2_rec_used", "w2_rec_dropped"):
             getattr(self.d, f).restype = ctypes.c_size_t
-        self.d.w2_rec_init.argtypes = [ctypes.c_size_t]
+        self.d.w2_rec_init.argtypes = [ctypes.c_size_t, ctypes.c_size_t]
+        self.d.w2_gap_count.restype = ctypes.c_size_t
 
     def now(self):
         return self.d.w2_qpc_now()
@@ -55,30 +56,34 @@ class W2:
     def set_gap_stride(self, stride):
         self.chk(self.d.w2_set_gap_stride(int(stride)), "set_gap_stride")
 
-    def rec_init(self, cap_blocks):
-        self.chk(self.d.w2_rec_init(int(cap_blocks)), "rec_init")
+    def rec_init(self, cap_blocks, gap_cap=8_000_000):
+        self.chk(self.d.w2_rec_init(int(cap_blocks), int(gap_cap)), "rec_init")
 
     def rec_fetch(self):
         n = int(self.d.w2_rec_used())
         u64 = lambda: np.zeros(n, dtype=np.uint64); u32 = lambda: np.zeros(n, dtype=np.uint32)
-        t0, t1, gmax, gbeg = u64(), u64(), u64(), u64(); smid, tag, blk, nreads = u32(), u32(), u32(), u32()
+        t0, t1, tg0, gmax, gbeg = u64(), u64(), u64(), u64(), u64(); smid, tag, blk, nreads, ngaps, novf = u32(), u32(), u32(), u32(), u32(), u32()
         ptr = lambda a: a.ctypes.data_as(ctypes.c_void_p)
-        self.chk(self.d.w2_rec_fetch(ptr(t0), ptr(t1), ptr(gmax), ptr(gbeg), ptr(smid), ptr(tag), ptr(blk), ptr(nreads)), "rec_fetch")
-        return dict(t0=t0, t1=t1, gmax=gmax, gbeg=gbeg, smid=smid, tag=tag, blk=blk, nreads=nreads, dropped=int(self.d.w2_rec_dropped()))
+        self.chk(self.d.w2_rec_fetch(ptr(t0), ptr(t1), ptr(tg0), ptr(gmax), ptr(gbeg), ptr(smid), ptr(tag), ptr(blk), ptr(nreads), ptr(ngaps), ptr(novf)), "rec_fetch")
+        total = int(self.d.w2_gap_count()); ng = min(total, 8_000_000)
+        gi, go, gl = (np.zeros(ng, dtype=np.uint32) for _ in range(3))
+        self.chk(self.d.w2_gap_fetch(ptr(gi), ptr(go), ptr(gl)), "gap_fetch")
+        return dict(t0=t0, t1=t1, tg0=tg0, gmax=gmax, gbeg=gbeg, smid=smid, tag=tag, blk=blk, nreads=nreads, ngaps=ngaps, novf=novf,
+                    gaps=dict(rec_idx=gi, off=go, len=gl), gap_lost=max(0, total - ng), dropped=int(self.d.w2_rec_dropped()))
 
-    def bg_until_rec(self, units, t_stop, t_rec0, cap_blocks, cap=200_000, bps=BPS, duty=1.0):
+    def bg_until_rec(self, units, t_stop, t_rec0, cap_blocks, cap=200_000, bps=BPS, duty=1.0, gap_k=32):
         self.rec_init(cap_blocks)
         units = np.ascontiguousarray(units, dtype=np.int32)
         ts, te, g = (np.zeros(cap) for _ in range(3)); n = ctypes.c_int()
         self.chk(self.d.w2_bg_until_rec(1, i32(units), len(units), bps, ctypes.c_double(t_stop), dbl(ts), dbl(te), dbl(g), cap,
-                                        ctypes.byref(n), ctypes.c_double(duty), ctypes.c_double(t_rec0)), "bg_until_rec")
+                                        ctypes.byref(n), ctypes.c_double(duty), ctypes.c_double(t_rec0), int(gap_k)), "bg_until_rec")
         return ts[:n.value], te[:n.value], g[:n.value], self.rec_fetch()
 
-    def fg_run_rec(self, kind, arrivals, units, rec_from, cap_blocks, bps=BPS):
+    def fg_run_rec(self, kind, arrivals, units, rec_from, cap_blocks, bps=BPS, gap_k=8):
         self.rec_init(cap_blocks)
         arrivals = np.ascontiguousarray(arrivals, dtype=np.float64); n = len(arrivals)
         tl, tc, g = (np.zeros(n) for _ in range(3))
-        self.chk(self.d.w2_fg_run_rec(kind, n, dbl(arrivals), int(units), bps, dbl(tl), dbl(tc), dbl(g), int(rec_from)), "fg_run_rec")
+        self.chk(self.d.w2_fg_run_rec(kind, n, dbl(arrivals), int(units), bps, dbl(tl), dbl(tc), dbl(g), int(rec_from), int(gap_k)), "fg_run_rec")
         return tl, tc, g, self.rec_fetch()
 
     def gt_resolution(self, n=20000):

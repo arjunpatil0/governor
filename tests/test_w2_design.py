@@ -126,11 +126,12 @@ def test_frame_units_loaded_for_every_part_whose_cells_use_a_frame(part):
 
 
 # ---- part G (experiments/w2_colocation_addendum_globaltimer_2026-10-22.md): 14 cells per block
-def test_G_cells_match_the_registered_addendum():
+def test_G_cells_match_the_registered_addenda():
     cells = build_cells(CFG, "G")
-    assert len(cells) == 14 and len({c["cell_id"] for c in cells}) == 14
+    assert len(cells) == 15 and len({c["cell_id"] for c in cells}) == 15       # 14 + g_baseline_off (addendum 2 section D)
     by = {c["cell_id"]: c for c in cells}
     assert by["g_baseline"]["rec"] and by["g_baseline"]["bg"] is None and by["g_baseline"]["fg"]["size_ms"] == 0.1
+    assert not by["g_baseline_off"]["rec"] and by["g_baseline_off"]["bg"] is None and by["g_baseline_off"]["fg"] == by["g_baseline"]["fg"]
     for m in (0.5, 1, 2, 8):
         on, off = by[f"g_R{m}"], by[f"g_R{m}_off"]
         assert on["rec"] and not off["rec"]
@@ -153,6 +154,16 @@ def test_G_precheck_cells_pair_every_instrumented_cell_with_an_uninstrumented_tw
     from design import precheck_cells_G
     cells = precheck_cells_G(build_cells(CFG, "G"))
     by = {c["cell_id"]: c for c in cells}
+    assert [c["cell_id"] for c in cells].count("g_baseline_off") == 1
     assert set(by) == {"g_baseline", "g_baseline_off", "g_R2", "g_R2_off", "g_bgalone", "g_T4"}
     assert by["g_baseline"]["rec"] and not by["g_baseline_off"]["rec"]
     assert {k: v for k, v in by["g_baseline"].items() if k not in ("cell_id", "rec")} == {k: v for k, v in by["g_baseline_off"].items() if k not in ("cell_id", "rec")}
+
+
+def test_G_gap_k_follows_addendum_2():
+    from design import gap_k_for
+    cells = {c["cell_id"]: c for c in build_cells(CFG, "G")}
+    assert gap_k_for(cells["g_baseline"], "fg") == 8 and gap_k_for(cells["g_R2"], "fg") == 8
+    for cid in ("g_T1", "g_T4", "g_T1_alone", "g_T4_alone"):
+        assert gap_k_for(cells[cid], "fg") == 32
+    assert gap_k_for(cells["g_R2"], "bg") == 32 and gap_k_for(cells["g_bgalone"], "bg") == 32

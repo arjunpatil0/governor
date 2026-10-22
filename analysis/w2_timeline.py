@@ -43,7 +43,7 @@ def overhead_check(on_lat_p50_ms, off_lat_p50_ms, on_wait_ms, off_wait_ms, rel_t
 
 
 # ---- compact storage of the per-block records (raw timestamps would be gigabytes over 140 cells)
-_REC_FIELDS = ("t0", "t1", "gmax", "gbeg", "smid", "tag", "blk", "nreads")
+_REC_FIELDS = ("t0", "t1", "tg0", "gmax", "gbeg", "smid", "tag", "blk", "nreads", "ngaps", "novf")
 
 
 def pack_rec(rec):
@@ -57,14 +57,20 @@ def pack_rec(rec):
         raise ValueError("a block duration or gap exceeds the 32-bit nanosecond range (4.29 s); refusing to truncate")
     return dict(base=np.array(base, dtype=np.uint64), t0_rel=(t0 - base).astype(np.int64), dur=dur.astype(np.uint32), gmax=gmax.astype(np.uint32),
                 gbeg_off=gbeg_off.astype(np.uint32), smid=np.asarray(rec["smid"], dtype=np.uint8), tag=np.asarray(rec["tag"], dtype=np.uint32),
-                blk=np.asarray(rec["blk"], dtype=np.uint16), nreads=np.asarray(rec["nreads"], dtype=np.uint32), dropped=np.array(int(rec.get("dropped", 0))))
+                blk=np.asarray(rec["blk"], dtype=np.uint16), nreads=np.asarray(rec["nreads"], dtype=np.uint32), dropped=np.array(int(rec.get("dropped", 0))),
+                tg0_off=(np.asarray(rec["tg0"], dtype=np.uint64) - t0).astype(np.uint32), ngaps=np.asarray(rec["ngaps"], dtype=np.uint8),
+                novf=np.asarray(rec["novf"], dtype=np.uint32), gap_rec_idx=np.asarray(rec["gaps"]["rec_idx"], dtype=np.uint32),
+                gap_off=np.asarray(rec["gaps"]["off"], dtype=np.uint32), gap_len=np.asarray(rec["gaps"]["len"], dtype=np.uint32),
+                gap_lost=np.array(int(rec.get("gap_lost", 0))))
 
 
 def unpack_rec(p):
     base = np.uint64(p["base"])
     t0 = p["t0_rel"].astype(np.uint64) + base
     return dict(t0=t0, t1=t0 + p["dur"].astype(np.uint64), gmax=p["gmax"].astype(np.uint64), gbeg=t0 + p["gbeg_off"].astype(np.uint64),
-                smid=p["smid"].astype(np.uint32), tag=p["tag"].astype(np.uint32), blk=p["blk"].astype(np.uint32), nreads=p["nreads"].astype(np.uint32), dropped=int(p["dropped"]))
+                smid=p["smid"].astype(np.uint32), tag=p["tag"].astype(np.uint32), blk=p["blk"].astype(np.uint32), nreads=p["nreads"].astype(np.uint32), dropped=int(p["dropped"]),
+                tg0=t0 + p["tg0_off"].astype(np.uint64), ngaps=p["ngaps"].astype(np.uint32), novf=p["novf"].astype(np.uint32),
+                gaps=dict(rec_idx=p["gap_rec_idx"], off=p["gap_off"], len=p["gap_len"]), gap_lost=int(p["gap_lost"]))
 
 
 def g_thr_ns(rec, mult=20):

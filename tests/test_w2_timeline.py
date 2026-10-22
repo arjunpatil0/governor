@@ -48,21 +48,25 @@ def test_pack_and_unpack_rec_roundtrip_and_shrinks():
     t0 = (base + np.sort(rng.integers(0, 5_000_000_000, n))).astype(np.uint64)
     rec = dict(t0=t0, t1=t0 + rng.integers(1000, 900_000, n).astype(np.uint64), gmax=rng.integers(0, 500_000, n).astype(np.uint64),
                gbeg=None, smid=rng.integers(0, 36, n).astype(np.uint32), tag=rng.integers(0, 50, n).astype(np.uint32),
-               blk=rng.integers(0, 216, n).astype(np.uint32), nreads=rng.integers(1, 500, n).astype(np.uint32), dropped=3)
+               blk=rng.integers(0, 216, n).astype(np.uint32), nreads=rng.integers(1, 500, n).astype(np.uint32), dropped=3,
+               ngaps=rng.integers(0, 3, n).astype(np.uint32), novf=rng.integers(0, 2, n).astype(np.uint32), gap_lost=2,
+               gaps=dict(rec_idx=np.arange(7, dtype=np.uint32), off=np.arange(7, dtype=np.uint32) * 1000, len=np.full(7, 30000, dtype=np.uint32)))
+    rec["tg0"] = rec["t0"] + rng.integers(0, 500, n).astype(np.uint64)
     rec["gbeg"] = rec["t0"] + (rng.random(n) * (rec["t1"] - rec["t0"])).astype(np.uint64)
     back = unpack_rec(pack_rec(rec))
-    for k in ("t0", "t1", "gmax", "gbeg", "smid", "tag", "blk", "nreads"):
+    for k in ("t0", "t1", "tg0", "gmax", "gbeg", "smid", "tag", "blk", "nreads", "ngaps", "novf"):
         assert (back[k] == rec[k]).all() and back[k].dtype == rec[k].dtype
+    assert all((back["gaps"][k] == rec["gaps"][k]).all() for k in ("rec_idx", "off", "len")) and back["gap_lost"] == 2
     assert back["dropped"] == 3
     packed = pack_rec(rec)
-    assert sum(v.nbytes for v in packed.values() if hasattr(v, "nbytes")) < 0.65 * sum(rec[k].nbytes for k in ("t0", "t1", "gmax", "gbeg", "smid", "tag", "blk", "nreads"))
+    assert sum(v.nbytes for v in packed.values() if hasattr(v, "nbytes")) < 0.7 * sum(rec[k].nbytes for k in ("t0", "t1", "tg0", "gmax", "gbeg", "smid", "tag", "blk", "nreads", "ngaps", "novf"))
 
 
 def test_pack_rec_rejects_a_block_longer_than_the_32_bit_range():
     from w2_timeline import pack_rec
     rec = dict(t0=np.array([0], dtype=np.uint64), t1=np.array([5_000_000_000], dtype=np.uint64), gmax=np.array([1], dtype=np.uint64),
                gbeg=np.array([0], dtype=np.uint64), smid=np.array([0], dtype=np.uint32), tag=np.array([0], dtype=np.uint32),
-               blk=np.array([0], dtype=np.uint32), nreads=np.array([1], dtype=np.uint32), dropped=0)
+               blk=np.array([0], dtype=np.uint32), nreads=np.array([1], dtype=np.uint32), dropped=0, tg0=np.array([0], dtype=np.uint64), ngaps=np.array([0], dtype=np.uint32), novf=np.array([0], dtype=np.uint32), gaps=dict(rec_idx=np.zeros(0, dtype=np.uint32), off=np.zeros(0, dtype=np.uint32), len=np.zeros(0, dtype=np.uint32)))
     with pytest.raises(ValueError):
         pack_rec(rec)
 

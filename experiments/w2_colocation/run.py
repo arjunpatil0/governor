@@ -24,7 +24,7 @@ for sub in ("telemetry", "workloads/common", "analysis", "experiments/w2_colocat
     sys.path.insert(0, str(ROOT / sub))
 from console import disable_quickedit  # noqa: E402
 from llama_cell import parse_exec_mode, window_tokens  # noqa: E402
-from design import G_SEED, build_cells, cell_seed, clock_flags, frame_units_for_part, order_block, precheck_cells_G  # noqa: E402
+from design import G_SEED, build_cells, cell_seed, clock_flags, frame_units_for_part, gap_k_for, order_block, precheck_cells_G  # noqa: E402
 from w2_timeline import pack_rec  # noqa: E402
 from loadgen import gamma_slice_durations, latencies, parse_hags, poisson_arrivals, residual_wait  # noqa: E402
 from nvml_utils import current_event_mask, decode_event_reasons  # noqa: E402
@@ -37,7 +37,7 @@ LLAMA_DIR = ROOT / "data" / "llama"
 PILOT = ROOT / "data" / "pilot" / "w2" / "20261020T222839Z" / "pilot.json"
 FG_CPU, BG_CPU = 4, 8
 KIND_ID = {"mem": 0, "fma": 1}
-G_BG_REC_BLOCKS = 800_000      # bg record buffer (Rec = 48 B): ~3700 slices of 216 blocks; later slices run uninstrumented and are counted
+G_BG_REC_BLOCKS = 1_600_000    # bg record buffer (addendum 2 section C): ~7400 slices of 216 blocks; later slices run uninstrumented and are counted
 SELF = [sys.executable, str(Path(__file__).resolve())]
 NO_CLOCK_CONTROL = False
 FIELDS = ["block", "cell_idx", "part", "cell_id", "sm_mhz", "mem_mhz", "seed", "spec", "n_fg_measured", "frac_completed",
@@ -126,7 +126,7 @@ def child_main(role, spec_path):
         while w.now() < spec["t_sync"]:
             time.sleep(0.001)
         if rec:
-            ts, te, g, r = w.bg_until_rec(units, spec["t_stop"], t_rec0=spec["t_rec0"], cap_blocks=spec["rec_cap_blocks"], cap=spec["cap"], duty=spec["duty"])
+            ts, te, g, r = w.bg_until_rec(units, spec["t_stop"], t_rec0=spec["t_rec0"], cap_blocks=spec["rec_cap_blocks"], cap=spec["cap"], duty=spec["duty"], gap_k=spec["gap_k"])
             save_rec(Path(spec["rec_out"]), r, sync0, w.gt_sync3(), w.sms)
         else:
             ts, te, g = w.bg_until(spec["kind"], units, spec["t_stop"], cap=spec["cap"], duty=spec["duty"])
@@ -138,7 +138,7 @@ def child_main(role, spec_path):
                 time.sleep(0.001)
             sync0 = w.gt_sync3()
             cap_blocks = (len(arr) - spec["rec_from"] + 10) * w.sms * 6
-            tl, tc, g, r = w.fg_run_rec(spec["kind"], arr, spec["units"], rec_from=spec["rec_from"], cap_blocks=cap_blocks)
+            tl, tc, g, r = w.fg_run_rec(spec["kind"], arr, spec["units"], rec_from=spec["rec_from"], cap_blocks=cap_blocks, gap_k=spec["gap_k"])
             save_rec(Path(spec["rec_out"]), r, sync0, w.gt_sync3(), w.sms)
         else:
             tl, tc, g = w.fg_run(spec["kind"], arr, spec["units"])
@@ -152,7 +152,7 @@ def child_main(role, spec_path):
                 plain, recd, gaps = [], [], []
                 for _ in range(6):
                     ts, te, _g = w.bg_until(1, [units], w.now() + 0.25); plain.append(float(np.median(te - ts)) * 1e3)
-                    ts, te, _g, r = w.bg_until_rec([units], w.now() + 0.25, t_rec0=0.0, cap_blocks=800_000); recd.append(float(np.median(te - ts)) * 1e3)
+                    ts, te, _g, r = w.bg_until_rec([units], w.now() + 0.25, t_rec0=0.0, cap_blocks=800_000, gap_k=32); recd.append(float(np.median(te - ts)) * 1e3)
                     gaps.append(float(np.median((r["t1"] - r["t0"]).astype(np.float64) / np.maximum(r["nreads"], 1))))
                 out_rows.append(dict(stride=stride, units=units, plain_ms=float(np.median(plain)), rec_ms=float(np.median(recd)),
                                      ratio=float(np.median(np.array(recd) / np.array(plain))), median_read_gap_ns=float(np.median(gaps))))
@@ -248,7 +248,7 @@ def run_cell(cell, block, idx, h, ctx):
                 units_fg = int(ctx["units_for"](cal["fma"], fg["size_ms"]))
             kid = KIND_ID[fg["kind"]]
             procs.append(spawn("fg", dict(out=str(cdir / "fg.npz"), arrivals=str(cdir / "arrivals.npy"), kind=kid, units=units_fg,
-                                          cpu=FG_CPU, priority=fg["priority"], rec=rec, rec_from=n_warm, t_probe=t_sync - 1.0, rec_out=str(cdir / "fg_rec.npz")), cdir))
+                                          cpu=FG_CPU, priority=fg["priority"], rec=rec, rec_from=n_warm, t_probe=t_sync - 1.0, rec_out=str(cdir / "fg_rec.npz"), gap_k=gap_k_for(cell, "fg")), cdir))
         else:                                              # part G bgalone: no foreground, a window of T["window"] after the warm-up
             t_win1 = t_win0 + T["window"]
         if bg:
@@ -259,7 +259,7 @@ def run_cell(cell, block, idx, h, ctx):
             cap = int((t_win1 - t_sync + 2) / (0.3 * bg["m_ms"] * 1e-3)) + 1000
             procs.append(spawn("bg", dict(out=str(cdir / "bg.npz"), units=str(cdir / "bg_units.npy"), kind=KIND_ID[bg["kind"]], t_sync=t_sync,
                                           t_stop=t_win1 + 1.0, cap=min(cap, 1_500_000), duty=bg["duty"], cpu=BG_CPU,
-                                          rec=rec, t_rec0=t_win0, t_probe=t_sync - 1.0, rec_cap_blocks=G_BG_REC_BLOCKS, rec_out=str(cdir / "bg_rec.npz")), cdir))
+                                          rec=rec, t_rec0=t_win0, t_probe=t_sync - 1.0, rec_cap_blocks=G_BG_REC_BLOCKS, gap_k=gap_k_for(cell, "bg"), rec_out=str(cdir / "bg_rec.npz")), cdir))
 
     # measured window: energy counter read exactly twice; 20 Hz samples inside
     while time.perf_counter() < t_win0:
