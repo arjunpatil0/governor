@@ -238,8 +238,8 @@ class OverrunSpy:
 
 
 def test_observations_report_how_far_tokens_end_after_the_next_frame_arrival(P):
-    loose, tight = OverrunSpy(-3.0), OverrunSpy(1.0)
-    run(P, scen(fg_periodic(8.0), LLAMA, dur=5000.0), loose)
-    run(P, scen(fg_periodic(8.0), LLAMA, dur=5000.0), tight)
+    loose, tight = OverrunSpy(-3.0), OverrunSpy(0.5)
+    run(P, scen(fg_periodic(8.0), LLAMA, dur=5000.0), loose)          # 8 ms + 10.06 ms token does not fit: guard -3 releases it anyway
+    run(P, scen(fg_periodic(6.0), LLAMA, dur=5000.0), tight)          # 6 + 10.06 + 0.5 < 16.67: every token fits
     assert max(loose.over) > 1.0 and sum(x > 0 for x in loose.over) > 20
     assert max(tight.over) == 0.0 and len(tight.over) > 20
