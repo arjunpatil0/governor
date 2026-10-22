@@ -24,7 +24,7 @@ from sim.scenarios import SCENARIOS, build  # noqa: E402
 GRIDS = {
     "c": dict(clock_margin=(0.35, 0.4, 0.5, 0.6), kp=(0.1, 0.3, 0.5), ki=(0.03, 0.08, 0.15), target=(0.5, 0.65, 0.8)),
     "c'": dict(ki=(0.05, 0.15, 0.3), target=(0.65, 0.8, 0.9), guard0=(0.5, 1.0, 2.0), gmin=(0.3, 0.5, 1.0)),
-    "d": dict(safety=(0.6, 0.7, 0.8, 0.9), gamma_alpha=(0.05, 0.1, 0.2), switch_gain=(0.5, 2.0)),
+    "d": dict(safety=(0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9), gamma_alpha=(0.05, 0.1, 0.2), switch_gain=(0.5, 2.0)),     # round 2 (2026-10-22): round 1 had safety 0.6-0.9, no set held the SLO
     "d'": dict(safety=(0.8, 0.9), switch_gain=(0.5, 2.0, 5.0), clock_every=(10, 20)),
 }
 
@@ -79,6 +79,14 @@ def tune_all(P, seeds=TUNING_SEEDS, workers=8):
 
 if __name__ == "__main__":
     P = load_params(ROOT)
+    if len(sys.argv) > 2 and sys.argv[1] == "--only":              # re-tune one controller, keep the rest of data/sim_tuned.json
+        res = json.loads(TUNED_PATH.read_text(encoding="utf-8"))
+        r = tune_controller(P, sys.argv[2], TUNING_SEEDS)
+        res["params"][sys.argv[2]] = r["params"]
+        res["tuning"][sys.argv[2]] = {k: v for k, v in r.items() if k != "params"}
+        print(sys.argv[2], "holds" if r["holds"] else "FAILS", r["params"], "obj %.2f worst miss %.4f (%d/%d)" % (r["objective"], r["worst_mean_miss"], r["n_holding"], r["n_combos"]))
+        TUNED_PATH.write_text(json.dumps(res, indent=1), encoding="utf-8")
+        sys.exit(0)
     res = tune_all(P)
     TUNED_PATH.write_text(json.dumps(res, indent=1), encoding="utf-8")
     print("written", TUNED_PATH)

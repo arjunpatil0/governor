@@ -1,0 +1,334 @@
+{
+ "meta": {
+  "seeds": [
+   100,
+   101,
+   102,
+   103,
+   104,
+   105,
+   106,
+   107,
+   108,
+   109
+  ],
+  "lam": 0.5,
+  "note": "chosen on tuning seeds only; docs/W45_SIM_PROTOCOL.md"
+ },
+ "params": {
+  "c": {
+   "clock_margin": 0.35,
+   "kp": 0.5,
+   "ki": 0.15,
+   "target": 0.5
+  },
+  "c'": {
+   "ki": 0.05,
+   "target": 0.65,
+   "guard0": 0.5,
+   "gmin": 0.3
+  },
+  "d": {
+   "safety": 0.6,
+   "gamma_alpha": 0.1,
+   "switch_gain": 0.5
+  },
+  "d'": {
+   "safety": 0.8,
+   "switch_gain": 2.0,
+   "clock_every": 20
+  }
+ },
+ "static": {
+  "S0": {
+   "b": {
+    "clock": 2460.0,
+    "pacing": "unaligned",
+    "duty": 0.6,
+    "guard_ms": 0.5
+   },
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   }
+  },
+  "S1": {
+   "b": {
+    "clock": 2460.0,
+    "pacing": "unaligned",
+    "duty": 0.2,
+    "guard_ms": 0.5
+   },
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   }
+  },
+  "S1d": {
+   "b": {
+    "clock": 2460.0,
+    "pacing": "unaligned",
+    "duty": 0.7,
+    "guard_ms": 0.5
+   },
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   }
+  },
+  "S2": {
+   "b": {
+    "clock": 2460.0,
+    "pacing": "unaligned",
+    "duty": 0.9,
+    "guard_ms": 0.5
+   },
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   }
+  },
+  "S3": {
+   "b": {
+    "clock": 2460.0,
+    "pacing": "unaligned",
+    "duty": 0.05,
+    "guard_ms": 0.5
+   },
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   }
+  },
+  "S4": {
+   "b": {
+    "clock": 2460.0,
+    "pacing": "unaligned",
+    "duty": 1.0,
+    "guard_ms": 0.5
+   },
+   "b'": {
+    "clock": 2460.0,
+    "pacing": "aligned",
+    "duty": 1.0,
+    "guard_ms": 0.0
+   }
+  }
+ },
+ "tuning": {
+  "static/S0/unaligned": {
+   "tok_s": 60.0,
+   "power_w": 79.80773871981197,
+   "miss_max_seen": 0.0,
+   "feasible": true
+  },
+  "static/S0/aligned": {
+   "tok_s": 60.0,
+   "power_w": 79.63004503060576,
+   "miss_max_seen": 0.0,
+   "feasible": true
+  },
+  "static/S1/unaligned": {
+   "tok_s": 15.520000000000001,
+   "power_w": 42.62751071593542,
+   "miss_max_seen": 0.008181818181818182,
+   "feasible": true
+  },
+  "static/S1/aligned": {
+   "tok_s": 54.03454545454546,
+   "power_w": 74.5067242533812,
+   "miss_max_seen": 0.0,
+   "feasible": true
+  },
+  "static/S1d/unaligned": {
+   "tok_s": 56.989090909090905,
+   "power_w": 81.29905054783637,
+   "miss_max_seen": 0.005151515151515152,
+   "feasible": true
+  },
+  "static/S1d/aligned": {
+   "tok_s": 59.27090909090909,
+   "power_w": 79.58329517559932,
+   "miss_max_seen": 0.0,
+   "feasible": true
+  },
+  "static/S2/unaligned": {
+   "tok_s": 70.53818181818181,
+   "power_w": 85.77950260608762,
+   "miss_max_seen": 0.0,
+   "feasible": true
+  },
+  "static/S2/aligned": {
+   "tok_s": 74.94545454545457,
+   "power_w": 84.11522217669192,
+   "miss_max_seen": 0.0,
+   "feasible": true
+  },
+  "static/S3/unaligned": {
+   "tok_s": 2.8509090909090906,
+   "power_w": 25.60959750700427,
+   "miss_max_seen": 0.013636363636363636,
+   "feasible": false
+  },
+  "static/S3/aligned": {
+   "tok_s": 27.272727272727273,
+   "power_w": 46.66669907764032,
+   "miss_max_seen": 0.0,
+   "feasible": true
+  },
+  "static/S4/unaligned": {
+   "tok_s": 64.9218181818182,
+   "power_w": 87.95532757090314,
+   "miss_max_seen": 0.0,
+   "feasible": true
+  },
+  "static/S4/aligned": {
+   "tok_s": 54.03454545454546,
+   "power_w": 74.5067242533812,
+   "miss_max_seen": 0.0,
+   "feasible": true
+  },
+  "c": {
+   "holds": true,
+   "worst_mean_miss": 0.00806060606060606,
+   "objective": -5.420445484409591,
+   "per_scenario": {
+    "S0": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S1": {
+     "mean_miss": 0.006484848484848485,
+     "frac_seeds_ok": 1.0
+    },
+    "S1d": {
+     "mean_miss": 0.000818181818181818,
+     "frac_seeds_ok": 1.0
+    },
+    "S2": {
+     "mean_miss": 0.0012857142857142856,
+     "frac_seeds_ok": 1.0
+    },
+    "S3": {
+     "mean_miss": 0.00806060606060606,
+     "frac_seeds_ok": 0.9
+    },
+    "S4": {
+     "mean_miss": 0.007545454545454545,
+     "frac_seeds_ok": 1.0
+    }
+   },
+   "n_combos": 108,
+   "n_holding": 7
+  },
+  "c'": {
+   "holds": true,
+   "worst_mean_miss": 0.0,
+   "objective": 14.953804768381751,
+   "per_scenario": {
+    "S0": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S1": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S1d": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S2": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S3": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S4": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    }
+   },
+   "n_combos": 81,
+   "n_holding": 81
+  },
+  "d": {
+   "holds": false,
+   "worst_mean_miss": 0.010666666666666666,
+   "objective": 6.229721896240837,
+   "per_scenario": {
+    "S0": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S1": {
+     "mean_miss": 0.00903030303030303,
+     "frac_seeds_ok": 1.0
+    },
+    "S1d": {
+     "mean_miss": 0.0006363636363636365,
+     "frac_seeds_ok": 1.0
+    },
+    "S2": {
+     "mean_miss": 0.001142857142857143,
+     "frac_seeds_ok": 1.0
+    },
+    "S3": {
+     "mean_miss": 0.010666666666666666,
+     "frac_seeds_ok": 0.4
+    },
+    "S4": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    }
+   },
+   "n_combos": 24,
+   "n_holding": 0
+  },
+  "d'": {
+   "holds": true,
+   "worst_mean_miss": 0.0,
+   "objective": 15.64328899581716,
+   "per_scenario": {
+    "S0": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S1": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S1d": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S2": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S3": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    },
+    "S4": {
+     "mean_miss": 0.0,
+     "frac_seeds_ok": 1.0
+    }
+   },
+   "n_combos": 12,
+   "n_holding": 12
+  }
+ }
+}
