@@ -1,0 +1,36 @@
+# Addendum 2 to w2_colocation.yaml (Experiment G pre-run amendment): multi-gap logging, run/q/s/overlap on gap on-intervals, recorded-interval rule, 15th cell — REGISTERED 2026-10-22, written BEFORE any G data
+Date: 2026-10-22 · Amends experiments/w2_colocation_addendum_globaltimer_2026-10-22.md (the "G addendum") · Motivated by reviews/2026-10-22_G_prerun_review.md findings 1, 2, 4, 5, 6 and by journal 0029 · No G data exists (only smoke-grade pre-check runs, which are not results) · Changes no rule of w2_colocation.yaml, A, A2, B, C or L.
+
+## Why (the design flaw this fixes)
+Every kernel in these experiments is a single wave: grid = 36 SMs x 6 blocks x 256 threads = full occupancy, so every block of either context is resident for its whole kernel. During fg/bg alternation no block of either context starts; resident blocks are suspended and resumed, and the alternation exists only as gaps inside resident blocks. The G addendum recorded only the LARGEST gap per block and defined a run as "a stretch with no block of the other context starting". That definition sees no runs at all, q and s cannot be reconstructed, and P6 can falsely fail (an fg block running inside a bg block's unrecorded second-largest gap would look like concurrency). The items below replace those parts; everything else in the G addendum stands (cells 1-7, P1-P3, P8, the pre-checks, the sliced-span threshold 2 x 0.243 ms).
+
+## A. Multi-gap logging (replaces "keeps the largest gap")
+- Per thread block the recording kernel logs EVERY gap between consecutive %globaltimer reads of thread 0 (warp 0, lane 0; a context switch suspends the whole block, so one warp suffices) that exceeds the logging threshold LOG_THR = 20 us, as (start, length) pairs, up to K per block, plus a per-block overflow counter (gaps beyond K are counted, not stored). K = 8 for the 0.1 ms foreground kernels (cells g_baseline, g_baseline_off, g_R_m, g_R_m_off); K = 32 for every other recorded kernel (bg slices; the 1 ms and 4 ms fg kernels in g_T1, g_T4, g_T1_alone, g_T4_alone; g_bgalone).
+- Read interval: 64 loop iterations (typical read gap about 2 us, measured; timer step 1.024 us). LOG_THR is about 10x the typical read gap; the analysis threshold G_thr (20 x the median block-mean read gap of g_bgalone, about 41 us) is about 20x the typical read gap and is applied AFTER logging; it is no longer the logging rule. The per-block largest gap (gmax, gbeg) is still recorded.
+- A block with overflow count > 0 is UNTRUSTED: excluded from P6, q and s; the number of untrusted blocks and the overflow counts per cell are always reported.
+- A gap's start is the last read before the suspension and its end the first read after the resume, so each boundary is uncertain by up to one read gap (about 2 us) plus the 1 us timer step.
+
+## B. Definitions on gap on-intervals (replace the G addendum's "run", "preempted interval" and OVERLAP definitions)
+- A block's ON-INTERVALS = [block start, block end] minus its logged gaps. A LAUNCH is one fg request or one bg slice (216 blocks). The launch's ON-SET = the union of its trusted blocks' on-intervals, with pieces separated by less than 20 us merged. A launch's on-set is ON when at least one of its blocks runs.
+- RUN of a context = a maximal interval of a launch's on-set. COMPLETE run = a run that is neither the first nor the last of its launch (the first begins at launch, the last ends at kernel completion, not at a switch).
+- q = the median length of COMPLETE runs, pooled over both contexts, of launches that overlap in time with a SLICED fg span (sliced = on-GPU span greater than the same-block alone span by more than 2 x 0.243 ms, as before). q_fg and q_bg are also reported separately, with the numbers of runs and sliced spans that contribute.
+- s = the time between the end of one context's run and the start of the next run of the OTHER context, for consecutive runs inside a sliced span's time range; the median over such transitions. Transitions with negative s (the runs overlap in time) are counted and reported separately and are not included in the median.
+- OVERLAP (P6) = an fg block's on-interval and a bg block's on-interval intersect for MORE than 10 us (about 5 typical read gaps; intersections of 10 us or less are reported as ties, not overlaps). Same-SM and different-SM overlaps are reported separately. Counting is over TRUSTED blocks only, inside the recorded interval (section C). One overlap in a cell with no overflow falsifies P6 for that cell.
+- PREEMPTED bg block (P7) = a bg block with at least one logged gap of length >= G_thr. P7's fraction = preempted bg blocks / recorded bg blocks inside the recorded interval; "contains fg blocks" = the gap intersects an fg on-interval by more than 10 us. The same fraction is computed for g_bgalone (gaps with no fg: other GPU contexts such as the desktop compositor) and reported as the baseline preemption rate; it is a reported number, not a prediction.
+- On-GPU span, alone service time, P8 and all other definitions are unchanged.
+
+## C. Recorded-interval rule (chosen: rule plus a larger buffer)
+- The bg record buffer is enlarged from 800,000 to 1,600,000 blocks (about 7,400 slices of 216 blocks: the whole 12 s window at m = 2 and 8, about 7 s at m = 1 and 3.7 s at m = 0.5). Foreground records span every request of the measured window.
+- Where the bg buffer fills before the window ends, the rule applies: P6, P7, q and s use only the RECORDED INTERVAL = from the start of the first recorded bg slice to the end of the last recorded bg slice, and only fg requests whose whole on-GPU span lies inside it. Per cell the report states that interval's length, the number of fg requests and of bg slices used, and the share of the measured window it covers. Nothing is claimed about time outside it. g_bgalone has no fg; its recorded interval is its bg records.
+- Dropped-launch counts (buffer full) are reported per cell.
+
+## D. 15th cell
+- g_baseline_off: fg 0.1 ms Poisson 200 Hz alone, instrumentation OFF (the uninstrumented twin of g_baseline). 15 cells per block, 150 cells.
+- Pre-check (iii) as registered, now judgeable: per block, median fg-alone latency of g_baseline vs g_baseline_off within 5%, and the A-style observed wait of the m = 2 cell, instrumented (g_R2 minus g_baseline) vs uninstrumented (g_R2_off minus g_baseline_off), within 0.03 ms; medians over the 10 blocks decide; bg slice durations and fg gpu time are also reported. If it fails the timeline is not interpreted (as registered).
+- P1-P3 use g_baseline_off as the block baseline for the uninstrumented cells.
+
+## E. Predictions
+P1-P8 are unchanged in content. Their definitions are now: P4 = q pooled as above in [0.5, 0.9] ms; P5 = s in [0.2, 0.3] ms; P6 = zero overlaps (trusted blocks, recorded interval); P7 = preempted fraction >= 1% in g_T4 (reported for all cells and for g_bgalone); P8 = arrival-to-GPU-start p99 <= 0.4 ms for every m on the cells with instrumentation. Each is reported "held / did not hold" with the numbers whatever happens. This amendment was written without any G data; the smoke-grade pre-check runs recorded no gap lists.
+
+## Not in scope / unchanged
+Part L, the A/A2/B/C rules, the pre-checks (i) and (ii), and any claim about other GPUs or driver versions.
