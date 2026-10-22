@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "analysis"))
 import w2_g_analysis as ga  # noqa: E402
 from w2_analysis import _tte_points  # noqa: E402
-from w2_g_posthoc import boundary_distances, fine_tau_fit, overlap_pairs, same_sm_cases, switch_stagger, uniform_boundary_fraction  # noqa: E402
+from w2_g_posthoc import boundary_distances, fine_tau_fit, overlap_pairs, overlap_roles, same_sm_cases, switch_stagger, uniform_boundary_fraction  # noqa: E402
 from w2_g_timeline import launch_table, recorded_interval  # noqa: E402
 
 CELLS = ("g_T1", "g_T4", "g_T4_3bpsm")
@@ -31,7 +31,7 @@ def _q(x, qs=(10, 50, 90, 99)):
 
 def analyse_cell(run_dir, df, cell, n_ref=1500):
     """Pool one cell over all blocks. Returns dict of arrays/frames."""
-    ov_us, dist_us, ref, stag, cases, edge = [], [], [], [], [], []
+    ov_us, dist_us, ref, stag, cases, edge, roles = [], [], [], [], [], [], []
     n_pairs = n_same = n_fg_launch = 0
     for _, r in df[df.cell_id == cell].iterrows():
         cd = ga.cell_dir(run_dir, r)
@@ -42,6 +42,7 @@ def analyse_cell(run_dir, df, cell, n_ref=1500):
         p = overlap_pairs(fg, bg, tags)
         n_pairs += len(p["ov_ns"]); ov_us += list(p["ov_ns"] * 1e-3)
         same = p["fg_sm"] == p["bg_sm"]; n_same += int(same.sum())
+        ro = overlap_roles(p, fg, bg); roles.append(pd.DataFrame(dict(fg_role=ro["fg_role"], bg_role=ro["bg_role"], same_sm=same)))
         if len(p["ov_ns"]):
             dist_us += list(boundary_distances(p, fg, bg) * 1e-3)
         if same.any():
@@ -53,7 +54,7 @@ def analyse_cell(run_dir, df, cell, n_ref=1500):
         if len(t):
             t.insert(0, "block", int(r.block)); stag.append(t)
     return dict(ov_us=np.array(ov_us), dist_us=np.array(dist_us), ref_frac=float(np.mean(ref)) if ref else np.nan, n_pairs=n_pairs, n_same=n_same,
-                stagger=pd.concat(stag) if stag else pd.DataFrame(), cases=pd.concat(cases) if cases else pd.DataFrame(), edge=np.array(edge, bool), n_fg=n_fg_launch)
+                stagger=pd.concat(stag) if stag else pd.DataFrame(), cases=pd.concat(cases) if cases else pd.DataFrame(), edge=np.array(edge, bool), n_fg=n_fg_launch, roles=pd.concat(roles) if roles else pd.DataFrame())
 
 
 def tau_refit(run_dir, df):
@@ -120,6 +121,20 @@ def build(run_dir):
         if len(cs):
             keep = cs.sort_values(["block"]).head(20)
             L += [f"### {c}: {len(keep)} randomly sampled same-SM overlaps (4 per block, seeded by block)", "", _tab(keep, 1), ""]
+    L += ["## 1e. Which interval of its block is overlapping? (first = starts at the block start, last = ends at the block end, only = both, interior = neither)", ""]
+    rows = []
+    for c, d in res.items():
+        r = d["roles"]
+        if not len(r):
+            continue
+        for label, sub in (("all pairs", r), ("same-SM pairs", r[r.same_sm])):
+            if not len(sub):
+                continue
+            edge = (sub.fg_role != "interior") | (sub.bg_role != "interior")
+            rows.append(dict(cell=c, set=label, n=len(sub), share_involving_a_first_last_or_only_interval=float(edge.mean()),
+                             share_both_interior=float((~edge).mean()), fg_interior=float((sub.fg_role == "interior").mean()), bg_interior=float((sub.bg_role == "interior").mean())))
+    L += [_tab(pd.DataFrame(rows), 4), "",
+          "- Gaps are logged from thread 0 only. Stalls of a block's other warps before thread 0 starts or after it finishes are invisible, so an overlap made of a first/last/only interval can be a measurement artefact; an overlap between two INTERIOR intervals cannot.", ""]
     fit, n = tau_refit(run_dir, df)
     L += ["## 2. tau refit on a fine grid (sensitivity; the registered fit and verdict are unchanged)", "",
           f"- registered fit: tau = 0.260 ms on a 0.01 ms grid, bootstrap CI [0.260, 0.260] (degenerate)",

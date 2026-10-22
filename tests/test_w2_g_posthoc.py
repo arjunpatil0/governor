@@ -75,3 +75,15 @@ def test_fine_tau_fit_resolves_below_the_10us_grid():
     y = 0.035 + np.minimum(r, 0.2634) + rng.normal(0, 0.01, len(r))
     f = fine_tau_fit(r, y, b, n_boot=100, seed=3)
     assert abs(f["tau"] - 0.2634) < 0.003 and f["tau_hi"] > f["tau_lo"]
+
+
+def test_overlap_roles_flag_overlaps_that_involve_a_block_first_or_last_interval():
+    from w2_g_posthoc import overlap_roles
+    # bg block on SM 0: intervals (0,1000) [first], (1500,2500) [last]; an interior interval needs 3: add (3000,3400) and make (1500,2500) interior.
+    bg = make_launches([(0, [(0, 1000 * US), (1500 * US, 2500 * US), (3000 * US, 3400 * US)])], n_blocks=1, smid_offset=0)
+    fg_edge = make_launches([(0, [(600 * US, 900 * US)])], n_blocks=1, smid_offset=0)            # overlaps the bg FIRST interval
+    fg_mid = make_launches([(0, [(1800 * US, 2100 * US)])], n_blocks=1, smid_offset=0)           # overlaps the bg INTERIOR interval (fg interval is its own first and last)
+    r_edge = overlap_roles(overlap_pairs(fg_edge, bg, [0]), fg_edge, bg)
+    r_mid = overlap_roles(overlap_pairs(fg_mid, bg, [0]), fg_mid, bg)
+    assert r_edge["bg_role"][0] == "first" and r_mid["bg_role"][0] == "interior"
+    assert r_edge["fg_role"][0] == "only"

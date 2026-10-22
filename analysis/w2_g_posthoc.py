@@ -144,6 +144,21 @@ def same_sm_cases(pairs, fg_rec, bg_rec, n=15, seed=0, edge_us=30.0):
     return pd.DataFrame(rows)
 
 
+def _role(s, e, t0, t1):
+    first = s == t0; last = e == t1
+    return np.where(first & last, "only", np.where(first, "first", np.where(last, "last", "interior")))
+
+
+def overlap_roles(pairs, fg_rec, bg_rec):
+    """Role of each overlapping on-interval inside its block: first (starts at the block start), last (ends at the block end = latest warp end), only
+    (both) or interior. Gaps are logged from thread 0 only; stalls of the block's other warps before thread 0 starts or after it finishes are invisible,
+    so overlaps made of first/last intervals are the candidates for a measurement artefact, interior-interval overlaps are not."""
+    ft0 = np.asarray(fg_rec["t0"]).astype(np.int64); ft1 = np.asarray(fg_rec["t1"]).astype(np.int64)
+    bt0 = np.asarray(bg_rec["t0"]).astype(np.int64); bt1 = np.asarray(bg_rec["t1"]).astype(np.int64)
+    fb = pairs["fg_blk"].astype(np.int64); bb = pairs["bg_blk"].astype(np.int64)
+    return dict(fg_role=_role(pairs["fg_s"], pairs["fg_e"], ft0[fb], ft1[fb]), bg_role=_role(pairs["bg_s"], pairs["bg_e"], bt0[bb], bt1[bb]))
+
+
 def _tau_curve(r, y, grid):
     """SSE(tau) and offset for wait = offset + min(r, tau) (offset free) on every tau in grid, in O(n log n + |grid| log n) with prefix sums."""
     o = np.argsort(r); r, y = r[o], y[o]; n = len(r)
