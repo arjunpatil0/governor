@@ -1,18 +1,16 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-23 - Phase: W4-5. W5a data COLLECTED and VERIFIED: 280/280 cells (sessions 94/93/93, run back to back), 0 problems. Waiting for sign-off of the model-selection protocol before anything is fitted.
+Updated 2026-10-23 - Phase: W4-5. Protocol registered (plan addendum L, 662d527); grey-box predictor written test-first; W5a selection RUN AS REGISTERED: NO candidate passes the hard gates. Stopped for review of the result.
 
-## Just did (journal 0046)
-- Verified W5a against the frozen list (analysis/w5a_verify.py, 4 tests; data/w5a/verification.json): no missing/extra/incident cells, manifests match, same Armoury mode / exe hash / git head in all sessions, no clock/offload/ring-drop flags, max 77 C. ~1.8 h per session (the 85 s/cell estimate was too high; ~70 s incl. cool-down).
-- Flag worth knowing: 80 of 280 cells are OVERLOADED (frames abandoned; miss incl. abandoned >= 0.5) and 103 of the other 200 produced zero tokens. Analysis must use miss_frac_incl_abandoned.
-- Helper Ctrl+C: handler only requests stop; main thread cancels the pipe wait, resets once, prints "shutting down... clock reset done"; second Ctrl+C ignored; 7 new tests (52 passed). Root cause of the old delay NOT reproduced; not yet run elevated with the new code.
-- Drafted docs/W5A_MODEL_SELECTION_PROTOCOL.md (nothing fitted, no target values inspected beyond counts).
+## Result (journal 0047, data/w5a/selection.md)
+- G (grey-box): false-feasible 5/10 picks (gate 5%), tok_s coverage 72%. HGB/GP/MLP: 0 false-feasible but tok_s coverage 73-77% and latency 1.9-15.6 ms (gate 1 ms). Only G meets 1 ms.
+- Why: the p99 target is dominated by a backlog tail (15% of non-overloaded cells above 200 ms, up to 3.2 s) that no model predicts; tok/s differs 6-14x between workloads, so one pooled sigma per target miscalibrates (1B fold coverage 16-30%).
+- Nothing selected, no pre-fixed fallback. Nothing re-run, nothing changed after seeing results.
 
 ## Waiting for
-1. Reviewer + Arjun: sign off the protocol draft, section 6: (a) whole-cell adaptation K=3 instead of "10 s", (b) targets + extra tok_s/power rule, (c) OK to pip install --use-feature=truststore lightgbm (or use sklearn HistGradientBoosting).
-2. Nothing else blocks me.
+1. Reviewer + Arjun: choose (A) addendum M fixing the protocol shape, then a labelled second run; (B) accept the negative result and keep ModelController for d'B; (C) more data (not recommended). Details in journal 0047.
 
-## Risks (not verified)
-- Candidate 1 (grey-box+RLS) needs a cell-level predict function (not written). HW7 staleness data not analysed. Helper reset errors still unexplained. d'B never simulated.
+## Risks / not verified
+- Helper Ctrl+C untested elevated (check at the first W5b tuning session). d'B never simulated. HW7 staleness data not analysed. W5b not started.
 
 ## Notes
-- Do NOT rebuild the driver exe (hash bb875fbc must stay) or change the registered files. The helper is not part of the registered configuration.
+- Do NOT rebuild the driver exe (bb875fbc) or edit registered files. scikit-learn 1.4.0 used; LightGBM not installed (decision c).
