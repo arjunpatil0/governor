@@ -1,0 +1,3459 @@
+{
+ "notes": [
+  "Where G predicts an overloaded cell its p99 is undefined (nan); for residuals, features and scoring it is replaced by the 16.667 ms period (the lowest latency an overloaded frame can have).",
+  "The online residual bias of the learned candidates is the mean (n/(n+1) shrunk) of (y - G - g) over the workload's adaptation cells, per target; targets without a defined value in a cell skip that cell.",
+  "sigma_hat of every candidate is the RMS of its out-of-fold residuals (inner leave-one-workload-out among the training workloads, with the same calibration and bias) per target; GP std and ensemble spread are not used.",
+  "Residual models are fit on all training cells (adaptation cells included); p99 residual models only on non-overloaded cells.",
+  "Latency is measured on one fitted model per candidate (the fold that holds out llama32_3b, K = 3): grey-box + features + 4 residual predictions + bias + intervals + decision for the 70 settings of condition c9."
+ ],
+ "candidates": {
+  "G": {
+   "lowo_k3": {
+    "pooled": {
+     "n_test": 271,
+     "n_p99": 198,
+     "n_overloaded_excluded_from_p99": 73,
+     "p99_err": 2425.1257062539535,
+     "p99_mae": 365.56135576467483,
+     "tok_mae": 4.436587009903717,
+     "power_mae": 6.353563031197243,
+     "miss_mae": 0.150758764489512,
+     "miss_class": {
+      "n": 271,
+      "false_feasible": 37,
+      "false_infeasible": 40,
+      "false_feasible_share_of_all": 0.13653136531365315,
+      "false_infeasible_share_of_all": 0.14760147601476015,
+      "false_feasible_of_predicted_feasible": 0.2824427480916031,
+      "false_infeasible_of_observed_feasible": 0.29850746268656714
+     },
+     "power_class": {
+      "n": 271,
+      "false_feasible": 12,
+      "false_infeasible": 0,
+      "false_feasible_share_of_all": 0.04428044280442804,
+      "false_infeasible_share_of_all": 0.0,
+      "false_feasible_of_predicted_feasible": 0.045627376425855515,
+      "false_infeasible_of_observed_feasible": 0.0
+     },
+     "zero_token_class": {
+      "n": 271,
+      "false_feasible": 25,
+      "false_infeasible": 3,
+      "false_feasible_share_of_all": 0.09225092250922509,
+      "false_infeasible_share_of_all": 0.01107011070110701,
+      "false_feasible_of_predicted_feasible": 0.15822784810126583,
+      "false_infeasible_of_observed_feasible": 0.022058823529411766
+     },
+     "coverage": {
+      "tok_s": 0.7232472324723247,
+      "power_w": 0.922509225092251,
+      "p99": 0.9393939393939394
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 10,
+     "false_feasible_picks": 5,
+     "false_feasible_rate": 0.5,
+     "regret_sum": 205.4,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.4820464679652664,
+     "sigma_hat_mean": {
+      "miss": 0.3319070787052152,
+      "tok_s": 10.074365321190221,
+      "power_w": 8.580400388781685,
+      "p99": 654.8333687701345
+     }
+    },
+    "per_fold": {
+     "llama32_1b": {
+      "n_test": 89,
+      "n_p99": 68,
+      "n_overloaded_excluded_from_p99": 21,
+      "p99_err": 2391.332397837525,
+      "p99_mae": 170.77005731543088,
+      "tok_mae": 12.386356582940827,
+      "power_mae": 8.212309299875054,
+      "miss_mae": 0.15126870559283453,
+      "miss_class": {
+       "n": 89,
+       "false_feasible": 14,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.15730337078651685,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.2153846153846154,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "power_class": {
+       "n": 89,
+       "false_feasible": 7,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.07865168539325842,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.08235294117647059,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 89,
+       "false_feasible": 25,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.2808988764044944,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.2808988764044944,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.15730337078651685,
+       "power_w": 0.8426966292134831,
+       "p99": 0.9558823529411765
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 5,
+      "picks": 6,
+      "false_feasible_picks": 2,
+      "false_feasible_rate": 0.3333333333333333,
+      "regret_sum": 150.1,
+      "best_sum": 359.56666666666666,
+      "regret_rel": 0.4174469268564012,
+      "sigma_hat_mean": {
+       "miss": 0.32986753367742505,
+       "tok_s": 1.7263791566065336,
+       "power_w": 7.389253383069649,
+       "p99": 705.3768866775756
+      }
+     },
+     "llama32_3b": {
+      "n_test": 92,
+      "n_p99": 66,
+      "n_overloaded_excluded_from_p99": 26,
+      "p99_err": 2248.927382251303,
+      "p99_mae": 751.6487646507343,
+      "tok_mae": 0.7841407533847974,
+      "power_mae": 3.3359665636819273,
+      "miss_mae": 0.06492792363252016,
+      "miss_class": {
+       "n": 92,
+       "false_feasible": 0,
+       "false_infeasible": 40,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.43478260869565216,
+       "false_feasible_of_predicted_feasible": NaN,
+       "false_infeasible_of_observed_feasible": 1.0
+      },
+      "power_class": {
+       "n": 92,
+       "false_feasible": 3,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.03260869565217391,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.03409090909090909,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 92,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 1.0,
+       "p99": 0.9242424242424242
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 1,
+      "picks": 0,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": NaN,
+      "regret_sum": 44.8,
+      "best_sum": 44.8,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.3965517935203046,
+       "tok_s": 14.154764484323614,
+       "power_w": 10.063437906823665,
+       "p99": 554.8515831842135
+      }
+     },
+     "phi35_mini": {
+      "n_test": 90,
+      "n_p99": 64,
+      "n_overloaded_excluded_from_p99": 26,
+      "p99_err": 2209.6565621887153,
+      "p99_mae": 174.37446995324757,
+      "tok_mae": 0.3087599387863624,
+      "power_mae": 7.600123665631507,
+      "miss_mae": 0.2379926822744847,
+      "miss_class": {
+       "n": 90,
+       "false_feasible": 23,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.25555555555555554,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.3484848484848485,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "power_class": {
+       "n": 90,
+       "false_feasible": 2,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.022222222222222223,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.022222222222222223,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 90,
+       "false_feasible": 0,
+       "false_infeasible": 3,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.03333333333333333,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.09375
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 0.9222222222222223,
+       "p99": 0.9375
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 2,
+      "picks": 4,
+      "false_feasible_picks": 3,
+      "false_feasible_rate": 0.75,
+      "regret_sum": 10.5,
+      "best_sum": 21.733333333333334,
+      "regret_rel": 0.4831288343558282,
+      "sigma_hat_mean": {
+       "miss": 0.26784269808838257,
+       "tok_s": 14.158521383853284,
+       "power_w": 8.24231852043178,
+       "p99": 707.055048549495
+      }
+     }
+    }
+   },
+   "latency_p99_s": 0.00025239094276912504,
+   "lowo_k1": {
+    "pooled": {
+     "n_test": 277,
+     "n_p99": 199,
+     "n_overloaded_excluded_from_p99": 78,
+     "p99_err": 2078.835275902709,
+     "p99_mae": 461.33807234800287,
+     "tok_mae": 4.020989526350414,
+     "power_mae": 6.180675501772614,
+     "miss_mae": 0.14539292540920248,
+     "miss_class": {
+      "n": 277,
+      "false_feasible": 37,
+      "false_infeasible": 4,
+      "false_feasible_share_of_all": 0.13357400722021662,
+      "false_infeasible_share_of_all": 0.01444043321299639,
+      "false_feasible_of_predicted_feasible": 0.2215568862275449,
+      "false_infeasible_of_observed_feasible": 0.029850746268656716
+     },
+     "power_class": {
+      "n": 277,
+      "false_feasible": 11,
+      "false_infeasible": 1,
+      "false_feasible_share_of_all": 0.039711191335740074,
+      "false_infeasible_share_of_all": 0.0036101083032490976,
+      "false_feasible_of_predicted_feasible": 0.041353383458646614,
+      "false_infeasible_of_observed_feasible": 0.00390625
+     },
+     "zero_token_class": {
+      "n": 277,
+      "false_feasible": 26,
+      "false_infeasible": 3,
+      "false_feasible_share_of_all": 0.09386281588447654,
+      "false_infeasible_share_of_all": 0.010830324909747292,
+      "false_feasible_of_predicted_feasible": 0.15757575757575756,
+      "false_infeasible_of_observed_feasible": 0.02112676056338028
+     },
+     "coverage": {
+      "tok_s": 0.9025270758122743,
+      "power_w": 0.9169675090252708,
+      "p99": 0.949748743718593
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 11,
+     "false_feasible_picks": 4,
+     "false_feasible_rate": 0.36363636363636365,
+     "regret_sum": 90.69999999999999,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.21286083079089416,
+     "sigma_hat_mean": {
+      "miss": 0.33020348021050083,
+      "tok_s": 9.638418178264521,
+      "power_w": 8.604703435393597,
+      "p99": 748.641798249374
+     }
+    },
+    "per_fold": {
+     "llama32_1b": {
+      "n_test": 91,
+      "n_p99": 68,
+      "n_overloaded_excluded_from_p99": 23,
+      "p99_err": 2391.332397837525,
+      "p99_mae": 170.77005731543088,
+      "tok_mae": 10.068045452684382,
+      "power_mae": 8.363596725709812,
+      "miss_mae": 0.14794411865672827,
+      "miss_class": {
+       "n": 91,
+       "false_feasible": 14,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.15384615384615385,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.2153846153846154,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "power_class": {
+       "n": 91,
+       "false_feasible": 7,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.07692307692307693,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.08139534883720931,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 91,
+       "false_feasible": 25,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.27472527472527475,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.27472527472527475,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.7142857142857143,
+       "power_w": 0.8461538461538461,
+       "p99": 0.9558823529411765
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 5,
+      "picks": 6,
+      "false_feasible_picks": 1,
+      "false_feasible_rate": 0.16666666666666666,
+      "regret_sum": 49.699999999999996,
+      "best_sum": 359.56666666666666,
+      "regret_rel": 0.1382219338092148,
+      "sigma_hat_mean": {
+       "miss": 0.3289054401891806,
+       "tok_s": 4.703992305865712,
+       "power_w": 7.682470343627827,
+       "p99": 849.4541289089351
+      }
+     },
+     "llama32_3b": {
+      "n_test": 94,
+      "n_p99": 67,
+      "n_overloaded_excluded_from_p99": 27,
+      "p99_err": 1894.275522550142,
+      "p99_mae": 1030.3574092954539,
+      "tok_mae": 1.0120902686532571,
+      "power_mae": 2.4615034310339916,
+      "miss_mae": 0.057357278041310494,
+      "miss_class": {
+       "n": 94,
+       "false_feasible": 0,
+       "false_infeasible": 4,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0425531914893617,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.1
+      },
+      "power_class": {
+       "n": 94,
+       "false_feasible": 2,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.02127659574468085,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.02247191011235955,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 94,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 1.0,
+       "p99": 0.9552238805970149
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 1,
+      "picks": 1,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 30.499999999999996,
+      "best_sum": 44.8,
+      "regret_rel": 0.6808035714285714,
+      "sigma_hat_mean": {
+       "miss": 0.3921939492111647,
+       "tok_s": 12.39854453466894,
+       "power_w": 10.38193045513376,
+       "p99": 554.8515831842135
+      }
+     },
+     "phi35_mini": {
+      "n_test": 92,
+      "n_p99": 64,
+      "n_overloaded_excluded_from_p99": 28,
+      "p99_err": 2209.6565621887153,
+      "p99_mae": 174.37446995324757,
+      "tok_mae": 1.1139725799063025,
+      "power_mae": 7.821505319937236,
+      "miss_mae": 0.23281892831199594,
+      "miss_class": {
+       "n": 92,
+       "false_feasible": 23,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.25,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.3484848484848485,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "power_class": {
+       "n": 92,
+       "false_feasible": 2,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.010869565217391304,
+       "false_feasible_of_predicted_feasible": 0.02197802197802198,
+       "false_infeasible_of_observed_feasible": 0.011111111111111112
+      },
+      "zero_token_class": {
+       "n": 92,
+       "false_feasible": 1,
+       "false_infeasible": 3,
+       "false_feasible_share_of_all": 0.010869565217391304,
+       "false_infeasible_share_of_all": 0.03260869565217391,
+       "false_feasible_of_predicted_feasible": 0.03125,
+       "false_infeasible_of_observed_feasible": 0.08823529411764706
+      },
+      "coverage": {
+       "tok_s": 0.9891304347826086,
+       "power_w": 0.9021739130434783,
+       "p99": 0.9375
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 2,
+      "picks": 4,
+      "false_feasible_picks": 3,
+      "false_feasible_rate": 0.75,
+      "regret_sum": 10.5,
+      "best_sum": 21.733333333333334,
+      "regret_rel": 0.4831288343558282,
+      "sigma_hat_mean": {
+       "miss": 0.2681493232091717,
+       "tok_s": 11.69907988355013,
+       "power_w": 7.7010498646882715,
+       "p99": 846.928299620081
+      }
+     }
+    }
+   },
+   "loco_k3": {
+    "pooled": {
+     "n_test": 280,
+     "n_p99": 200,
+     "n_overloaded_excluded_from_p99": 80,
+     "p99_err": 2861.3610053118123,
+     "p99_mae": 489.322593686788,
+     "tok_mae": 4.59986668462344,
+     "power_mae": 6.0328673922484,
+     "miss_mae": 0.18395909076860595,
+     "miss_class": {
+      "n": 280,
+      "false_feasible": 27,
+      "false_infeasible": 40,
+      "false_feasible_share_of_all": 0.09642857142857143,
+      "false_infeasible_share_of_all": 0.14285714285714285,
+      "false_feasible_of_predicted_feasible": 0.2231404958677686,
+      "false_infeasible_of_observed_feasible": 0.29850746268656714
+     },
+     "power_class": {
+      "n": 280,
+      "false_feasible": 12,
+      "false_infeasible": 0,
+      "false_feasible_share_of_all": 0.04285714285714286,
+      "false_infeasible_share_of_all": 0.0,
+      "false_feasible_of_predicted_feasible": 0.04428044280442804,
+      "false_infeasible_of_observed_feasible": 0.0
+     },
+     "zero_token_class": {
+      "n": 280,
+      "false_feasible": 42,
+      "false_infeasible": 3,
+      "false_feasible_share_of_all": 0.15,
+      "false_infeasible_share_of_all": 0.010714285714285714,
+      "false_feasible_of_predicted_feasible": 0.22826086956521738,
+      "false_infeasible_of_observed_feasible": 0.020689655172413793
+     },
+     "coverage": {
+      "tok_s": 0.9571428571428572,
+      "power_w": 0.9357142857142857,
+      "p99": 0.9
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 11,
+     "false_feasible_picks": 5,
+     "false_feasible_rate": 0.45454545454545453,
+     "regret_sum": 205.4,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.4820464679652664,
+     "sigma_hat_mean": {
+      "miss": 0.3438000454275027,
+      "tok_s": 11.546830298127748,
+      "power_w": 8.761354285070105,
+      "p99": 707.6599403570859
+     }
+    },
+    "per_condition": {
+     "c5": {
+      "n_test": 46,
+      "n_p99": 43,
+      "n_overloaded_excluded_from_p99": 3,
+      "p99_err": 1758.335859901222,
+      "p99_mae": 573.4398197306399,
+      "tok_mae": 6.089387482513915,
+      "power_mae": 8.70459012732427,
+      "miss_mae": 0.24176879680964883,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 5,
+       "false_infeasible": 9,
+       "false_feasible_share_of_all": 0.10869565217391304,
+       "false_infeasible_share_of_all": 0.1956521739130435,
+       "false_feasible_of_predicted_feasible": 0.15625,
+       "false_infeasible_of_observed_feasible": 0.25
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 2,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.043478260869565216,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.045454545454545456,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 7,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.15217391304347827,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.1891891891891892,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9130434782608695,
+       "power_w": 0.9130434782608695,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 3,
+      "picks": 3,
+      "false_feasible_picks": 2,
+      "false_feasible_rate": 0.6666666666666666,
+      "regret_sum": 172.56666666666666,
+      "best_sum": 172.56666666666666,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.481639690137896,
+       "tok_s": 11.708066435378562,
+       "power_w": 9.577938652592218,
+       "p99": 1068.5390404753139
+      }
+     },
+     "c7": {
+      "n_test": 46,
+      "n_p99": 44,
+      "n_overloaded_excluded_from_p99": 2,
+      "p99_err": 706.3109663015282,
+      "p99_mae": 253.4049371415913,
+      "tok_mae": 2.8043994055938093,
+      "power_mae": 7.644603031067418,
+      "miss_mae": 0.04774711665207393,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 1,
+       "false_infeasible": 12,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.2608695652173913,
+       "false_feasible_of_predicted_feasible": 0.038461538461538464,
+       "false_infeasible_of_observed_feasible": 0.32432432432432434
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 2,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.043478260869565216,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.043478260869565216,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 2,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.043478260869565216,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.08333333333333333,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9782608695652174,
+       "power_w": 0.9347826086956522,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 2,
+      "picks": 2,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 0.0,
+      "best_sum": 71.23333333333333,
+      "regret_rel": 0.0,
+      "sigma_hat_mean": {
+       "miss": 0.3617848357565028,
+       "tok_s": 12.284386566602603,
+       "power_w": 8.43319081709933,
+       "p99": 713.7577731586786
+      }
+     },
+     "c9": {
+      "n_test": 47,
+      "n_p99": 33,
+      "n_overloaded_excluded_from_p99": 14,
+      "p99_err": 1659.0200279364558,
+      "p99_mae": 544.2335465216529,
+      "tok_mae": 8.021692572846185,
+      "power_mae": 4.96914607972974,
+      "miss_mae": 0.2509208520843926,
+      "miss_class": {
+       "n": 47,
+       "false_feasible": 5,
+       "false_infeasible": 5,
+       "false_feasible_share_of_all": 0.10638297872340426,
+       "false_infeasible_share_of_all": 0.10638297872340426,
+       "false_feasible_of_predicted_feasible": 0.2,
+       "false_infeasible_of_observed_feasible": 0.2
+      },
+      "power_class": {
+       "n": 47,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 47,
+       "false_feasible": 16,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.3404255319148936,
+       "false_infeasible_share_of_all": 0.02127659574468085,
+       "false_feasible_of_predicted_feasible": 0.4444444444444444,
+       "false_infeasible_of_observed_feasible": 0.047619047619047616
+      },
+      "coverage": {
+       "tok_s": 0.9148936170212766,
+       "power_w": 0.9787234042553191,
+       "p99": 0.9696969696969697
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 2,
+      "false_feasible_picks": 1,
+      "false_feasible_rate": 0.5,
+      "regret_sum": 0.0,
+      "best_sum": 59.9,
+      "regret_rel": 0.0,
+      "sigma_hat_mean": {
+       "miss": 0.39973594669862655,
+       "tok_s": 9.831544810007108,
+       "power_w": 9.339653913165037,
+       "p99": 850.4483904667185
+      }
+     },
+     "c11": {
+      "n_test": 47,
+      "n_p99": 26,
+      "n_overloaded_excluded_from_p99": 21,
+      "p99_err": 879.4892798101639,
+      "p99_mae": 200.58869422607,
+      "tok_mae": 4.744200148784677,
+      "power_mae": 6.3150161532912525,
+      "miss_mae": 0.18070893252868656,
+      "miss_class": {
+       "n": 47,
+       "false_feasible": 8,
+       "false_infeasible": 4,
+       "false_feasible_share_of_all": 0.1702127659574468,
+       "false_infeasible_share_of_all": 0.0851063829787234,
+       "false_feasible_of_predicted_feasible": 0.36363636363636365,
+       "false_infeasible_of_observed_feasible": 0.2222222222222222
+      },
+      "power_class": {
+       "n": 47,
+       "false_feasible": 3,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.06382978723404255,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.06666666666666667,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 47,
+       "false_feasible": 5,
+       "false_infeasible": 2,
+       "false_feasible_share_of_all": 0.10638297872340426,
+       "false_infeasible_share_of_all": 0.0425531914893617,
+       "false_feasible_of_predicted_feasible": 0.18518518518518517,
+       "false_infeasible_of_observed_feasible": 0.08333333333333333
+      },
+      "coverage": {
+       "tok_s": 0.9574468085106383,
+       "power_w": 0.851063829787234,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 2,
+      "false_feasible_picks": 1,
+      "false_feasible_rate": 0.5,
+      "regret_sum": 32.833333333333336,
+      "best_sum": 32.833333333333336,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.3215231902164341,
+       "tok_s": 11.108792580790725,
+       "power_w": 7.963813972943547,
+       "p99": 693.5692355143902
+      }
+     },
+     "c14": {
+      "n_test": 48,
+      "n_p99": 16,
+      "n_overloaded_excluded_from_p99": 32,
+      "p99_err": 706.8961427283672,
+      "p99_mae": 346.7281046322061,
+      "tok_mae": 2.0033803080621233,
+      "power_mae": 3.3542565691510866,
+      "miss_mae": 0.19516237583798987,
+      "miss_class": {
+       "n": 48,
+       "false_feasible": 5,
+       "false_infeasible": 3,
+       "false_feasible_share_of_all": 0.10416666666666667,
+       "false_infeasible_share_of_all": 0.0625,
+       "false_feasible_of_predicted_feasible": 0.7142857142857143,
+       "false_infeasible_of_observed_feasible": 0.6
+      },
+      "power_class": {
+       "n": 48,
+       "false_feasible": 4,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.08333333333333333,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0851063829787234,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 48,
+       "false_feasible": 9,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.1875,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.3,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 0.9791666666666666,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 0,
+      "picks": 1,
+      "false_feasible_picks": 1,
+      "false_feasible_rate": 1.0,
+      "regret_sum": 0.0,
+      "best_sum": 0.0,
+      "regret_rel": NaN,
+      "sigma_hat_mean": {
+       "miss": 0.1959523833191408,
+       "tok_s": 12.006511162196398,
+       "power_w": 8.242027583023761,
+       "p99": 678.5047433111478
+      }
+     },
+     "var9": {
+      "n_test": 46,
+      "n_p99": 38,
+      "n_overloaded_excluded_from_p99": 8,
+      "p99_err": 3149.1226429339163,
+      "p99_mae": 877.2138551448003,
+      "tok_mae": 3.9715056986516406,
+      "power_mae": 5.34304444070208,
+      "miss_mae": 0.18557433649852575,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 3,
+       "false_infeasible": 7,
+       "false_feasible_share_of_all": 0.06521739130434782,
+       "false_infeasible_share_of_all": 0.15217391304347827,
+       "false_feasible_of_predicted_feasible": 0.3333333333333333,
+       "false_infeasible_of_observed_feasible": 0.5384615384615384
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 1,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.022727272727272728,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 3,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.06521739130434782,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.1,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9782608695652174,
+       "power_w": 0.9565217391304348,
+       "p99": 0.5
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 1,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 0.0,
+      "best_sum": 89.56666666666666,
+      "regret_rel": 0.0,
+      "sigma_hat_mean": {
+       "miss": 0.3078606672659083,
+       "tok_s": 12.368505483298048,
+       "power_w": 9.03884629525162,
+       "p99": 239.61029940811403
+      }
+     }
+    }
+   },
+   "seconds": 0.5
+  },
+  "HGB": {
+   "lowo_k3": {
+    "pooled": {
+     "n_test": 271,
+     "n_p99": 198,
+     "n_overloaded_excluded_from_p99": 73,
+     "p99_err": 1750.08109605582,
+     "p99_mae": 257.0817248393238,
+     "tok_mae": 5.385335019738446,
+     "power_mae": 2.3996584710073323,
+     "miss_mae": 0.12093695636122397,
+     "miss_class": {
+      "n": 271,
+      "false_feasible": 0,
+      "false_infeasible": 70,
+      "false_feasible_share_of_all": 0.0,
+      "false_infeasible_share_of_all": 0.25830258302583026,
+      "false_feasible_of_predicted_feasible": 0.0,
+      "false_infeasible_of_observed_feasible": 0.5223880597014925
+     },
+     "power_class": {
+      "n": 271,
+      "false_feasible": 1,
+      "false_infeasible": 1,
+      "false_feasible_share_of_all": 0.0036900369003690036,
+      "false_infeasible_share_of_all": 0.0036900369003690036,
+      "false_feasible_of_predicted_feasible": 0.00398406374501992,
+      "false_infeasible_of_observed_feasible": 0.00398406374501992
+     },
+     "zero_token_class": {
+      "n": 271,
+      "false_feasible": 62,
+      "false_infeasible": 6,
+      "false_feasible_share_of_all": 0.22878228782287824,
+      "false_infeasible_share_of_all": 0.02214022140221402,
+      "false_feasible_of_predicted_feasible": 0.3229166666666667,
+      "false_infeasible_of_observed_feasible": 0.04411764705882353
+     },
+     "coverage": {
+      "tok_s": 0.7453874538745388,
+      "power_w": 0.9630996309963099,
+      "p99": 0.9191919191919192
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 8,
+     "false_feasible_picks": 0,
+     "false_feasible_rate": 0.0,
+     "regret_sum": 216.53333333333333,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.5081749198153799,
+     "sigma_hat_mean": {
+      "miss": 0.267312270057361,
+      "tok_s": 10.621369797625348,
+      "power_w": 4.065401593003362,
+      "p99": 500.0209476439465
+     }
+    },
+    "per_fold": {
+     "llama32_1b": {
+      "n_test": 89,
+      "n_p99": 68,
+      "n_overloaded_excluded_from_p99": 21,
+      "p99_err": 1007.8178736360832,
+      "p99_mae": 174.99991712908295,
+      "tok_mae": 12.010141644437535,
+      "power_mae": 2.9484554687995983,
+      "miss_mae": 0.07289810945629684,
+      "miss_class": {
+       "n": 89,
+       "false_feasible": 0,
+       "false_infeasible": 21,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.23595505617977527,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.4117647058823529
+      },
+      "power_class": {
+       "n": 89,
+       "false_feasible": 1,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.011235955056179775,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.012658227848101266,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 89,
+       "false_feasible": 25,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.2808988764044944,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.2808988764044944,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.2247191011235955,
+       "power_w": 0.9325842696629213,
+       "p99": 0.9852941176470589
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 5,
+      "picks": 4,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 150.0,
+      "best_sum": 359.56666666666666,
+      "regret_rel": 0.41716881431352554,
+      "sigma_hat_mean": {
+       "miss": 0.32776236078538595,
+       "tok_s": 1.978981484155412,
+       "power_w": 3.994961436036908,
+       "p99": 605.4665707842803
+      }
+     },
+     "llama32_3b": {
+      "n_test": 92,
+      "n_p99": 66,
+      "n_overloaded_excluded_from_p99": 26,
+      "p99_err": 1902.6829117093728,
+      "p99_mae": 464.9321250843057,
+      "tok_mae": 2.272188330922452,
+      "power_mae": 2.167662700906735,
+      "miss_mae": 0.15354321217066239,
+      "miss_class": {
+       "n": 92,
+       "false_feasible": 0,
+       "false_infeasible": 11,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.11956521739130435,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.275
+      },
+      "power_class": {
+       "n": 92,
+       "false_feasible": 0,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.010869565217391304,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.011764705882352941
+      },
+      "zero_token_class": {
+       "n": 92,
+       "false_feasible": 24,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.2608695652173913,
+       "false_infeasible_share_of_all": 0.010869565217391304,
+       "false_feasible_of_predicted_feasible": 0.38095238095238093,
+       "false_infeasible_of_observed_feasible": 0.025
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 0.9782608695652174,
+       "p99": 0.803030303030303
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 1,
+      "picks": 4,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 44.8,
+      "best_sum": 44.8,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.1948378531919931,
+       "tok_s": 15.082840703128461,
+       "power_w": 3.8596989500340393,
+       "p99": 345.5406055666454
+      }
+     },
+     "phi35_mini": {
+      "n_test": 90,
+      "n_p99": 64,
+      "n_overloaded_excluded_from_p99": 26,
+      "p99_err": 1486.6814090104167,
+      "p99_mae": 129.94792027881695,
+      "tok_mae": 2.01646508388125,
+      "power_mae": 2.0941104492933698,
+      "miss_mae": 0.13511119902867044,
+      "miss_class": {
+       "n": 90,
+       "false_feasible": 0,
+       "false_infeasible": 38,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.4222222222222222,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.8837209302325582
+      },
+      "power_class": {
+       "n": 90,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 90,
+       "false_feasible": 13,
+       "false_infeasible": 5,
+       "false_feasible_share_of_all": 0.14444444444444443,
+       "false_infeasible_share_of_all": 0.05555555555555555,
+       "false_feasible_of_predicted_feasible": 0.325,
+       "false_infeasible_of_observed_feasible": 0.15625
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 0.9777777777777777,
+       "p99": 0.96875
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 2,
+      "picks": 0,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": NaN,
+      "regret_sum": 21.733333333333334,
+      "best_sum": 21.733333333333334,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.28161880646646775,
+       "tok_s": 14.607116870875767,
+       "power_w": 4.345332894372163,
+       "p99": 553.6601811064133
+      }
+     }
+    }
+   },
+   "latency_p99_s": 0.015643126999493686,
+   "lowo_k1": {
+    "pooled": {
+     "n_test": 277,
+     "n_p99": 199,
+     "n_overloaded_excluded_from_p99": 78,
+     "p99_err": 2185.7265704643064,
+     "p99_mae": 348.8225755004322,
+     "tok_mae": 6.340258949081468,
+     "power_mae": 2.85207821984018,
+     "miss_mae": 0.12631630550231404,
+     "miss_class": {
+      "n": 277,
+      "false_feasible": 1,
+      "false_infeasible": 54,
+      "false_feasible_share_of_all": 0.0036101083032490976,
+      "false_infeasible_share_of_all": 0.19494584837545126,
+      "false_feasible_of_predicted_feasible": 0.012345679012345678,
+      "false_infeasible_of_observed_feasible": 0.40298507462686567
+     },
+     "power_class": {
+      "n": 277,
+      "false_feasible": 5,
+      "false_infeasible": 2,
+      "false_feasible_share_of_all": 0.018050541516245487,
+      "false_infeasible_share_of_all": 0.007220216606498195,
+      "false_feasible_of_predicted_feasible": 0.019305019305019305,
+      "false_infeasible_of_observed_feasible": 0.0078125
+     },
+     "zero_token_class": {
+      "n": 277,
+      "false_feasible": 52,
+      "false_infeasible": 6,
+      "false_feasible_share_of_all": 0.18772563176895307,
+      "false_infeasible_share_of_all": 0.021660649819494584,
+      "false_feasible_of_predicted_feasible": 0.2765957446808511,
+      "false_infeasible_of_observed_feasible": 0.04225352112676056
+     },
+     "coverage": {
+      "tok_s": 0.8808664259927798,
+      "power_w": 0.9638989169675091,
+      "p99": 0.8592964824120602
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 10,
+     "false_feasible_picks": 1,
+     "false_feasible_rate": 0.1,
+     "regret_sum": 349.59999999999997,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.8204646796526637,
+     "sigma_hat_mean": {
+      "miss": 0.2794808406346863,
+      "tok_s": 12.014423650265515,
+      "power_w": 6.648281878877149,
+      "p99": 643.3953094490109
+     }
+    },
+    "per_fold": {
+     "llama32_1b": {
+      "n_test": 91,
+      "n_p99": 68,
+      "n_overloaded_excluded_from_p99": 23,
+      "p99_err": 1184.341904546809,
+      "p99_mae": 131.47622268917345,
+      "tok_mae": 11.994557922649644,
+      "power_mae": 4.195533180411346,
+      "miss_mae": 0.07408182881429073,
+      "miss_class": {
+       "n": 91,
+       "false_feasible": 1,
+       "false_infeasible": 34,
+       "false_feasible_share_of_all": 0.01098901098901099,
+       "false_infeasible_share_of_all": 0.37362637362637363,
+       "false_feasible_of_predicted_feasible": 0.05555555555555555,
+       "false_infeasible_of_observed_feasible": 0.6666666666666666
+      },
+      "power_class": {
+       "n": 91,
+       "false_feasible": 3,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.03296703296703297,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.036585365853658534,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 91,
+       "false_feasible": 25,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.27472527472527475,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.27472527472527475,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.6593406593406593,
+       "power_w": 0.9010989010989011,
+       "p99": 0.9852941176470589
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 5,
+      "picks": 3,
+      "false_feasible_picks": 1,
+      "false_feasible_rate": 0.3333333333333333,
+      "regret_sum": 283.06666666666666,
+      "best_sum": 359.56666666666666,
+      "regret_rel": 0.787243904700102,
+      "sigma_hat_mean": {
+       "miss": 0.3652745617320513,
+       "tok_s": 5.194703861779254,
+       "power_w": 6.1777185702808195,
+       "p99": 848.1615616609257
+      }
+     },
+     "llama32_3b": {
+      "n_test": 94,
+      "n_p99": 67,
+      "n_overloaded_excluded_from_p99": 27,
+      "p99_err": 2403.462354369927,
+      "p99_mae": 762.0795727363259,
+      "tok_mae": 1.5004437939655861,
+      "power_mae": 2.2376102879519206,
+      "miss_mae": 0.1931977651127693,
+      "miss_class": {
+       "n": 94,
+       "false_feasible": 0,
+       "false_infeasible": 14,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.14893617021276595,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.35
+      },
+      "power_class": {
+       "n": 94,
+       "false_feasible": 1,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.010638297872340425,
+       "false_infeasible_share_of_all": 0.010638297872340425,
+       "false_feasible_of_predicted_feasible": 0.011494252873563218,
+       "false_infeasible_of_observed_feasible": 0.011494252873563218
+      },
+      "zero_token_class": {
+       "n": 94,
+       "false_feasible": 3,
+       "false_infeasible": 2,
+       "false_feasible_share_of_all": 0.031914893617021274,
+       "false_infeasible_share_of_all": 0.02127659574468085,
+       "false_feasible_of_predicted_feasible": 0.06976744186046512,
+       "false_infeasible_of_observed_feasible": 0.047619047619047616
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 1.0,
+       "p99": 0.6119402985074627
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 1,
+      "picks": 2,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 44.8,
+      "best_sum": 44.8,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.17775930378925198,
+       "tok_s": 17.483493354756565,
+       "power_w": 8.82305565536231,
+       "p99": 347.8670042598354
+      }
+     },
+     "phi35_mini": {
+      "n_test": 92,
+      "n_p99": 64,
+      "n_overloaded_excluded_from_p99": 28,
+      "p99_err": 913.2052420033772,
+      "p99_mae": 147.12465638106826,
+      "tok_mae": 5.6924482750183,
+      "power_mae": 2.15105196098714,
+      "miss_mae": 0.10964761175478498,
+      "miss_class": {
+       "n": 92,
+       "false_feasible": 0,
+       "false_infeasible": 6,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.06521739130434782,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.13953488372093023
+      },
+      "power_class": {
+       "n": 92,
+       "false_feasible": 1,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.010869565217391304,
+       "false_infeasible_share_of_all": 0.010869565217391304,
+       "false_feasible_of_predicted_feasible": 0.011111111111111112,
+       "false_infeasible_of_observed_feasible": 0.011111111111111112
+      },
+      "zero_token_class": {
+       "n": 92,
+       "false_feasible": 24,
+       "false_infeasible": 4,
+       "false_feasible_share_of_all": 0.2608695652173913,
+       "false_infeasible_share_of_all": 0.043478260869565216,
+       "false_feasible_of_predicted_feasible": 0.4444444444444444,
+       "false_infeasible_of_observed_feasible": 0.11764705882352941
+      },
+      "coverage": {
+       "tok_s": 0.9782608695652174,
+       "power_w": 0.9891304347826086,
+       "p99": 0.984375
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 2,
+      "picks": 5,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 21.733333333333334,
+      "best_sum": 21.733333333333334,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.29855253458697545,
+       "tok_s": 13.172053525592593,
+       "power_w": 4.891678901623458,
+       "p99": 742.8076109326878
+      }
+     }
+    }
+   },
+   "loco_k3": {
+    "pooled": {
+     "n_test": 280,
+     "n_p99": 200,
+     "n_overloaded_excluded_from_p99": 80,
+     "p99_err": 2323.9485283043427,
+     "p99_mae": 334.88173315802794,
+     "tok_mae": 4.37390119191594,
+     "power_mae": 2.2613409843376946,
+     "miss_mae": 0.1415800672107853,
+     "miss_class": {
+      "n": 280,
+      "false_feasible": 2,
+      "false_infeasible": 80,
+      "false_feasible_share_of_all": 0.007142857142857143,
+      "false_infeasible_share_of_all": 0.2857142857142857,
+      "false_feasible_of_predicted_feasible": 0.03571428571428571,
+      "false_infeasible_of_observed_feasible": 0.5970149253731343
+     },
+     "power_class": {
+      "n": 280,
+      "false_feasible": 3,
+      "false_infeasible": 0,
+      "false_feasible_share_of_all": 0.010714285714285714,
+      "false_infeasible_share_of_all": 0.0,
+      "false_feasible_of_predicted_feasible": 0.011450381679389313,
+      "false_infeasible_of_observed_feasible": 0.0
+     },
+     "zero_token_class": {
+      "n": 280,
+      "false_feasible": 37,
+      "false_infeasible": 3,
+      "false_feasible_share_of_all": 0.13214285714285715,
+      "false_infeasible_share_of_all": 0.010714285714285714,
+      "false_feasible_of_predicted_feasible": 0.20670391061452514,
+      "false_infeasible_of_observed_feasible": 0.020689655172413793
+     },
+     "coverage": {
+      "tok_s": 0.95,
+      "power_w": 0.95,
+      "p99": 0.895
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 7,
+     "false_feasible_picks": 0,
+     "false_feasible_rate": 0.0,
+     "regret_sum": 269.66666666666663,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.6328717828365797,
+     "sigma_hat_mean": {
+      "miss": 0.26714686871692683,
+      "tok_s": 11.702930286005973,
+      "power_w": 4.830595830498634,
+      "p99": 608.0233387263294
+     }
+    },
+    "per_condition": {
+     "c5": {
+      "n_test": 46,
+      "n_p99": 43,
+      "n_overloaded_excluded_from_p99": 3,
+      "p99_err": 1747.4223559444597,
+      "p99_mae": 306.4318617196099,
+      "tok_mae": 7.7238448356173075,
+      "power_mae": 4.444695314289771,
+      "miss_mae": 0.12706420138331162,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 24,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.5217391304347826,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.6666666666666666
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 1,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.023255813953488372,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 4,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.08695652173913043,
+       "false_infeasible_share_of_all": 0.021739130434782608,
+       "false_feasible_of_predicted_feasible": 0.12121212121212122,
+       "false_infeasible_of_observed_feasible": 0.03333333333333333
+      },
+      "coverage": {
+       "tok_s": 0.9130434782608695,
+       "power_w": 0.8913043478260869,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 3,
+      "picks": 1,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 112.56666666666666,
+      "best_sum": 172.56666666666666,
+      "regret_rel": 0.6523082866525014,
+      "sigma_hat_mean": {
+       "miss": 0.4034774750172981,
+       "tok_s": 11.413398114981083,
+       "power_w": 6.9915545118064415,
+       "p99": 1213.0677151579991
+      }
+     },
+     "c7": {
+      "n_test": 46,
+      "n_p99": 44,
+      "n_overloaded_excluded_from_p99": 2,
+      "p99_err": 398.1105939136172,
+      "p99_mae": 69.8043984702234,
+      "tok_mae": 3.3427452435717178,
+      "power_mae": 1.5278072420642912,
+      "miss_mae": 0.052253908960138054,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 12,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.2608695652173913,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.32432432432432434
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 5,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.10869565217391304,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.18518518518518517,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9565217391304348,
+       "power_w": 0.9565217391304348,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 2,
+      "picks": 3,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 0.0,
+      "best_sum": 71.23333333333333,
+      "regret_rel": 0.0,
+      "sigma_hat_mean": {
+       "miss": 0.22144975082095233,
+       "tok_s": 12.803328765989122,
+       "power_w": 3.4374605696876976,
+       "p99": 474.6796155245396
+      }
+     },
+     "c9": {
+      "n_test": 47,
+      "n_p99": 33,
+      "n_overloaded_excluded_from_p99": 14,
+      "p99_err": 1521.1204060442326,
+      "p99_mae": 344.71624441117876,
+      "tok_mae": 5.7855782439595025,
+      "power_mae": 2.3122303472092045,
+      "miss_mae": 0.15750001140824996,
+      "miss_class": {
+       "n": 47,
+       "false_feasible": 1,
+       "false_infeasible": 19,
+       "false_feasible_share_of_all": 0.02127659574468085,
+       "false_infeasible_share_of_all": 0.40425531914893614,
+       "false_feasible_of_predicted_feasible": 0.14285714285714285,
+       "false_infeasible_of_observed_feasible": 0.76
+      },
+      "power_class": {
+       "n": 47,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 47,
+       "false_feasible": 9,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.19148936170212766,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.3,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9148936170212766,
+       "power_w": 1.0,
+       "p99": 0.9696969696969697
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 0,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": NaN,
+      "regret_sum": 59.9,
+      "best_sum": 59.9,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.3373090653576209,
+       "tok_s": 10.521627425299283,
+       "power_w": 5.87459976757793,
+       "p99": 738.4549671445858
+      }
+     },
+     "c11": {
+      "n_test": 47,
+      "n_p99": 26,
+      "n_overloaded_excluded_from_p99": 21,
+      "p99_err": 1008.0462454625003,
+      "p99_mae": 154.55581278825858,
+      "tok_mae": 3.5291451476584643,
+      "power_mae": 1.8859415745054402,
+      "miss_mae": 0.14241846918573425,
+      "miss_class": {
+       "n": 47,
+       "false_feasible": 1,
+       "false_infeasible": 11,
+       "false_feasible_share_of_all": 0.02127659574468085,
+       "false_infeasible_share_of_all": 0.23404255319148937,
+       "false_feasible_of_predicted_feasible": 0.125,
+       "false_infeasible_of_observed_feasible": 0.6111111111111112
+      },
+      "power_class": {
+       "n": 47,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 47,
+       "false_feasible": 8,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.1702127659574468,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.25,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9574468085106383,
+       "power_w": 0.9148936170212766,
+       "p99": 0.9615384615384616
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 2,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 32.833333333333336,
+      "best_sum": 32.833333333333336,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.20807708356315296,
+       "tok_s": 10.881549735704413,
+       "power_w": 3.5446065599691208,
+       "p99": 515.5961467590305
+      }
+     },
+     "c14": {
+      "n_test": 48,
+      "n_p99": 16,
+      "n_overloaded_excluded_from_p99": 32,
+      "p99_err": 861.3838792689119,
+      "p99_mae": 324.5960701540456,
+      "tok_mae": 1.3912572596748773,
+      "power_mae": 1.2154668579276853,
+      "miss_mae": 0.1859848801654512,
+      "miss_class": {
+       "n": 48,
+       "false_feasible": 0,
+       "false_infeasible": 4,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.08333333333333333,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.8
+      },
+      "power_class": {
+       "n": 48,
+       "false_feasible": 2,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.041666666666666664,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.044444444444444446,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 48,
+       "false_feasible": 9,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.1875,
+       "false_infeasible_share_of_all": 0.020833333333333332,
+       "false_feasible_of_predicted_feasible": 0.3103448275862069,
+       "false_infeasible_of_observed_feasible": 0.047619047619047616
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 0.9791666666666666,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 0,
+      "picks": 0,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": NaN,
+      "regret_sum": 0.0,
+      "best_sum": 0.0,
+      "regret_rel": NaN,
+      "sigma_hat_mean": {
+       "miss": 0.19460302968648832,
+       "tok_s": 12.386890005419431,
+       "power_w": 4.311594827583433,
+       "p99": 508.08715323955363
+      }
+     },
+     "var9": {
+      "n_test": 46,
+      "n_p99": 38,
+      "n_overloaded_excluded_from_p99": 8,
+      "p99_err": 2524.520436389708,
+      "p99_mae": 793.1778611695839,
+      "tok_mae": 4.58819222224629,
+      "power_mae": 2.234431924372833,
+      "miss_mae": 0.18196397624700633,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 10,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.21739130434782608,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.7692307692307693
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 2,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.043478260869565216,
+       "false_infeasible_share_of_all": 0.021739130434782608,
+       "false_feasible_of_predicted_feasible": 0.07142857142857142,
+       "false_infeasible_of_observed_feasible": 0.037037037037037035
+      },
+      "coverage": {
+       "tok_s": 0.9565217391304348,
+       "power_w": 0.9565217391304348,
+       "p99": 0.5
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 1,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 64.36666666666666,
+      "best_sum": 89.56666666666666,
+      "regret_rel": 0.7186453293636025,
+      "sigma_hat_mean": {
+       "miss": 0.2408777484337428,
+       "tok_s": 12.224586885429057,
+       "power_w": 4.851584558090672,
+       "p99": 201.77330267406361
+      }
+     }
+    }
+   },
+   "seconds": 14.2
+  },
+  "GP": {
+   "lowo_k3": {
+    "pooled": {
+     "n_test": 271,
+     "n_p99": 198,
+     "n_overloaded_excluded_from_p99": 73,
+     "p99_err": 2409.7606485224023,
+     "p99_mae": 377.68434586626114,
+     "tok_mae": 4.419755418151387,
+     "power_mae": 3.732464614871799,
+     "miss_mae": 0.16986601140357968,
+     "miss_class": {
+      "n": 271,
+      "false_feasible": 0,
+      "false_infeasible": 108,
+      "false_feasible_share_of_all": 0.0,
+      "false_infeasible_share_of_all": 0.3985239852398524,
+      "false_feasible_of_predicted_feasible": 0.0,
+      "false_infeasible_of_observed_feasible": 0.8059701492537313
+     },
+     "power_class": {
+      "n": 271,
+      "false_feasible": 8,
+      "false_infeasible": 1,
+      "false_feasible_share_of_all": 0.02952029520295203,
+      "false_infeasible_share_of_all": 0.0036900369003690036,
+      "false_feasible_of_predicted_feasible": 0.031007751937984496,
+      "false_infeasible_of_observed_feasible": 0.00398406374501992
+     },
+     "zero_token_class": {
+      "n": 271,
+      "false_feasible": 25,
+      "false_infeasible": 3,
+      "false_feasible_share_of_all": 0.09225092250922509,
+      "false_infeasible_share_of_all": 0.01107011070110701,
+      "false_feasible_of_predicted_feasible": 0.15822784810126583,
+      "false_infeasible_of_observed_feasible": 0.022058823529411766
+     },
+     "coverage": {
+      "tok_s": 0.7306273062730627,
+      "power_w": 0.9446494464944649,
+      "p99": 0.9444444444444444
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 1,
+     "false_feasible_picks": 0,
+     "false_feasible_rate": 0.0,
+     "regret_sum": 419.8,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.9852147383243371,
+     "sigma_hat_mean": {
+      "miss": 0.2881259953699707,
+      "tok_s": 10.03441423239121,
+      "power_w": 7.09942426426863,
+      "p99": 607.9652318287715
+     }
+    },
+    "per_fold": {
+     "llama32_1b": {
+      "n_test": 89,
+      "n_p99": 68,
+      "n_overloaded_excluded_from_p99": 21,
+      "p99_err": 1806.4180580782245,
+      "p99_mae": 244.9734298763357,
+      "tok_mae": 11.927800399663795,
+      "power_mae": 7.219708539979873,
+      "miss_mae": 0.19610235052837485,
+      "miss_class": {
+       "n": 89,
+       "false_feasible": 0,
+       "false_infeasible": 51,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.5730337078651685,
+       "false_feasible_of_predicted_feasible": NaN,
+       "false_infeasible_of_observed_feasible": 1.0
+      },
+      "power_class": {
+       "n": 89,
+       "false_feasible": 7,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.07865168539325842,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.08235294117647059,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 89,
+       "false_feasible": 25,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.2808988764044944,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.2808988764044944,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.1797752808988764,
+       "power_w": 0.8314606741573034,
+       "p99": 0.9852941176470589
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 5,
+      "picks": 0,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": NaN,
+      "regret_sum": 359.56666666666666,
+      "best_sum": 359.56666666666666,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.3131952538111071,
+       "tok_s": 1.7336505620732592,
+       "power_w": 5.960375484832396,
+       "p99": 662.4699613633684
+      }
+     },
+     "llama32_3b": {
+      "n_test": 92,
+      "n_p99": 66,
+      "n_overloaded_excluded_from_p99": 26,
+      "p99_err": 2412.4582374723277,
+      "p99_mae": 796.3051982698897,
+      "tok_mae": 0.7706397494166035,
+      "power_mae": 1.774664404125702,
+      "miss_mae": 0.15407356259150887,
+      "miss_class": {
+       "n": 92,
+       "false_feasible": 0,
+       "false_infeasible": 17,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.18478260869565216,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.425
+      },
+      "power_class": {
+       "n": 92,
+       "false_feasible": 0,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.010869565217391304,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.011764705882352941
+      },
+      "zero_token_class": {
+       "n": 92,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 1.0,
+       "p99": 0.8787878787878788
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 1,
+      "picks": 1,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 38.5,
+      "best_sum": 44.8,
+      "regret_rel": 0.859375,
+      "sigma_hat_mean": {
+       "miss": 0.2922847876005099,
+       "tok_s": 14.05646309717403,
+       "power_w": 7.546841358303899,
+       "p99": 458.07382247506035
+      }
+     },
+     "phi35_mini": {
+      "n_test": 90,
+      "n_p99": 64,
+      "n_overloaded_excluded_from_p99": 26,
+      "p99_err": 1773.3545946143392,
+      "p99_mae": 86.9869400643149,
+      "tok_mae": 0.7253402866957875,
+      "power_mae": 2.285274726583156,
+      "miss_mae": 0.16006457927695464,
+      "miss_class": {
+       "n": 90,
+       "false_feasible": 0,
+       "false_infeasible": 40,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.4444444444444444,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.9302325581395349
+      },
+      "power_class": {
+       "n": 90,
+       "false_feasible": 1,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.011111111111111112,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.011235955056179775,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 90,
+       "false_feasible": 0,
+       "false_infeasible": 3,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.03333333333333333,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.09375
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 1.0,
+       "p99": 0.96875
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 2,
+      "picks": 0,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": NaN,
+      "regret_sum": 21.733333333333334,
+      "best_sum": 21.733333333333334,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.25908407440918474,
+       "tok_s": 14.131519466816517,
+       "power_w": 7.768457250030628,
+       "p99": 707.2884399616861
+      }
+     }
+    }
+   },
+   "latency_p99_s": 0.005687378980219362,
+   "lowo_k1": {
+    "pooled": {
+     "n_test": 277,
+     "n_p99": 199,
+     "n_overloaded_excluded_from_p99": 78,
+     "p99_err": 2812.6797908003914,
+     "p99_mae": 490.65715144877777,
+     "tok_mae": 8.173561352248761,
+     "power_mae": 4.743841126537557,
+     "miss_mae": 0.12634766341258077,
+     "miss_class": {
+      "n": 277,
+      "false_feasible": 4,
+      "false_infeasible": 73,
+      "false_feasible_share_of_all": 0.01444043321299639,
+      "false_infeasible_share_of_all": 0.26353790613718414,
+      "false_feasible_of_predicted_feasible": 0.06153846153846154,
+      "false_infeasible_of_observed_feasible": 0.5447761194029851
+     },
+     "power_class": {
+      "n": 277,
+      "false_feasible": 10,
+      "false_infeasible": 2,
+      "false_feasible_share_of_all": 0.036101083032490974,
+      "false_infeasible_share_of_all": 0.007220216606498195,
+      "false_feasible_of_predicted_feasible": 0.03787878787878788,
+      "false_infeasible_of_observed_feasible": 0.0078125
+     },
+     "zero_token_class": {
+      "n": 277,
+      "false_feasible": 53,
+      "false_infeasible": 2,
+      "false_feasible_share_of_all": 0.19133574007220217,
+      "false_infeasible_share_of_all": 0.007220216606498195,
+      "false_feasible_of_predicted_feasible": 0.27461139896373055,
+      "false_infeasible_of_observed_feasible": 0.014084507042253521
+     },
+     "coverage": {
+      "tok_s": 0.8231046931407943,
+      "power_w": 0.9458483754512635,
+      "p99": 0.6934673366834171
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 10,
+     "false_feasible_picks": 2,
+     "false_feasible_rate": 0.2,
+     "regret_sum": 314.3,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.7376202769302982,
+     "sigma_hat_mean": {
+      "miss": 0.291046042840165,
+      "tok_s": 11.368804599523827,
+      "power_w": 7.984512724605491,
+      "p99": 709.985732077971
+     }
+    },
+    "per_fold": {
+     "llama32_1b": {
+      "n_test": 91,
+      "n_p99": 68,
+      "n_overloaded_excluded_from_p99": 23,
+      "p99_err": 1247.5829160045969,
+      "p99_mae": 60.34082256977701,
+      "tok_mae": 19.58164735426431,
+      "power_mae": 7.676732264539709,
+      "miss_mae": 0.08351459445839575,
+      "miss_class": {
+       "n": 91,
+       "false_feasible": 1,
+       "false_infeasible": 39,
+       "false_feasible_share_of_all": 0.01098901098901099,
+       "false_infeasible_share_of_all": 0.42857142857142855,
+       "false_feasible_of_predicted_feasible": 0.07692307692307693,
+       "false_infeasible_of_observed_feasible": 0.7647058823529411
+      },
+      "power_class": {
+       "n": 91,
+       "false_feasible": 8,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.08791208791208792,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.09195402298850575,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 91,
+       "false_feasible": 0,
+       "false_infeasible": 2,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.02197802197802198,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.030303030303030304
+      },
+      "coverage": {
+       "tok_s": 0.4725274725274725,
+       "power_w": 0.8461538461538461,
+       "p99": 0.9852941176470589
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 5,
+      "picks": 3,
+      "false_feasible_picks": 1,
+      "false_feasible_rate": 0.3333333333333333,
+      "regret_sum": 269.5,
+      "best_sum": 359.56666666666666,
+      "regret_rel": 0.7495133030499675,
+      "sigma_hat_mean": {
+       "miss": 0.33715373605626153,
+       "tok_s": 4.738641592985423,
+       "power_w": 7.345930852694968,
+       "p99": 860.5912594180777
+      }
+     },
+     "llama32_3b": {
+      "n_test": 94,
+      "n_p99": 67,
+      "n_overloaded_excluded_from_p99": 27,
+      "p99_err": 3874.345902261769,
+      "p99_mae": 1132.2193164028888,
+      "tok_mae": 2.9732154182239547,
+      "power_mae": 2.906169322620269,
+      "miss_mae": 0.14934519346562702,
+      "miss_class": {
+       "n": 94,
+       "false_feasible": 0,
+       "false_infeasible": 14,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.14893617021276595,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.35
+      },
+      "power_class": {
+       "n": 94,
+       "false_feasible": 0,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.010638297872340425,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.011494252873563218
+      },
+      "zero_token_class": {
+       "n": 94,
+       "false_feasible": 52,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.5531914893617021,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.5531914893617021,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 1.0,
+       "p99": 0.11940298507462686
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 1,
+      "picks": 4,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 44.8,
+      "best_sum": 44.8,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.26452293535587557,
+       "tok_s": 16.787090187808133,
+       "power_w": 8.934304293704434,
+       "p99": 409.73931713157407
+      }
+     },
+     "phi35_mini": {
+      "n_test": 92,
+      "n_p99": 64,
+      "n_overloaded_excluded_from_p99": 28,
+      "p99_err": 1877.2342651078106,
+      "p99_mae": 276.2328594463814,
+      "tok_mae": 2.202873217628293,
+      "power_mae": 3.7204504309943975,
+      "miss_mae": 0.14521767917176,
+      "miss_class": {
+       "n": 92,
+       "false_feasible": 3,
+       "false_infeasible": 20,
+       "false_feasible_share_of_all": 0.03260869565217391,
+       "false_infeasible_share_of_all": 0.21739130434782608,
+       "false_feasible_of_predicted_feasible": 0.11538461538461539,
+       "false_infeasible_of_observed_feasible": 0.46511627906976744
+      },
+      "power_class": {
+       "n": 92,
+       "false_feasible": 2,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.010869565217391304,
+       "false_feasible_of_predicted_feasible": 0.02197802197802198,
+       "false_infeasible_of_observed_feasible": 0.011111111111111112
+      },
+      "zero_token_class": {
+       "n": 92,
+       "false_feasible": 1,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.010869565217391304,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.02857142857142857,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9891304347826086,
+       "power_w": 0.9891304347826086,
+       "p99": 0.984375
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 2,
+      "picks": 3,
+      "false_feasible_picks": 1,
+      "false_feasible_rate": 0.3333333333333333,
+      "regret_sum": 0.0,
+      "best_sum": 21.733333333333334,
+      "regret_rel": 0.0,
+      "sigma_hat_mean": {
+       "miss": 0.27253921697993044,
+       "tok_s": 12.390826211439805,
+       "power_w": 7.645714277307201,
+       "p99": 867.7907322628797
+      }
+     }
+    }
+   },
+   "loco_k3": {
+    "pooled": {
+     "n_test": 280,
+     "n_p99": 200,
+     "n_overloaded_excluded_from_p99": 80,
+     "p99_err": 2302.6802715485373,
+     "p99_mae": 216.49447666641746,
+     "tok_mae": 3.7651926379047396,
+     "power_mae": 2.4593852731309678,
+     "miss_mae": 0.15577100569555613,
+     "miss_class": {
+      "n": 280,
+      "false_feasible": 4,
+      "false_infeasible": 75,
+      "false_feasible_share_of_all": 0.014285714285714285,
+      "false_infeasible_share_of_all": 0.26785714285714285,
+      "false_feasible_of_predicted_feasible": 0.06349206349206349,
+      "false_infeasible_of_observed_feasible": 0.5597014925373134
+     },
+     "power_class": {
+      "n": 280,
+      "false_feasible": 5,
+      "false_infeasible": 3,
+      "false_feasible_share_of_all": 0.017857142857142856,
+      "false_infeasible_share_of_all": 0.010714285714285714,
+      "false_feasible_of_predicted_feasible": 0.019157088122605363,
+      "false_infeasible_of_observed_feasible": 0.011583011583011582
+     },
+     "zero_token_class": {
+      "n": 280,
+      "false_feasible": 24,
+      "false_infeasible": 1,
+      "false_feasible_share_of_all": 0.08571428571428572,
+      "false_infeasible_share_of_all": 0.0035714285714285713,
+      "false_feasible_of_predicted_feasible": 0.14285714285714285,
+      "false_infeasible_of_observed_feasible": 0.006896551724137931
+     },
+     "coverage": {
+      "tok_s": 0.95,
+      "power_w": 0.9678571428571429,
+      "p99": 0.895
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 6,
+     "false_feasible_picks": 3,
+     "false_feasible_rate": 0.5,
+     "regret_sum": 359.9,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.8446374090589064,
+     "sigma_hat_mean": {
+      "miss": 0.3198755023483321,
+      "tok_s": 11.493596670524465,
+      "power_w": 6.937618180399742,
+      "p99": 652.541814465714
+     }
+    },
+    "per_condition": {
+     "c5": {
+      "n_test": 46,
+      "n_p99": 43,
+      "n_overloaded_excluded_from_p99": 3,
+      "p99_err": 386.2323339347847,
+      "p99_mae": 70.99272849963346,
+      "tok_mae": 5.61196225190919,
+      "power_mae": 4.099511834306523,
+      "miss_mae": 0.1012543520248694,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 2,
+       "false_infeasible": 9,
+       "false_feasible_share_of_all": 0.043478260869565216,
+       "false_infeasible_share_of_all": 0.1956521739130435,
+       "false_feasible_of_predicted_feasible": 0.06896551724137931,
+       "false_infeasible_of_observed_feasible": 0.25
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 1,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.021739130434782608,
+       "false_feasible_of_predicted_feasible": 0.023809523809523808,
+       "false_infeasible_of_observed_feasible": 0.023809523809523808
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.021739130434782608,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.03333333333333333
+      },
+      "coverage": {
+       "tok_s": 0.9130434782608695,
+       "power_w": 0.9782608695652174,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 3,
+      "picks": 3,
+      "false_feasible_picks": 2,
+      "false_feasible_rate": 0.6666666666666666,
+      "regret_sum": 166.26666666666665,
+      "best_sum": 172.56666666666666,
+      "regret_rel": 0.9634923700985126,
+      "sigma_hat_mean": {
+       "miss": 0.5287515430995338,
+       "tok_s": 11.781544453532021,
+       "power_w": 9.94226112743618,
+       "p99": 1067.8729392288303
+      }
+     },
+     "c7": {
+      "n_test": 46,
+      "n_p99": 44,
+      "n_overloaded_excluded_from_p99": 2,
+      "p99_err": 209.2504139395705,
+      "p99_mae": 18.925720157161354,
+      "tok_mae": 1.9975412614298709,
+      "power_mae": 2.0523394689012306,
+      "miss_mae": 0.13404861880312097,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 36,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.782608695652174,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.972972972972973
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 2,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.043478260869565216,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.045454545454545456
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 1,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.043478260869565216,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9782608695652174,
+       "power_w": 0.9565217391304348,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 2,
+      "picks": 0,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": NaN,
+      "regret_sum": 71.23333333333333,
+      "best_sum": 71.23333333333333,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.2529232014900547,
+       "tok_s": 12.01667159610796,
+       "power_w": 4.979701736224465,
+       "p99": 637.2706652374765
+      }
+     },
+     "c9": {
+      "n_test": 47,
+      "n_p99": 33,
+      "n_overloaded_excluded_from_p99": 14,
+      "p99_err": 1280.2457084072087,
+      "p99_mae": 84.45619709959071,
+      "tok_mae": 7.06485743149007,
+      "power_mae": 2.354901023294073,
+      "miss_mae": 0.1823420934340469,
+      "miss_class": {
+       "n": 47,
+       "false_feasible": 2,
+       "false_infeasible": 10,
+       "false_feasible_share_of_all": 0.0425531914893617,
+       "false_infeasible_share_of_all": 0.2127659574468085,
+       "false_feasible_of_predicted_feasible": 0.11764705882352941,
+       "false_infeasible_of_observed_feasible": 0.4
+      },
+      "power_class": {
+       "n": 47,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 47,
+       "false_feasible": 16,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.3404255319148936,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.43243243243243246,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.8936170212765957,
+       "power_w": 1.0,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 2,
+      "false_feasible_picks": 1,
+      "false_feasible_rate": 0.5,
+      "regret_sum": 0.0,
+      "best_sum": 59.9,
+      "regret_rel": 0.0,
+      "sigma_hat_mean": {
+       "miss": 0.3440238148211065,
+       "tok_s": 9.935909046627154,
+       "power_w": 10.407197055003623,
+       "p99": 885.4679864245352
+      }
+     },
+     "c11": {
+      "n_test": 47,
+      "n_p99": 26,
+      "n_overloaded_excluded_from_p99": 21,
+      "p99_err": 951.9661869128008,
+      "p99_mae": 136.87800158910716,
+      "tok_mae": 2.9767578490887514,
+      "power_mae": 2.331682921990344,
+      "miss_mae": 0.12886680161174707,
+      "miss_class": {
+       "n": 47,
+       "false_feasible": 0,
+       "false_infeasible": 5,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.10638297872340426,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.2777777777777778
+      },
+      "power_class": {
+       "n": 47,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 47,
+       "false_feasible": 5,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.10638297872340426,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.1724137931034483,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9574468085106383,
+       "power_w": 0.9361702127659575,
+       "p99": 0.9615384615384616
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 1,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 32.833333333333336,
+      "best_sum": 32.833333333333336,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.31863602807273705,
+       "tok_s": 10.85253734828798,
+       "power_w": 4.9310399942755785,
+       "p99": 496.3781041924515
+      }
+     },
+     "c14": {
+      "n_test": 48,
+      "n_p99": 16,
+      "n_overloaded_excluded_from_p99": 32,
+      "p99_err": 628.7344832753237,
+      "p99_mae": 222.97649304736473,
+      "tok_mae": 0.8399909129407268,
+      "power_mae": 1.6181831500224222,
+      "miss_mae": 0.160208105069356,
+      "miss_class": {
+       "n": 48,
+       "false_feasible": 0,
+       "false_infeasible": 2,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.041666666666666664,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.4
+      },
+      "power_class": {
+       "n": 48,
+       "false_feasible": 3,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0625,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.06521739130434782,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 48,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 0.9583333333333334,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 0,
+      "picks": 0,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": NaN,
+      "regret_sum": 0.0,
+      "best_sum": 0.0,
+      "regret_rel": NaN,
+      "sigma_hat_mean": {
+       "miss": 0.17952243246774804,
+       "tok_s": 12.049535551725151,
+       "power_w": 5.158203629501415,
+       "p99": 620.3322315508177
+      }
+     },
+     "var9": {
+      "n_test": 46,
+      "n_p99": 38,
+      "n_overloaded_excluded_from_p99": 8,
+      "p99_err": 2627.951385698282,
+      "p99_mae": 776.3149970137645,
+      "tok_mae": 4.172636847638493,
+      "power_mae": 2.341314780427617,
+      "miss_mae": 0.22772038752579898,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 13,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.2826086956521739,
+       "false_feasible_of_predicted_feasible": NaN,
+       "false_infeasible_of_observed_feasible": 1.0
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 1,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.022727272727272728,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 2,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.043478260869565216,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.06896551724137931,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9565217391304348,
+       "power_w": 0.9782608695652174,
+       "p99": 0.47368421052631576
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 0,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": NaN,
+      "regret_sum": 89.56666666666666,
+      "best_sum": 89.56666666666666,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.3010002833032471,
+       "tok_s": 12.349009617817218,
+       "power_w": 6.2528670272032,
+       "p99": 207.66062764156922
+      }
+     }
+    }
+   },
+   "seconds": 107.9
+  },
+  "MLP": {
+   "lowo_k3": {
+    "pooled": {
+     "n_test": 271,
+     "n_p99": 198,
+     "n_overloaded_excluded_from_p99": 73,
+     "p99_err": 2561.264997697102,
+     "p99_mae": 424.29865931662385,
+     "tok_mae": 5.449507884329469,
+     "power_mae": 3.711120878110306,
+     "miss_mae": 0.14952162449339634,
+     "miss_class": {
+      "n": 271,
+      "false_feasible": 3,
+      "false_infeasible": 95,
+      "false_feasible_share_of_all": 0.01107011070110701,
+      "false_infeasible_share_of_all": 0.3505535055350554,
+      "false_feasible_of_predicted_feasible": 0.07142857142857142,
+      "false_infeasible_of_observed_feasible": 0.7089552238805971
+     },
+     "power_class": {
+      "n": 271,
+      "false_feasible": 7,
+      "false_infeasible": 1,
+      "false_feasible_share_of_all": 0.025830258302583026,
+      "false_infeasible_share_of_all": 0.0036900369003690036,
+      "false_feasible_of_predicted_feasible": 0.027237354085603113,
+      "false_infeasible_of_observed_feasible": 0.00398406374501992
+     },
+     "zero_token_class": {
+      "n": 271,
+      "false_feasible": 83,
+      "false_infeasible": 13,
+      "false_feasible_share_of_all": 0.3062730627306273,
+      "false_infeasible_share_of_all": 0.04797047970479705,
+      "false_feasible_of_predicted_feasible": 0.4029126213592233,
+      "false_infeasible_of_observed_feasible": 0.09558823529411764
+     },
+     "coverage": {
+      "tok_s": 0.7712177121771218,
+      "power_w": 0.9114391143911439,
+      "p99": 0.8585858585858586
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 8,
+     "false_feasible_picks": 0,
+     "false_feasible_rate": 0.0,
+     "regret_sum": 302.5,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.709927247125088,
+     "sigma_hat_mean": {
+      "miss": 0.2530520711027202,
+      "tok_s": 13.04956143411338,
+      "power_w": 4.633458711136518,
+      "p99": 556.8401966059462
+     }
+    },
+    "per_fold": {
+     "llama32_1b": {
+      "n_test": 89,
+      "n_p99": 68,
+      "n_overloaded_excluded_from_p99": 21,
+      "p99_err": 2676.3415770931065,
+      "p99_mae": 752.8129666129219,
+      "tok_mae": 11.630279951650138,
+      "power_mae": 5.438531677046924,
+      "miss_mae": 0.16829476302429233,
+      "miss_class": {
+       "n": 89,
+       "false_feasible": 1,
+       "false_infeasible": 40,
+       "false_feasible_share_of_all": 0.011235955056179775,
+       "false_infeasible_share_of_all": 0.449438202247191,
+       "false_feasible_of_predicted_feasible": 0.08333333333333333,
+       "false_infeasible_of_observed_feasible": 0.7843137254901961
+      },
+      "power_class": {
+       "n": 89,
+       "false_feasible": 6,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.06741573033707865,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.07142857142857142,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 89,
+       "false_feasible": 25,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.2808988764044944,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.2808988764044944,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.30337078651685395,
+       "power_w": 0.8089887640449438,
+       "p99": 0.75
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 5,
+      "picks": 3,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 261.5,
+      "best_sum": 359.56666666666666,
+      "regret_rel": 0.7272642996199129,
+      "sigma_hat_mean": {
+       "miss": 0.26313979549859384,
+       "tok_s": 2.2259047343513028,
+       "power_w": 4.186933334626282,
+       "p99": 606.7721949222932
+      }
+     },
+     "llama32_3b": {
+      "n_test": 92,
+      "n_p99": 66,
+      "n_overloaded_excluded_from_p99": 26,
+      "p99_err": 2579.7096805880724,
+      "p99_mae": 345.2113236889303,
+      "tok_mae": 2.6229034862706406,
+      "power_mae": 2.6071322125651215,
+      "miss_mae": 0.1612223286367937,
+      "miss_class": {
+       "n": 92,
+       "false_feasible": 0,
+       "false_infeasible": 31,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.33695652173913043,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.775
+      },
+      "power_class": {
+       "n": 92,
+       "false_feasible": 0,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.010869565217391304,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.011764705882352941
+      },
+      "zero_token_class": {
+       "n": 92,
+       "false_feasible": 42,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.45652173913043476,
+       "false_infeasible_share_of_all": 0.010869565217391304,
+       "false_feasible_of_predicted_feasible": 0.5185185185185185,
+       "false_infeasible_of_observed_feasible": 0.025
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 0.9456521739130435,
+       "p99": 0.8484848484848485
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 1,
+      "picks": 2,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 30.499999999999996,
+      "best_sum": 44.8,
+      "regret_rel": 0.6808035714285714,
+      "sigma_hat_mean": {
+       "miss": 0.269205445508854,
+       "tok_s": 18.94774968287448,
+       "power_w": 4.272322955481511,
+       "p99": 432.81418742177084
+      }
+     },
+     "phi35_mini": {
+      "n_test": 90,
+      "n_p99": 64,
+      "n_overloaded_excluded_from_p99": 26,
+      "p99_err": 1048.9824032740273,
+      "p99_mae": 156.81102268036622,
+      "tok_mae": 2.2268288913280516,
+      "power_mae": 3.13142527949695,
+      "miss_mae": 0.11899635659959298,
+      "miss_class": {
+       "n": 90,
+       "false_feasible": 2,
+       "false_infeasible": 24,
+       "false_feasible_share_of_all": 0.022222222222222223,
+       "false_infeasible_share_of_all": 0.26666666666666666,
+       "false_feasible_of_predicted_feasible": 0.09523809523809523,
+       "false_infeasible_of_observed_feasible": 0.5581395348837209
+      },
+      "power_class": {
+       "n": 90,
+       "false_feasible": 1,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.011111111111111112,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.011235955056179775,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 90,
+       "false_feasible": 16,
+       "false_infeasible": 12,
+       "false_feasible_share_of_all": 0.17777777777777778,
+       "false_infeasible_share_of_all": 0.13333333333333333,
+       "false_feasible_of_predicted_feasible": 0.4444444444444444,
+       "false_infeasible_of_observed_feasible": 0.375
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 0.9777777777777777,
+       "p99": 0.984375
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 2,
+      "picks": 3,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 10.5,
+      "best_sum": 21.733333333333334,
+      "regret_rel": 0.4831288343558282,
+      "sigma_hat_mean": {
+       "miss": 0.22656409425164167,
+       "tok_s": 17.72369618292231,
+       "power_w": 5.444183689243979,
+       "p99": 634.2451409924932
+      }
+     }
+    }
+   },
+   "latency_p99_s": 0.0018689539784099848,
+   "lowo_k1": {
+    "pooled": {
+     "n_test": 277,
+     "n_p99": 199,
+     "n_overloaded_excluded_from_p99": 78,
+     "p99_err": 2400.71737099515,
+     "p99_mae": 348.9536504005935,
+     "tok_mae": 5.961341937457324,
+     "power_mae": 4.433365793064726,
+     "miss_mae": 0.17097904353111557,
+     "miss_class": {
+      "n": 277,
+      "false_feasible": 8,
+      "false_infeasible": 65,
+      "false_feasible_share_of_all": 0.02888086642599278,
+      "false_infeasible_share_of_all": 0.23465703971119134,
+      "false_feasible_of_predicted_feasible": 0.1038961038961039,
+      "false_infeasible_of_observed_feasible": 0.48507462686567165
+     },
+     "power_class": {
+      "n": 277,
+      "false_feasible": 7,
+      "false_infeasible": 2,
+      "false_feasible_share_of_all": 0.02527075812274368,
+      "false_infeasible_share_of_all": 0.007220216606498195,
+      "false_feasible_of_predicted_feasible": 0.02681992337164751,
+      "false_infeasible_of_observed_feasible": 0.0078125
+     },
+     "zero_token_class": {
+      "n": 277,
+      "false_feasible": 41,
+      "false_infeasible": 14,
+      "false_feasible_share_of_all": 0.148014440433213,
+      "false_infeasible_share_of_all": 0.05054151624548736,
+      "false_feasible_of_predicted_feasible": 0.24260355029585798,
+      "false_infeasible_of_observed_feasible": 0.09859154929577464
+     },
+     "coverage": {
+      "tok_s": 0.9169675090252708,
+      "power_w": 0.9458483754512635,
+      "p99": 0.9045226130653267
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 9,
+     "false_feasible_picks": 1,
+     "false_feasible_rate": 0.1111111111111111,
+     "regret_sum": 89.93333333333334,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.21106156614253307,
+     "sigma_hat_mean": {
+      "miss": 0.2543099422447569,
+      "tok_s": 16.227438663152505,
+      "power_w": 8.120238339511626,
+      "p99": 548.7474762102839
+     }
+    },
+    "per_fold": {
+     "llama32_1b": {
+      "n_test": 91,
+      "n_p99": 68,
+      "n_overloaded_excluded_from_p99": 23,
+      "p99_err": 1379.0583570395095,
+      "p99_mae": 431.7299912986517,
+      "tok_mae": 10.89047022496286,
+      "power_mae": 5.446000628683336,
+      "miss_mae": 0.14443332389291544,
+      "miss_class": {
+       "n": 91,
+       "false_feasible": 6,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.06593406593406594,
+       "false_infeasible_share_of_all": 0.01098901098901099,
+       "false_feasible_of_predicted_feasible": 0.10714285714285714,
+       "false_infeasible_of_observed_feasible": 0.0196078431372549
+      },
+      "power_class": {
+       "n": 91,
+       "false_feasible": 3,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.03296703296703297,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.036585365853658534,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 91,
+       "false_feasible": 25,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.27472527472527475,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.27472527472527475,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.7692307692307693,
+       "power_w": 0.9120879120879121,
+       "p99": 1.0
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 5,
+      "picks": 6,
+      "false_feasible_picks": 1,
+      "false_feasible_rate": 0.16666666666666666,
+      "regret_sum": 34.63333333333334,
+      "best_sum": 359.56666666666666,
+      "regret_rel": 0.09631964401594514,
+      "sigma_hat_mean": {
+       "miss": 0.32008871688597534,
+       "tok_s": 6.169970419751113,
+       "power_w": 7.209099939249873,
+       "p99": 733.8826702416612
+      }
+     },
+     "llama32_3b": {
+      "n_test": 94,
+      "n_p99": 67,
+      "n_overloaded_excluded_from_p99": 27,
+      "p99_err": 2534.2581802028485,
+      "p99_mae": 469.80027039925335,
+      "tok_mae": 3.68419278432511,
+      "power_mae": 3.5510367555388007,
+      "miss_mae": 0.21999572811927873,
+      "miss_class": {
+       "n": 94,
+       "false_feasible": 0,
+       "false_infeasible": 36,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.3829787234042553,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.9
+      },
+      "power_class": {
+       "n": 94,
+       "false_feasible": 2,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.02127659574468085,
+       "false_infeasible_share_of_all": 0.010638297872340425,
+       "false_feasible_of_predicted_feasible": 0.022727272727272728,
+       "false_infeasible_of_observed_feasible": 0.011494252873563218
+      },
+      "zero_token_class": {
+       "n": 94,
+       "false_feasible": 0,
+       "false_infeasible": 4,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0425531914893617,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.09523809523809523
+      },
+      "coverage": {
+       "tok_s": 0.9893617021276596,
+       "power_w": 0.9893617021276596,
+       "p99": 0.7611940298507462
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 1,
+      "picks": 0,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": NaN,
+      "regret_sum": 44.8,
+      "best_sum": 44.8,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.1857253008972405,
+       "tok_s": 25.267380234576457,
+       "power_w": 10.829904346294638,
+       "p99": 344.3903501559749
+      }
+     },
+     "phi35_mini": {
+      "n_test": 92,
+      "n_p99": 64,
+      "n_overloaded_excluded_from_p99": 28,
+      "p99_err": 1336.6375166550329,
+      "p99_mae": 134.49248288530976,
+      "tok_mae": 3.4124435269293287,
+      "power_mae": 4.333247961392372,
+      "miss_mae": 0.14715395805055986,
+      "miss_class": {
+       "n": 92,
+       "false_feasible": 2,
+       "false_infeasible": 28,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.30434782608695654,
+       "false_feasible_of_predicted_feasible": 0.11764705882352941,
+       "false_infeasible_of_observed_feasible": 0.6511627906976745
+      },
+      "power_class": {
+       "n": 92,
+       "false_feasible": 2,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.010869565217391304,
+       "false_feasible_of_predicted_feasible": 0.02197802197802198,
+       "false_infeasible_of_observed_feasible": 0.011111111111111112
+      },
+      "zero_token_class": {
+       "n": 92,
+       "false_feasible": 16,
+       "false_infeasible": 10,
+       "false_feasible_share_of_all": 0.17391304347826086,
+       "false_infeasible_share_of_all": 0.10869565217391304,
+       "false_feasible_of_predicted_feasible": 0.4,
+       "false_infeasible_of_observed_feasible": 0.29411764705882354
+      },
+      "coverage": {
+       "tok_s": 0.9891304347826086,
+       "power_w": 0.9347826086956522,
+       "p99": 0.953125
+      },
+      "strata": 6,
+      "strata_with_feasible_best": 2,
+      "picks": 3,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 10.5,
+      "best_sum": 21.733333333333334,
+      "regret_rel": 0.4831288343558282,
+      "sigma_hat_mean": {
+       "miss": 0.2593217660960141,
+       "tok_s": 16.93912455919247,
+       "power_w": 6.252901271970494,
+       "p99": 574.4242935173462
+      }
+     }
+    }
+   },
+   "loco_k3": {
+    "pooled": {
+     "n_test": 280,
+     "n_p99": 200,
+     "n_overloaded_excluded_from_p99": 80,
+     "p99_err": 2744.5419297036797,
+     "p99_mae": 285.740510090592,
+     "tok_mae": 3.456638524197172,
+     "power_mae": 1.7353876887050896,
+     "miss_mae": 0.11964002740762081,
+     "miss_class": {
+      "n": 280,
+      "false_feasible": 8,
+      "false_infeasible": 66,
+      "false_feasible_share_of_all": 0.02857142857142857,
+      "false_infeasible_share_of_all": 0.2357142857142857,
+      "false_feasible_of_predicted_feasible": 0.10526315789473684,
+      "false_infeasible_of_observed_feasible": 0.4925373134328358
+     },
+     "power_class": {
+      "n": 280,
+      "false_feasible": 3,
+      "false_infeasible": 1,
+      "false_feasible_share_of_all": 0.010714285714285714,
+      "false_infeasible_share_of_all": 0.0035714285714285713,
+      "false_feasible_of_predicted_feasible": 0.011494252873563218,
+      "false_infeasible_of_observed_feasible": 0.003861003861003861
+     },
+     "zero_token_class": {
+      "n": 280,
+      "false_feasible": 43,
+      "false_infeasible": 2,
+      "false_feasible_share_of_all": 0.15357142857142858,
+      "false_infeasible_share_of_all": 0.007142857142857143,
+      "false_feasible_of_predicted_feasible": 0.23118279569892472,
+      "false_infeasible_of_observed_feasible": 0.013793103448275862
+     },
+     "coverage": {
+      "tok_s": 0.9678571428571429,
+      "power_w": 0.9892857142857143,
+      "p99": 0.89
+     },
+     "strata": 18,
+     "strata_with_feasible_best": 8,
+     "picks": 8,
+     "false_feasible_picks": 2,
+     "false_feasible_rate": 0.25,
+     "regret_sum": 190.73333333333332,
+     "best_sum": 426.09999999999997,
+     "regret_rel": 0.4476257529531409,
+     "sigma_hat_mean": {
+      "miss": 0.3194920905317215,
+      "tok_s": 12.893521486862928,
+      "power_w": 6.7802166008434925,
+      "p99": 949.9795613946746
+     }
+    },
+    "per_condition": {
+     "c5": {
+      "n_test": 46,
+      "n_p99": 43,
+      "n_overloaded_excluded_from_p99": 3,
+      "p99_err": 1664.6651113201247,
+      "p99_mae": 120.0533265613568,
+      "tok_mae": 6.032135627360961,
+      "power_mae": 3.609220538943587,
+      "miss_mae": 0.08543194973877614,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 12,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.2608695652173913,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.3333333333333333
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 1,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.023255813953488372,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 9,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.1956521739130435,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.23076923076923078,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9347826086956522,
+       "power_w": 0.9565217391304348,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 3,
+      "picks": 3,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 41.633333333333326,
+      "best_sum": 172.56666666666666,
+      "regret_rel": 0.2412594166505698,
+      "sigma_hat_mean": {
+       "miss": 0.4792177793111641,
+       "tok_s": 11.555851366392957,
+       "power_w": 10.735141697984998,
+       "p99": 1801.385960215945
+      }
+     },
+     "c7": {
+      "n_test": 46,
+      "n_p99": 44,
+      "n_overloaded_excluded_from_p99": 2,
+      "p99_err": 741.3743917168595,
+      "p99_mae": 65.70557335077487,
+      "tok_mae": 3.6817889099920085,
+      "power_mae": 1.261056684902957,
+      "miss_mae": 0.022078707332001683,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 1,
+       "false_infeasible": 15,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.32608695652173914,
+       "false_feasible_of_predicted_feasible": 0.043478260869565216,
+       "false_infeasible_of_observed_feasible": 0.40540540540540543
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 2,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.043478260869565216,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.08333333333333333,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9565217391304348,
+       "power_w": 1.0,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 2,
+      "picks": 1,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 11.233333333333333,
+      "best_sum": 71.23333333333333,
+      "regret_rel": 0.15769770706598032,
+      "sigma_hat_mean": {
+       "miss": 0.24639130195986955,
+       "tok_s": 12.170087206190013,
+       "power_w": 5.303186730260854,
+       "p99": 1117.2142459533884
+      }
+     },
+     "c9": {
+      "n_test": 47,
+      "n_p99": 33,
+      "n_overloaded_excluded_from_p99": 14,
+      "p99_err": 1508.415313041701,
+      "p99_mae": 194.80480465752478,
+      "tok_mae": 3.5412129743509193,
+      "power_mae": 1.4388007736635144,
+      "miss_mae": 0.1525959812201606,
+      "miss_class": {
+       "n": 47,
+       "false_feasible": 0,
+       "false_infeasible": 16,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.3404255319148936,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.64
+      },
+      "power_class": {
+       "n": 47,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 47,
+       "false_feasible": 12,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.2553191489361702,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.36363636363636365,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 0.9787234042553191,
+       "power_w": 1.0,
+       "p99": 1.0
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 1,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 15.466666666666669,
+      "best_sum": 59.9,
+      "regret_rel": 0.25820812465219817,
+      "sigma_hat_mean": {
+       "miss": 0.32892250656394845,
+       "tok_s": 13.16427955175887,
+       "power_w": 7.568146933290953,
+       "p99": 1427.3494119790525
+      }
+     },
+     "c11": {
+      "n_test": 47,
+      "n_p99": 26,
+      "n_overloaded_excluded_from_p99": 21,
+      "p99_err": 1234.2421045905069,
+      "p99_mae": 170.80232889946416,
+      "tok_mae": 1.693411964489839,
+      "power_mae": 1.1660698571046688,
+      "miss_mae": 0.11611068266220179,
+      "miss_class": {
+       "n": 47,
+       "false_feasible": 1,
+       "false_infeasible": 12,
+       "false_feasible_share_of_all": 0.02127659574468085,
+       "false_infeasible_share_of_all": 0.2553191489361702,
+       "false_feasible_of_predicted_feasible": 0.14285714285714285,
+       "false_infeasible_of_observed_feasible": 0.6666666666666666
+      },
+      "power_class": {
+       "n": 47,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 47,
+       "false_feasible": 5,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.10638297872340426,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.1724137931034483,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 1.0,
+       "p99": 0.9615384615384616
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 1,
+      "false_feasible_picks": 0,
+      "false_feasible_rate": 0.0,
+      "regret_sum": 32.833333333333336,
+      "best_sum": 32.833333333333336,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.24280722017997333,
+       "tok_s": 12.998317748249708,
+       "power_w": 4.869073604188751,
+       "p99": 575.577987001842
+      }
+     },
+     "c14": {
+      "n_test": 48,
+      "n_p99": 16,
+      "n_overloaded_excluded_from_p99": 32,
+      "p99_err": 1549.4827018357264,
+      "p99_mae": 418.25949634537267,
+      "tok_mae": 2.241618006412653,
+      "power_mae": 1.345149629710547,
+      "miss_mae": 0.21394463360453894,
+      "miss_class": {
+       "n": 48,
+       "false_feasible": 5,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.10416666666666667,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.5,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "power_class": {
+       "n": 48,
+       "false_feasible": 2,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.041666666666666664,
+       "false_infeasible_share_of_all": 0.020833333333333332,
+       "false_feasible_of_predicted_feasible": 0.045454545454545456,
+       "false_infeasible_of_observed_feasible": 0.023255813953488372
+      },
+      "zero_token_class": {
+       "n": 48,
+       "false_feasible": 13,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.2708333333333333,
+       "false_infeasible_share_of_all": 0.020833333333333332,
+       "false_feasible_of_predicted_feasible": 0.3939393939393939,
+       "false_infeasible_of_observed_feasible": 0.047619047619047616
+      },
+      "coverage": {
+       "tok_s": 1.0,
+       "power_w": 1.0,
+       "p99": 0.875
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 0,
+      "picks": 1,
+      "false_feasible_picks": 1,
+      "false_feasible_rate": 1.0,
+      "regret_sum": 0.0,
+      "best_sum": 0.0,
+      "regret_rel": NaN,
+      "sigma_hat_mean": {
+       "miss": 0.4158385336397537,
+       "tok_s": 15.402331495866617,
+       "power_w": 5.754748773373044,
+       "p99": 605.0879314282005
+      }
+     },
+     "var9": {
+      "n_test": 46,
+      "n_p99": 38,
+      "n_overloaded_excluded_from_p99": 8,
+      "p99_err": 3009.1323677895916,
+      "p99_mae": 829.8208605772531,
+      "tok_mae": 3.6389830787749706,
+      "power_mae": 1.6278195362668082,
+      "miss_mae": 0.12293830072585094,
+      "miss_class": {
+       "n": 46,
+       "false_feasible": 1,
+       "false_infeasible": 11,
+       "false_feasible_share_of_all": 0.021739130434782608,
+       "false_infeasible_share_of_all": 0.2391304347826087,
+       "false_feasible_of_predicted_feasible": 0.3333333333333333,
+       "false_infeasible_of_observed_feasible": 0.8461538461538461
+      },
+      "power_class": {
+       "n": 46,
+       "false_feasible": 0,
+       "false_infeasible": 0,
+       "false_feasible_share_of_all": 0.0,
+       "false_infeasible_share_of_all": 0.0,
+       "false_feasible_of_predicted_feasible": 0.0,
+       "false_infeasible_of_observed_feasible": 0.0
+      },
+      "zero_token_class": {
+       "n": 46,
+       "false_feasible": 2,
+       "false_infeasible": 1,
+       "false_feasible_share_of_all": 0.043478260869565216,
+       "false_infeasible_share_of_all": 0.021739130434782608,
+       "false_feasible_of_predicted_feasible": 0.07142857142857142,
+       "false_infeasible_of_observed_feasible": 0.037037037037037035
+      },
+      "coverage": {
+       "tok_s": 0.9347826086956522,
+       "power_w": 0.9782608695652174,
+       "p99": 0.5
+      },
+      "strata": 3,
+      "strata_with_feasible_best": 1,
+      "picks": 1,
+      "false_feasible_picks": 1,
+      "false_feasible_rate": 1.0,
+      "regret_sum": 89.56666666666666,
+      "best_sum": 89.56666666666666,
+      "regret_rel": 1.0,
+      "sigma_hat_mean": {
+       "miss": 0.20104827910308617,
+       "tok_s": 11.953018632191379,
+       "power_w": 6.520005090291657,
+       "p99": 186.01867926225898
+      }
+     }
+    }
+   },
+   "seconds": 85.4
+  }
+ },
+ "selection": {
+  "selected": null,
+  "failed_gates": {
+   "G": [
+    "G1 false-feasible 50.0% > 5%",
+    "G2 coverage tok_s 72.3% outside 90-98%"
+   ],
+   "HGB": [
+    "G2 coverage tok_s 74.5% outside 90-98%",
+    "G3 latency p99 15.64 ms >= 1 ms"
+   ],
+   "GP": [
+    "G2 coverage tok_s 73.1% outside 90-98%",
+    "G3 latency p99 5.69 ms >= 1 ms"
+   ],
+   "MLP": [
+    "G2 coverage tok_s 77.1% outside 90-98%",
+    "G2 coverage p99 85.9% outside 90-98%",
+    "G3 latency p99 1.87 ms >= 1 ms"
+   ]
+  },
+  "qualifying": [],
+  "note": "no candidate passes G1-G3"
+ }
+}
