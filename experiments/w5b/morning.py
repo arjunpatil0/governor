@@ -23,6 +23,9 @@ def check(out):
             flags.append(f"{cid}: ring_dropped {m['ring_dropped']}")
         if (m.get("temp_after_c") or 0) >= 83:
             flags.append(f"{cid}: temp_after_c {m['temp_after_c']}")
+        r0 = m.get("c0m_over_nominal")
+        if r0 is not None and not (0.85 <= r0 <= 1.15):
+            flags.append(f"{cid}: c0m at a locked 1800 MHz is {r0:.2f} x nominal c0 (expected about 1.0: the FMA calibration may be off)")
         if m.get("clamp_events"):
             clamp[0] += m["clamp_events"]; clamp[1] += 1
         em = m.get("exec_mode")

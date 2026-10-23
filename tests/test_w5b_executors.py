@@ -28,8 +28,9 @@ def test_static_and_arm_a_are_fixed_actions():
 
 
 def test_c_b_and_d_b_use_the_tuned_constants_and_the_margin_is_one_minus_safety():
-    k, c = ex.build_controller(P, spec("cB", pacing="aligned", params=dict(target=0.65, ki=0.05)))
-    assert k == "ctl" and c.pacing == "aligned" and c.target == 0.65 and c.ki == 0.05 and c.guard0 == 0.5 and c.gmin == 0.3 and c.power_budget_w == 60.0
+    from controllers.pi import SwitchingPIController
+    k, c = ex.build_controller(P, spec("cB", params=dict(target=0.65, ki=0.05)))
+    assert k == "ctl" and isinstance(c, SwitchingPIController) and c.al.target == c.un.target == 0.65 and c.al.ki == 0.05 and c.al.guard0 == 0.5 and c.al.gmin == 0.3 and c.al.power_budget_w == 60.0
     k, d = ex.build_controller(P, spec("dB", params=dict(margin=0.2)))
     assert k == "ctl" and abs(d.model.safety - 0.8) < 1e-9 and d.model.switch_gain == 2.0 and d.model.clock_every == 20 and d.model.power_budget_w == 60.0
 
@@ -44,7 +45,8 @@ def test_sim_executor_returns_the_metrics_every_cell_kind_needs(tmp_path):
     s = ex.SimExecutor()
     m = s.run(spec("arm_a"), tmp_path)
     assert {"miss", "tok_s", "power_w"} <= set(m) and m["miss"] >= 0.0
-    assert s.run(spec("fg_alone", scene=None), tmp_path)["c0m"] > 0.0
+    fa = s.run(spec("fg_alone", scene=None), tmp_path)
+    assert fa["c0m"] > 0.0 and fa["c0m_unlocked"] > 0.0 and fa["c0m_unlocked"] < fa["c0m"]               # unlocked boost makes the frame shorter than at the locked 1800 MHz that defines nominal
     assert s.run(spec("bg_alone", scene=None), tmp_path)["tok_s"] > 20.0
     assert 0.0 <= s.run(spec("static", setting=dict(sid="1500_a_g1_d1", clock=1500, mode="aligned", guard_ms=1.0, duty=1.0)), tmp_path)["miss"] <= 1.0
 

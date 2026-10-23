@@ -1,19 +1,19 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-23 - Phase: W4-5. First hardware trial crashed on a 2475 MHz clock reading and confirmed the granularity blocker; both FIXED test-first (clamp + d'B in the shared action space); addendum O-1 written; the overnight sitting restructured (no d'B cells). Waiting for YOU to restart, run the trial again (all six cells must pass) and then the sitting.
+Updated 2026-10-23 - Phase: W4-5. Before trial2: c'B now switches pacing mode inside a cell (non-learned rule), c0m redefined at a locked 1800 MHz with the SM clock logged, addendum O-2 written. Waiting for YOU to restart and run helper -> trial2 -> sitting (docs/W5B_TUNING_SITTING.md).
 
-## Just did (journal 0051)
-- Clamp: live clock mapped into [600, 2460] MHz before any controller, every clamp logged (14 tests). All live-clock paths go through Governor.step.
-- d'B: aligned + unaligned ModelControllers, mode chosen every 1 s by predicted tok/s with hysteresis (6 new tests + updated hybrid tests; frozen-simulator unit harness: 0 -> 12 tok/s at 10 ms frames, the unaligned plan is optimistic so the margin knob matters).
-- Addendum O-1 (docs/W5B_ADDENDUM_O1.md). d'B margin grid moved to block T3b (with d'B-HGB). Sitting dry run: 127 cells. Ctrl+C fix verified elevated (PASSED).
+## Just did (journal 0052)
+- SwitchingPIController (c'B): unaligned when the recent measured frame time > 6.57 + 0.3 ms, aligned below 6.57 - 0.3 ms, dwell 5 s; 8 tests. d'B keeps its prediction-based switch.
+- c0m = fg alone at a LOCKED 1800 MHz (+ c0m_unlocked, SM clocks of both); no rule reads c0m. The SM clock was NOT logged in trial_fgalone, so the boost-drop hypothesis is only consistent with the files (locked 1500 MHz frame 8.50 vs predicted 8.41 ms; smoke 3's 0.745 = 1800/2460), not confirmed; trial2 logs it.
+- Gate / c0 search re-read: unchanged. At c0 = 7 aligned fits a token only above ~1920 MHz (only the unlocked static), so trial_static's 0 tok/s at 1500 MHz was expected.
 
-## Your next steps (docs/W5B_TUNING_SITTING.md has the literal commands)
-RESTART -> Admin helper (step 1) -> trial2 (python experiments/w5b/tune.py --out data/w5b/trial2 --armoury-mode Performance --trial) -> paste the six TRIAL lines -> if all six pass, the overnight command (step 4) within the same 2 h of uptime, with the powercfg lines; morning checks in step 5.
+## Your sequence
+RESTART -> Admin helper -> powercfg -> trial2 (paste six TRIAL lines + the fgalone c0m / sm_ lines) -> overnight sitting -> morning checks. Literal commands: docs/W5B_TUNING_SITTING.md.
 
 ## Waiting for
-Reviewer: c'B mode is fixed per cell while d'B can switch (asymmetry, your call); O-1.
+Reviewer: the fixed 6.57 ms threshold for c'B is wrong for short-token workloads (1B); token-aware alternative offered in O-2.
 
 ## Risks / not verified
-- Governed c'B and d'B cells have never completed on hardware; d'B dual mode only validated in the frozen simulator and on synthetic observations; unaligned instance uses the 3B L table; c0m/nominal ratio 0.954 vs 0.745 in smoke 3 unexplained; cell time and size are estimates (127 cells in the dry run).
+- Governed c'B and d'B cells never completed on hardware; d'B/c'B switching validated only in the frozen simulator and on synthetic observations; unaligned instance uses the 3B L table; cell time and size are estimates (127 cells in the dry run).
 
 ## Notes
 - Do not run pytest or rebuild before the sitting; tree committed; exe hash bb875fbc unchanged.

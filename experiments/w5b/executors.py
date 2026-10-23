@@ -2,7 +2,7 @@
 SimExecutor: runs a cell spec in the (frozen) simulator - a DRY RUN of the sitting logic, never data; its cells say executor 'sim'.
 HwExecutor: runs a cell spec on the real GPU with the governed driver, the synthetic FMA foreground, the admin clock helper and (for c'B / d'B) the Governor loop at 10 Hz - the same pieces
 smoke.py and experiments/w5a/run.py use. NOT yet run on hardware when this file was written (journal 0050); the first hardware run is the supervised trial.
-build_controller(P, spec) is shared: ('static', Action) for static settings and arm a, ('ctl', controller) for c'B (PIController, pacing mode and constants from the spec) and d'B (HybridController,
+build_controller(P, spec) is shared: ('static', Action) for static settings and arm a, ('ctl', controller) for c'B (SwitchingPIController: both pacing modes, non-learned switch at 6.57 +- 0.3 ms, constants from the spec) and d'B (HybridController,
 safety = 1 - margin, switch_gain 2.0 and clock_every 20 from data/sim_tuned.json d')."""
 import dataclasses
 import json
@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "experiments" / "w5a")); sys.path.insert(0, str(ROOT / "experiments" / "w4_smoke"))
 sys.path.insert(0, str(ROOT / "workloads" / "common")); sys.path.insert(0, str(ROOT / "telemetry"))
 from controllers.hybrid import HybridController  # noqa: E402
-from controllers.pi import PIController  # noqa: E402
+from controllers.pi import SwitchingPIController  # noqa: E402
 from sim.params import load_params  # noqa: E402
 from sim.plant import Action, BgSpec, Plant, summarise  # noqa: E402
 from sim.scenarios import C0_MS, build  # noqa: E402
@@ -56,7 +56,7 @@ def build_controller(P, spec):
         return "static", Action(clock=P.UNLOCKED_MHZ, pacing="unaligned", duty=1.0, guard_ms=0.5)
     if k == "cB":
         p = spec["params"]
-        return "ctl", PIController(P, spec["pacing"], power_budget_w=float(spec["budget_w"]), target=p["target"], ki=p["ki"], guard0=0.5, gmin=0.3)
+        return "ctl", SwitchingPIController(P, power_budget_w=float(spec["budget_w"]), target=p["target"], ki=p["ki"], guard0=0.5, gmin=0.3)
     if k == "dB":
         return "ctl", HybridController(P, float(spec["budget_w"]), safety=1.0 - float(spec["params"]["margin"]), switch_gain=2.0, clock_every=20)
     raise ValueError(f"no controller for cell kind {k}")
@@ -83,7 +83,13 @@ class SimExecutor:
             fg = dataclasses.replace(fg, active=lambda t: False)
         sc = build(spec.get("scene") or "S0")
         sc = dataclasses.replace(sc, duration_ms=(65000.0 if k not in ("fg_alone", "bg_alone") else 35000.0), fg=fg, bg=None if k == "fg_alone" else bg, warmup_ms=5000.0)
-        if k in ("fg_alone", "bg_alone"):
+        if k == "fg_alone":                                                         # c0m at a LOCKED 1800 MHz (defines nominal) and unlocked (addendum O-2)
+            seed = zlib.crc32(spec["id"].encode()) % (2 ** 31)
+            r = summarise(Plant(P, sc, seed=seed).run(Action(clock=1800.0, pacing="unaligned", duty=1.0, guard_ms=0.5)))
+            ru = summarise(Plant(P, sc, seed=seed).run(Action(clock=P.UNLOCKED_MHZ, pacing="unaligned", duty=1.0, guard_ms=0.5)))
+            return dict(miss=float(r["miss_frac"]), tok_s=0.0, power_w=float(r["power_w"]), c0m=float(r["lat_p50_ms"]), c0m_unlocked=float(ru["lat_p50_ms"]), sm_locked_median=1800.0,
+                        sm_unlocked_median=float(P.UNLOCKED_MHZ), executor="sim")
+        if k == "bg_alone":
             policy = Action(clock=P.UNLOCKED_MHZ, pacing="unaligned", duty=1.0, guard_ms=0.5)
         else:
             kind, policy = build_controller(P, spec)
@@ -235,14 +241,29 @@ class HwExecutor:
         return dict(miss=0.0, tok_s=res["bg_tok_s"], power_w=res["power_w"], tok_ms_p50=res["tok_ms_p50"], bg_tokens=res["bg_tokens"], ring_dropped=int(dropped), exec_mode=exec_mode, driver_tail=tail, executor="hw")
 
     def _fg_alone(self, spec, cdir):
+        """Foreground alone twice: at a LOCKED 1800 MHz (the clock that defines nominal c0 -> c0m) and unlocked (c0m_unlocked), each with the SM clock sampled (addendum O-2: the unlocked clock can sit
+        below the boost clock when the GPU idles between frames, which is why trial_fgalone read 6.68 ms at nominal 7)."""
         from telemetry.fg_publisher import FramePublisher
         from workloads.foreground.frame_loop import FmaFrameRunner, FrameLoop
-        frames, tokens, ctrl, pace = self._rings()
-        loop = FrameLoop(fg_spec("S0", spec["c0"]), FmaFrameRunner(self.w, self.cal), FramePublisher(frames, pace))
-        recs = loop.run(duration_s=FG_ALONE_S)
-        lat = np.array([r["lat_ms"] for r in recs if r["t_sched"] >= loop.t0 + 2.0])
-        return dict(miss=float((lat > PERIOD).mean()) if len(lat) else float("nan"), tok_s=0.0, power_w=float("nan"), c0m=float(np.percentile(lat, 50)) if len(lat) else float("nan"),
-                    fg_p99_ms=float(np.percentile(lat, 99)) if len(lat) else float("nan"), abandoned=int(loop.abandoned), executor="hw")
+        out = {}
+        for tag, lock in (("locked", 1800), ("unlocked", None)):
+            ok = self.cl.lock(lock) if lock else self.cl.reset()
+            time.sleep(1.5)
+            frames, tokens, ctrl, pace = self._rings()
+            loop = FrameLoop(fg_spec("S0", spec["c0"]), FmaFrameRunner(self.w, self.cal), FramePublisher(frames, pace))
+            smp = self.smoke.NvmlSampler(); smp.start()
+            try:
+                recs = loop.run(duration_s=FG_ALONE_S)
+            finally:
+                smp.stop(); self.cl.reset()
+            lat = np.array([r["lat_ms"] for r in recs if r["t_sched"] >= loop.t0 + 2.0])
+            sm = np.array(smp.sm)
+            out[tag] = dict(p50=float(np.percentile(lat, 50)) if len(lat) else float("nan"), p99=float(np.percentile(lat, 99)) if len(lat) else float("nan"), miss=float((lat > PERIOD).mean()) if len(lat) else float("nan"),
+                            sm_median=float(np.median(sm)) if len(sm) else float("nan"), sm_p10=float(np.percentile(sm, 10)) if len(sm) else float("nan"), sm_p90=float(np.percentile(sm, 90)) if len(sm) else float("nan"),
+                            abandoned=int(loop.abandoned), clock_ok=bool(ok))
+        return dict(miss=out["locked"]["miss"], tok_s=0.0, power_w=float("nan"), c0m=out["locked"]["p50"], c0m_unlocked=out["unlocked"]["p50"], fg_p99_ms=out["locked"]["p99"],
+                    sm_locked_median=out["locked"]["sm_median"], sm_unlocked_median=out["unlocked"]["sm_median"], sm_unlocked_p10_p90=[out["unlocked"]["sm_p10"], out["unlocked"]["sm_p90"]],
+                    c0m_over_nominal=out["locked"]["p50"] / float(spec["c0"]), fg_alone_detail=out, abandoned=out["locked"]["abandoned"] + out["unlocked"]["abandoned"], executor="hw")
 
     def _fg_bg(self, spec, cdir):
         from actuators.control import ControlActuator

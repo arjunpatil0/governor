@@ -86,3 +86,55 @@ class PIController:
                     self.clock = float(f)
                     return
         self.clock = float(clocks[-1])
+
+
+class SwitchingPIController:
+    """(c'B) The PI controller with a within-cell pacing-mode switch by a simple NON-learned rule (reviewer + Arjun 2026-10-23, fairness against d'B, plan addendum O-2): unaligned when the recent
+    measured frame time exceeds threshold_ms + hyst_ms (6.57 + 0.3 ms: a clean 3B token of 10.1 ms no longer fits the 16.67 ms period), aligned when it falls below threshold_ms - hyst_ms, and never
+    sooner than dwell_ticks (50 ticks = 5 s) after the last switch. The frame time is the median of the last window_frames (30) frame latencies while aligned (the frames run alone) and their 10th
+    percentile while unaligned (the low quantile is the frame alone; contended frames are longer), the same estimators PIController uses. Two PIController instances share one clock; only the
+    executed one sees observations; the incoming one keeps its last duty / guard and gets fresh latency windows. Not learned: no model, no prediction."""
+    name = "c'"
+
+    def __init__(self, P, power_budget_w=None, threshold_ms=6.57, hyst_ms=0.3, dwell_ticks=50, window_frames=30, **pi_kw):
+        self.P, self.threshold_ms, self.hyst_ms, self.dwell_ticks, self.window_frames = P, threshold_ms, hyst_ms, int(dwell_ticks), int(window_frames)
+        self.al = PIController(P, "aligned", power_budget_w=power_budget_w, **pi_kw)
+        self.un = PIController(P, "unaligned", **pi_kw)
+
+    def reset(self, ctx):
+        self.un.reset(ctx)
+        a = self.al.reset(ctx)
+        self.mode, self.tick, self.tick_of_switch = "aligned", 0, 0
+        self.frames = deque(maxlen=self.window_frames)
+        return a
+
+    @property
+    def clock(self):
+        return (self.al if self.mode == "aligned" else self.un).clock
+
+    def _adopt(self, ctrl, clock):
+        ctrl.clock = float(clock)
+        ctrl.w5, ctrl.w20, ctrl.idle = Window(ctrl.win), Window(20), IdleDetector()
+        ctrl.e_prev = 0.0
+        ctrl.pw.clear()
+
+    def act(self, obs):
+        self.tick += 1
+        for x in np.asarray(obs.lat_ms, float).ravel():
+            self.frames.append(float(x))
+        cur = self.al if self.mode == "aligned" else self.un
+        a = cur.act(obs)
+        if len(obs.lat_ms) and len(self.frames) >= self.window_frames and self.tick - self.tick_of_switch >= self.dwell_ticks:
+            lat = np.fromiter(self.frames, float)
+            est = float(np.median(lat)) if self.mode == "aligned" else float(np.percentile(lat, 10))
+            to = None
+            if self.mode == "aligned" and est > self.threshold_ms + self.hyst_ms:
+                to = "unaligned"
+            elif self.mode == "unaligned" and est < self.threshold_ms - self.hyst_ms:
+                to = "aligned"
+            if to is not None:
+                self.mode, self.tick_of_switch = to, self.tick
+                self.frames.clear()
+                self._adopt(self.al if to == "aligned" else self.un, a.clock)
+        self.al.clock = self.un.clock = float(a.clock)
+        return a

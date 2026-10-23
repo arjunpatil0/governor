@@ -22,7 +22,7 @@ cd C:\Users\arjun\governor; python actuators/clock_helper.py --config C:\Program
 cd C:\Users\arjun\governor
 python experiments/w5b/tune.py --out data/w5b/trial2 --armoury-mode Performance --trial
 ```
-Paste back the six TRIAL lines. trial_cb now runs unaligned (c0m was 6.68 ms), trial_db exercises both pacing modes; the new fields clamp_events and final_pacing_mode are in the cell.json files. Expected shape (the simulator gives the same pattern; hardware numbers will differ): bg-alone about 97 tok/s for the 3B; fg-alone c0m about 6.7 ms at c0 = 7; arm a misses a lot; the static cell, c'B and d'B print miss, tok/s, power and clock_changes; no exception. If anything raises, stop and paste the traceback.
+Paste back the six TRIAL lines. Changes since the first trial (addenda O-1, O-2): c'B and d'B both switch pacing mode inside the cell; the fg-alone cell now runs twice (about 40 s): c0m at a LOCKED 1800 MHz (expected about 7 ms = nominal; the morning check flags a ratio outside 0.85-1.15) and c0m_unlocked with the SM clock logged for both (we expect about 6.7 ms and an SM median clearly below 2460 if the GPU does not hold boost when 40% busy). The new fields clamp_events and final_pacing_mode are in the cell.json files. Other expected shape (hardware numbers will differ): bg-alone about 97 tok/s for the 3B; arm a misses a lot; the static cell at 1500 MHz gives 0 tok/s (frame 8.5 ms, no slack: expected, not a bug); c'B and d'B print miss, tok/s, power and clock_changes; no exception. If anything raises, stop and paste the traceback. Also paste `Get-Content data/w5b/trial2/cells/trial_fgalone/cell.json | Select-String "c0m|sm_"`.
 
 ## 4. The overnight sitting (T1 -> T2 -> T3 chained; resumable; one command)
 ```powershell

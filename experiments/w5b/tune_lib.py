@@ -10,7 +10,6 @@ SCENES = ("S0", "S1")
 BUDGETS = (60.0, 35.0)
 SEED = 20261024
 MISS_MAX, ARM_A_MIN_MISS, TOK_FRACTION, TOP_N = 0.01, 0.05, 0.20, 8
-C0M_ALIGNED_MAX_MS = 6.57
 CB_TARGETS, CB_KIS = (0.5, 0.65, 0.8), (0.05, 0.15)
 DB_MARGINS = (0.0, 0.1, 0.2, 0.3, 0.4)
 CLOCKS = (900, 1050, 1200, 1350, 1500, 1800, "unlocked")
@@ -72,7 +71,7 @@ def next_batch(results):
         if _missing(pre, results):
             return ans(_missing(pre, results), key=f"pre{c0}")
         arm = results[f"t1_arma_c{c0}"]
-        rec = dict(c0=c0, c0m=results[f"t1_fgalone_c{c0}"]["c0m"], arm_a_miss=arm["miss"], swept=False, feasible_statics_60=None, feasible_statics_35=None)
+        rec = dict(c0=c0, c0m=results[f"t1_fgalone_c{c0}"]["c0m"], c0m_unlocked=results[f"t1_fgalone_c{c0}"].get("c0m_unlocked"), arm_a_miss=arm["miss"], swept=False, feasible_statics_60=None, feasible_statics_35=None)
         tried.append(rec)
         if arm["miss"] <= ARM_A_MIN_MISS:
             rec["note"] = "arm a misses <= 5% in S1: the gate fails without a sweep"
@@ -90,7 +89,11 @@ def next_batch(results):
     if chosen is None:
         return dict(batch=[], stop="no c0 in {7, 8, 9, 10, 11} meets the HW0 feasibility gate at 60 W: the run stops and the result is reported (no other c0 is invented)", decisions=dec)
     dec["c0"] = chosen
-    dec["c0m"] = results[f"t1_fgalone_c{chosen}"]["c0m"]
+    fa = results[f"t1_fgalone_c{chosen}"]
+    dec["c0m"] = fa["c0m"]                                                                      # measured frame time alone at a LOCKED 1800 MHz (the clock that defines nominal c0), addendum O-2
+    dec["c0m_unlocked"] = fa.get("c0m_unlocked")
+    dec["c0m_basis"] = "locked 1800 MHz p50 latency; c0m_unlocked = the same with the clock unlocked and no background (it can sit below the boost clock when the GPU idles between frames)"
+    dec["sm_median_fg_alone"] = dict(locked=fa.get("sm_locked_median"), unlocked=fa.get("sm_unlocked_median"))
     # ---- T3 stage 2: top 8 feasible stage-1 settings per budget
     by_sid = {s["sid"]: s for s in sweep_all}
     top = {}
@@ -116,8 +119,7 @@ def next_batch(results):
         gb[str(int(b))] = None if best is None else dict(setting=by_sid[best[2]], feasible_cells=best[0], of=6, feasible_in_all=best[0] == 6, mean_tok_s=best[1])
     dec["g_b"] = gb
     # ---- c'B constants and d'B margin (60 W cells on the 3 workloads x {S0, S1})
-    mode = "aligned" if dec["c0m"] <= C0M_ALIGNED_MAX_MS else "unaligned"
-    cb_specs = [dict(id=f"cb_{w}_{sc}_t{t:g}_k{k:g}", kind="cB", workload=w, scene=sc, c0=chosen, pacing=mode, params=dict(target=t, ki=k), budget_w=60.0)
+    cb_specs = [dict(id=f"cb_{w}_{sc}_t{t:g}_k{k:g}", kind="cB", workload=w, scene=sc, c0=chosen, params=dict(target=t, ki=k), budget_w=60.0)
                 for t in CB_TARGETS for k in CB_KIS for w in WORKLOADS for sc in SCENES]
     if _missing(cb_specs, results):
         return ans(_missing(cb_specs, results), key="tune")
@@ -128,17 +130,17 @@ def next_batch(results):
             combos.append(dict(params=dict(target=t, ki=k), miss=sum(m["miss"] for m in ms) / 6, power_w=sum(m["power_w"] for m in ms) / 6, tok_s=sum(m["tok_s"] for m in ms) / 6))
     ok = [c for c in combos if c["miss"] <= MISS_MAX and c["power_w"] <= 60.0]
     pick = max(ok, key=lambda c: (c["tok_s"], -c["params"]["target"], -c["params"]["ki"])) if ok else min(combos, key=lambda c: (c["miss"], -c["tok_s"]))
-    dec["c_b"] = dict(pacing=mode, params=dict(pick["params"], guard0=0.5, gmin=0.3), rule_met=bool(ok), mean_miss=pick["miss"], mean_tok_s=pick["tok_s"], mean_power_w=pick["power_w"], grid=combos)
+    dec["c_b"] = dict(pacing="auto (non-learned switch at 6.57 +- 0.3 ms measured frame time, dwell 5 s; plan addendum O-2)", params=dict(pick["params"], guard0=0.5, gmin=0.3), rule_met=bool(ok), mean_miss=pick["miss"], mean_tok_s=pick["tok_s"], mean_power_w=pick["power_w"], grid=combos)
     dec["d_b"] = "deferred to block T3b (addendum O-1: d'B action-space fix first)"           # DB_MARGINS and the margin rule (addendum O section 2) are applied in T3b
     return dict(batch=[], stop=None, decisions=dec)
 
 
 def trial_specs():
-    """Supervised hardware trial (not part of the plan, not data): one cell of every executor path - background alone, foreground alone, arm a, an aligned static, c'B (unaligned: c0m was 6.68 ms > 6.57 in the first trial), d'B (both pacing modes) - at c0 = 7 on the 3B."""
+    """Supervised hardware trial (not part of the plan, not data): one cell of every executor path - background alone, foreground alone, arm a, an aligned static, c'B and d'B (both switch pacing mode inside the cell) - at c0 = 7 on the 3B."""
     st = next(x for x in settings70() if x["sid"] == "1500_a_g1_d1")
     return [dict(id="trial_bgalone", kind="bg_alone", workload="llama32_3b", scene=None, c0=None),
             dict(id="trial_fgalone", kind="fg_alone", workload="llama32_3b", scene=None, c0=7),
             dict(id="trial_arma", kind="arm_a", workload="llama32_3b", scene="S1", c0=7),
             dict(id="trial_static", kind="static", workload="llama32_3b", scene="S1", c0=7, setting=st),
-            dict(id="trial_cb", kind="cB", workload="llama32_3b", scene="S1", c0=7, pacing="unaligned", params=dict(target=0.65, ki=0.15), budget_w=60.0),
+            dict(id="trial_cb", kind="cB", workload="llama32_3b", scene="S1", c0=7, params=dict(target=0.65, ki=0.15), budget_w=60.0),
             dict(id="trial_db", kind="dB", workload="llama32_3b", scene="S1", c0=7, params=dict(margin=0.2), budget_w=60.0)]

@@ -35,7 +35,7 @@ def fake_world(good_c0=8, c0m_of=lambda c0: 0.745 * c0):
         if k == "bg_alone":
             return metrics(tok={"llama32_1b": 120.0, "llama32_3b": 100.0, "phi35_mini": 80.0}[spec["workload"]], power=70.0)
         if k == "fg_alone":
-            return metrics(c0m=c0m_of(spec["c0"]))
+            return dict(metrics(c0m=c0m_of(spec["c0"])), c0m_unlocked=0.954 * c0m_of(spec["c0"]), sm_locked_median=1800.0, sm_unlocked_median=1890.0)
         if k == "arm_a":
             return metrics(miss=0.10, tok=40.0, power=80.0)
         if k == "static":
@@ -112,13 +112,20 @@ def test_g_b_is_the_best_setting_feasible_in_all_six_cells_else_the_one_with_mos
     assert ans2["decisions"]["g_b"]["60"]["setting"] == g["setting"]                  # deterministic recomputation from stored cells
 
 
-def test_c_b_pacing_mode_follows_the_measured_frame_time_and_constants_follow_the_rule():
-    res, ans = run_plan(fake_world(good_c0=8, c0m_of=lambda c0: 5.0))
-    assert ans["decisions"]["c_b"]["pacing"] == "aligned" and ans["decisions"]["c0m"] == 5.0
-    res, ans = run_plan(fake_world(good_c0=8, c0m_of=lambda c0: 7.0))
-    cb = ans["decisions"]["c_b"]
-    assert cb["pacing"] == "unaligned" and cb["params"]["ki"] == 0.15 and cb["rule_met"] is True          # highest mean tok/s among combinations with mean miss <= 1% and power <= 60 W
-    assert sum(1 for k in res if k.startswith("cb_")) == 36
+def test_c_b_switches_mode_itself_so_the_plan_fixes_only_its_constants_and_records_c0m_at_locked_1800():
+    seen = []
+    base = fake_world(good_c0=8, c0m_of=lambda c0: 7.0)
+
+    def f(spec):
+        if spec["kind"] == "cB":
+            seen.append(spec)
+        return base(spec)
+    res, ans = run_plan(f)
+    d = ans["decisions"]
+    assert d["c0m"] == 7.0 and abs(d["c0m_unlocked"] - 0.954 * 7.0) < 1e-9 and d["c0m_basis"].startswith("locked 1800")
+    cb = d["c_b"]
+    assert cb["pacing"].startswith("auto") and cb["params"]["ki"] == 0.15 and cb["rule_met"] is True          # highest mean tok/s among combinations with mean miss <= 1% and power <= 60 W
+    assert len(seen) == 36 and all("pacing" not in sp for sp in seen)
 
 
 def test_d_b_margin_tuning_is_deferred_to_block_t3b_so_the_sitting_has_no_d_b_cells():
