@@ -1,0 +1,144 @@
+{
+ "utc": "2026-10-23T09:13:30.431975+00:00",
+ "boot_utc": "2026-10-23T08:29:23.169662+00:00",
+ "uptime_s": 2647,
+ "battery_charge_mode": "Balanced 80%",
+ "armoury_mode": "Performance",
+ "armoury_mode_recorded": true,
+ "chrome_running": false,
+ "git_head": "d4ac9e55b0b251e0aac153920116bba670304c9f",
+ "exe_sha256": "bb875fbcaa2cf792f0f015a949b9db6cacf1ac50c4491471c2e1bcd504e78044",
+ "helper_ping": "OK none",
+ "processes": [
+  {
+   "name": "System Idle Process",
+   "count": 1,
+   "cpu_pct": 1548.2
+  },
+  {
+   "name": "python.exe",
+   "count": 2,
+   "cpu_pct": 37.5
+  },
+  {
+   "name": "WindowsTerminal.exe",
+   "count": 1,
+   "cpu_pct": 4.9
+  },
+  {
+   "name": "System",
+   "count": 1,
+   "cpu_pct": 3.8
+  },
+  {
+   "name": "AvastSvc.exe",
+   "count": 1,
+   "cpu_pct": 1.0
+  },
+  {
+   "name": "dwm.exe",
+   "count": 1,
+   "cpu_pct": 1.0
+  },
+  {
+   "name": "powershell.exe",
+   "count": 4,
+   "cpu_pct": 1.0
+  },
+  {
+   "name": "?",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSServ.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSSrcExt.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ASUSSmartDisplayControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AcPowerNotification.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AdobeCollabSync.exe",
+   "count": 2,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AggregatorHost.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AppActions.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ApplicationFrameHost.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.Service.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.UserSessionHelper.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrateControlInterface.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryHtmlDebugServer.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmourySocketServer.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsHotplugCtrl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsMonitorControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsusAppService.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  }
+ ],
+ "sitting_start_utc": "2026-10-23T09:13:30.431975+00:00",
+ "relaxation": "T1-T3 chained in one unattended sitting (plan addendum O section 4): the yaml 3 h session cap is relaxed for the tuning blocks only; evaluation blocks keep it. Tuning blocks are in no confirmatory test.",
+ "plan_addendum": "docs/W5B_ADDENDUM_O.md",
+ "addendum_o_sha256": "d544d01084fd8bc8564ebe21d7c126b0359d6a5988fb53556574d8a9aa3ae40f",
+ "yaml_sha256": "47fab0c817e9a5509d56fc01fcd34e1afd109859ec6093f6641822be1b43a4e9"
+}

@@ -6,6 +6,7 @@ class Governor:
         self.ctl, self.ob, self.act_, self.frames, self.tokens = controller, obs_builder, actuator, frame_ring, token_ring
         self.period_ms, self.deadline_ms, self.params = period_ms, deadline_ms, params
         self.last_obs = None
+        self.clamped = []                                           # (t_ms, raw MHz, clamped MHz): every live clock reading mapped into the measured model range
         self._t = self._e = None
 
     def start(self, t_ms, startup_reset=None):
@@ -19,6 +20,11 @@ class Governor:
 
     def step(self, t_ms, energy_j, clock_mhz):
         """energy_j is the cumulative NVML energy counter (J); the power over the tick is its delta / dt."""
+        if self.params is not None and hasattr(self.params, "clamp_clock"):
+            c = self.params.clamp_clock(clock_mhz)
+            if c != float(clock_mhz):
+                self.clamped.append((float(t_ms), float(clock_mhz), c))
+            clock_mhz = c
         fr, _ = self.frames.read_new()
         tk, _ = self.tokens.read_new()
         dt = (t_ms - self._t) / 1000.0

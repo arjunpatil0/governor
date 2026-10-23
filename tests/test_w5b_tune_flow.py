@@ -42,7 +42,7 @@ def test_a_full_sitting_writes_every_cell_and_the_decisions(tmp_path):
     s = tune.run_sitting(tmp_path, ex, log=lambda *a: None)
     assert s["stop"] is None and s["finished"] is True
     d = json.loads((tmp_path / "decisions.json").read_text(encoding="utf-8"))
-    assert d["c0"] == 8 and d["d_b"]["margin"] == 0.2
+    assert d["c0"] == 8 and d["d_b"].startswith("deferred")
     cells = list((tmp_path / "cells").glob("*/cell.json"))
     assert len(cells) == len(ex.calls) and json.loads(cells[0].read_text(encoding="utf-8"))["executor"] == "stub"
 

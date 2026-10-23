@@ -119,9 +119,8 @@ def next_batch(results):
     mode = "aligned" if dec["c0m"] <= C0M_ALIGNED_MAX_MS else "unaligned"
     cb_specs = [dict(id=f"cb_{w}_{sc}_t{t:g}_k{k:g}", kind="cB", workload=w, scene=sc, c0=chosen, pacing=mode, params=dict(target=t, ki=k), budget_w=60.0)
                 for t in CB_TARGETS for k in CB_KIS for w in WORKLOADS for sc in SCENES]
-    db_specs = [dict(id=f"db_{w}_{sc}_m{m:g}", kind="dB", workload=w, scene=sc, c0=chosen, params=dict(margin=m), budget_w=60.0) for m in DB_MARGINS for w in WORKLOADS for sc in SCENES]
-    if _missing(cb_specs + db_specs, results):
-        return ans(_missing(cb_specs + db_specs, results), key="tune")
+    if _missing(cb_specs, results):
+        return ans(_missing(cb_specs, results), key="tune")
     combos = []
     for t in CB_TARGETS:
         for k in CB_KIS:
@@ -130,21 +129,16 @@ def next_batch(results):
     ok = [c for c in combos if c["miss"] <= MISS_MAX and c["power_w"] <= 60.0]
     pick = max(ok, key=lambda c: (c["tok_s"], -c["params"]["target"], -c["params"]["ki"])) if ok else min(combos, key=lambda c: (c["miss"], -c["tok_s"]))
     dec["c_b"] = dict(pacing=mode, params=dict(pick["params"], guard0=0.5, gmin=0.3), rule_met=bool(ok), mean_miss=pick["miss"], mean_tok_s=pick["tok_s"], mean_power_w=pick["power_w"], grid=combos)
-    margins = []
-    for m in DB_MARGINS:
-        ms = [results[f"db_{w}_{sc}_m{m:g}"] for w in WORKLOADS for sc in SCENES]
-        margins.append(dict(margin=m, mean_miss=sum(x["miss"] for x in ms) / 6, mean_tok_s=sum(x["tok_s"] for x in ms) / 6, mean_power_w=sum(x["power_w"] for x in ms) / 6))
-    met = [r for r in margins if r["mean_miss"] <= MISS_MAX]
-    dec["d_b"] = dict(margin=min(r["margin"] for r in met) if met else DB_MARGINS[-1], rule_met=bool(met), grid=margins)
+    dec["d_b"] = "deferred to block T3b (addendum O-1: d'B action-space fix first)"           # DB_MARGINS and the margin rule (addendum O section 2) are applied in T3b
     return dict(batch=[], stop=None, decisions=dec)
 
 
 def trial_specs():
-    """Supervised hardware trial (not part of the plan, not data): one cell of every executor path - background alone, foreground alone, arm a, an aligned static, c'B, d'B - at c0 = 7 on the 3B."""
+    """Supervised hardware trial (not part of the plan, not data): one cell of every executor path - background alone, foreground alone, arm a, an aligned static, c'B (unaligned: c0m was 6.68 ms > 6.57 in the first trial), d'B (both pacing modes) - at c0 = 7 on the 3B."""
     st = next(x for x in settings70() if x["sid"] == "1500_a_g1_d1")
     return [dict(id="trial_bgalone", kind="bg_alone", workload="llama32_3b", scene=None, c0=None),
             dict(id="trial_fgalone", kind="fg_alone", workload="llama32_3b", scene=None, c0=7),
             dict(id="trial_arma", kind="arm_a", workload="llama32_3b", scene="S1", c0=7),
             dict(id="trial_static", kind="static", workload="llama32_3b", scene="S1", c0=7, setting=st),
-            dict(id="trial_cb", kind="cB", workload="llama32_3b", scene="S1", c0=7, pacing="aligned", params=dict(target=0.65, ki=0.15), budget_w=60.0),
+            dict(id="trial_cb", kind="cB", workload="llama32_3b", scene="S1", c0=7, pacing="unaligned", params=dict(target=0.65, ki=0.15), budget_w=60.0),
             dict(id="trial_db", kind="dB", workload="llama32_3b", scene="S1", c0=7, params=dict(margin=0.2), budget_w=60.0)]

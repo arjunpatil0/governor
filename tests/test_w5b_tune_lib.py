@@ -121,16 +121,9 @@ def test_c_b_pacing_mode_follows_the_measured_frame_time_and_constants_follow_th
     assert sum(1 for k in res if k.startswith("cb_")) == 36
 
 
-def test_d_b_margin_is_the_smallest_with_mean_miss_at_most_one_percent_else_0_4_flagged():
+def test_d_b_margin_tuning_is_deferred_to_block_t3b_so_the_sitting_has_no_d_b_cells():
     res, ans = run_plan(fake_world(good_c0=8))
-    d = ans["decisions"]["d_b"]
-    assert d["margin"] == 0.2 and d["rule_met"] is True and sum(1 for k in res if k.startswith("db_")) == 30
-
-    def never(spec):
-        r = fake_world(good_c0=8)(spec)
-        return metrics(miss=0.05, tok=10.0, power=55.0) if spec["kind"] == "dB" else r
-    res, ans = run_plan(never)
-    assert ans["decisions"]["d_b"]["margin"] == 0.4 and ans["decisions"]["d_b"]["rule_met"] is False
+    assert ans["decisions"]["d_b"] == "deferred to block T3b (addendum O-1: d'B action-space fix first)" and not any(k.startswith("db_") for k in res)
 
 
 def test_resume_returns_only_the_missing_cells():

@@ -1,7 +1,9 @@
 """Hybrid d'B (controllers/hybrid.py): idle branch = the eB rule (clock to the knee with a free background after IDLE_TICKS ticks without frames), active branch = the learned
 ModelController (v2+v3, learned guard, power budget). Specified by docs/W45_PLAN.md addendum F and experiments/w5_governor.yaml (d'B).
 Instruction (Arjun + reviewer, 2026-10-22): "d'B becomes a hybrid. The idle branch uses the eB rule (clock drop within the budget); the learned model (with the learned guard) handles active play."
-Synthetic observations only, no plant and no GPU (the simulator is frozen: the hybrid is deliberately NOT run in it)."""
+Synthetic observations only, no plant and no GPU (the simulator is frozen: the hybrid is deliberately NOT run in it).
+Updated 2026-10-23 (plan addendum O-1): the active branch now also owns an unaligned plan; these tests use light frames, where the aligned plan wins and the hybrid equals the aligned model (the
+unaligned fallback is tested in tests/test_hybrid_dual.py)."""
 from pathlib import Path
 
 import numpy as np
@@ -29,7 +31,7 @@ def ctx(P):
 
 
 def active(t, clock=1800.0, power=55.0, overrun=None):
-    lat = np.full(6, 7.0)
+    lat = np.full(6, 4.0)                                              # light frames: the aligned plan admits tokens (7.0 ms leaves too little slack; addendum O-1 then switches to unaligned)
     return Obs(t_ms=float(t), lat_ms=lat, n_missed=0, n_arrived=6, tokens=3, power_w=power, clock_mhz=clock, period_ms=PERIOD, deadline_ms=PERIOD,
                tok_ms=np.array([10.1, 10.2, 10.0]), overrun_ms=None if overrun is None else np.array(overrun, float))
 
@@ -60,7 +62,9 @@ def test_active_ticks_are_exactly_the_learned_model(P):
     m.reset(ctx(P))
     for i in range(30):
         o = active(100.0 + 100.0 * i, overrun=[0.5] if i % 7 == 3 else None)
-        assert h.act(o) == m.act(o), i
+        a_h, a_m = h.act(o), m.act(o)
+        if h.mode == "aligned":                                            # while the aligned mode is executed the hybrid IS the aligned learned model
+            assert a_h == a_m, i
 
 
 def test_idle_branch_is_the_eB_rule(P):
@@ -107,6 +111,6 @@ def test_learned_guard_works_inside_the_hybrid(P):
     for i in range(25):
         g0.act(active(100.0 + 100.0 * i))
         a1 = g1.act(active(100.0 + 100.0 * i, overrun=[2.5]))
-    a0 = g0.act(active(3000.0))
-    a1 = g1.act(active(3000.0, overrun=[2.5]))
-    assert a1.guard_ms > a0.guard_ms
+    g0.act(active(3000.0))
+    g1.act(active(3000.0, overrun=[2.5]))
+    assert g1.model.guard_fb > g0.model.guard_fb                            # the learned guard lives in the aligned instance (the executed mode may be unaligned on these synthetic observations)

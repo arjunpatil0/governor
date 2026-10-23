@@ -1,0 +1,21 @@
+{
+ "id": "trial_fgalone",
+ "spec": {
+  "id": "trial_fgalone",
+  "kind": "fg_alone",
+  "workload": "llama32_3b",
+  "scene": null,
+  "c0": 7
+ },
+ "metrics": {
+  "miss": 0.0,
+  "tok_s": 0.0,
+  "power_w": NaN,
+  "c0m": 6.677149999632093,
+  "fg_p99_ms": 7.132639666401701,
+  "abandoned": 0,
+  "executor": "hw"
+ },
+ "executor": "hw",
+ "wall_s": 15.040808916091919
+}

@@ -55,6 +55,10 @@ class Params:
         """Time-sliced co-run: each context progresses at 1/S of its solo speed. S is fitted to the A2 SA4 anchors (sim/calibrate.py -> data/sim_calibration.json); the G value is the sensitivity setting."""
         return self.share_override if self.share_override is not None else self.share_divisor_G
 
+    def clamp_clock(self, f):
+        """A LIVE clock reading mapped into the measured range [lowest W1 clock, unlocked median]: the unlocked GPU reads above the W1 median (2475 vs 2460 MHz, trial 2026-10-23) and an idle GPU below 600."""
+        return float(min(max(float(f), float(self._fg_x[0])), float(self.UNLOCKED_MHZ)))
+
     def _check(self, f):
         if not (self._fg_x[0] - 1e-9 <= f <= self.UNLOCKED_MHZ + 1e-9):
             raise ValueError(f"clock {f} MHz outside the measured range [{self._fg_x[0]}, {self.UNLOCKED_MHZ}]")
