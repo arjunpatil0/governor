@@ -11,3 +11,4 @@ data/llama/*.gguf
 workloads/background/*.obj
 data/nsys/*.nsys-rep
 data/nsys/*.sqlite
+data/w5b/_dryrun/
