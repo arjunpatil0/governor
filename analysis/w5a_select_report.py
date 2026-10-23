@@ -39,7 +39,8 @@ def main():
     for n, c in r["candidates"].items():
         p, q = c["loco_k3"]["pooled"], c["loco_k3"]["per_condition"]["c14"]
         L.append(f"- {n}: {f(p['tok_mae'], 1)} / {f(p['power_mae'], 1)} / {f(p['p99_err'], 0)} / {p['picks']} ({p['false_feasible_picks']}); c14: tok {f(q['tok_mae'], 1)}, power {f(q['power_mae'], 1)}, p99 err {f(q['p99_err'], 0)}, picks {q['picks']} ({q['false_feasible_picks']})")
-    L += ["", "## Implementation notes", ""] + [f"- {x}" for x in r["notes"]]
+    L += ["", "## Implementation notes — these five choices were made while implementing run 1 WITHOUT registration (reviewer 2026-10-23); addendum N adopts or reverts each", ""] + [f"- {x}" for x in r["notes"]]
+    L += ["- Also unregistered: the regret margin was an absolute +0.10 (a ratio rule is degenerate near 0); intervals were RMS of inner out-of-fold residuals; GP was subset-of-data with seed 0; CUSUM was not evaluated offline."]
     Path(a.out).write_text("\n".join(L) + "\n", encoding="utf-8")
 
 

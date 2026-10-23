@@ -54,10 +54,11 @@
 - GP: 3.8 / 2.5 / 2303 / 6 (3); c14: tok 0.8, power 1.6, p99 err 629, picks 0 (0)
 - MLP: 3.5 / 1.7 / 2745 / 8 (2); c14: tok 2.2, power 1.3, p99 err 1549, picks 1 (1)
 
-## Implementation notes
+## Implementation notes — these five choices were made while implementing run 1 WITHOUT registration (reviewer 2026-10-23); addendum N adopts or reverts each
 
 - Where G predicts an overloaded cell its p99 is undefined (nan); for residuals, features and scoring it is replaced by the 16.667 ms period (the lowest latency an overloaded frame can have).
 - The online residual bias of the learned candidates is the mean (n/(n+1) shrunk) of (y - G - g) over the workload's adaptation cells, per target; targets without a defined value in a cell skip that cell.
 - sigma_hat of every candidate is the RMS of its out-of-fold residuals (inner leave-one-workload-out among the training workloads, with the same calibration and bias) per target; GP std and ensemble spread are not used.
 - Residual models are fit on all training cells (adaptation cells included); p99 residual models only on non-overloaded cells.
 - Latency is measured on one fitted model per candidate (the fold that holds out llama32_3b, K = 3): grey-box + features + 4 residual predictions + bias + intervals + decision for the 70 settings of condition c9.
+- Also unregistered: the regret margin was an absolute +0.10 (a ratio rule is degenerate near 0); intervals were RMS of inner out-of-fold residuals; GP was subset-of-data with seed 0; CUSUM was not evaluated offline.
