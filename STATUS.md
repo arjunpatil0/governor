@@ -6,6 +6,9 @@ Updated 2026-10-23 - Phase: W4-5. Protocol registered (plan addendum L, 662d527)
 - Why: the p99 target is dominated by a backlog tail (15% of non-overloaded cells above 200 ms, up to 3.2 s) that no model predicts; tok/s differs 6-14x between workloads, so one pooled sigma per target miscalibrates (1B fold coverage 16-30%).
 - Nothing selected, no pre-fixed fallback. Nothing re-run, nothing changed after seeing results.
 
+## Also recorded (journal 0048, plan addendum M)
+- Laptop restarted 2026-10-23; Armoury Crate Battery Health Charging = Balanced 80%, fixed for the study. meta.json now has battery_charge_mode, boot_utc, uptime_s. Every W5b session starts from a fresh restart. Helper must be restarted in the Administrator window before any hardware step.
+
 ## Waiting for
 1. Reviewer + Arjun: choose (A) addendum M fixing the protocol shape, then a labelled second run; (B) accept the negative result and keep ModelController for d'B; (C) more data (not recommended). Details in journal 0047.
 

@@ -422,8 +422,11 @@ def step_shift(d):
 
 STEPS = dict(warm=step_warm, clock=step_clock, daemon=step_daemon, frame=step_frame, driver=step_driver, governor=step_governor, overrun=step_overrun, gate=step_gate, shift=step_shift)
 
-def write_meta(d, armoury_mode):
-    """meta.json for every smoke/run directory: Armoury Crate mode (NOT_RECORDED is flagged), Chrome state, process list with CPU%, git head, exe hash, helper state."""
+BATTERY_CHARGE_MODE = "Balanced 80%"        # Armoury Crate Battery Health Charging, fixed for the whole study from 2026-10-23 (not detectable by software: a recorded declaration)
+
+
+def write_meta(d, armoury_mode, battery_charge_mode=BATTERY_CHARGE_MODE):
+    """meta.json for every smoke/run directory: Armoury Crate mode (NOT_RECORDED is flagged), battery charge mode, boot time / uptime, Chrome state, process list with CPU%, git head, exe hash, helper state."""
     import procsnap
     procs = procsnap.snapshot(interval=1.0)
     git = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
@@ -432,7 +435,10 @@ def write_meta(d, armoury_mode):
     except Exception as e:                                   # noqa: BLE001
         helper = f"unreachable: {type(e).__name__}"
     from workloads.common.exe_warm import sha256
-    meta = dict(utc=datetime.now(timezone.utc).isoformat(), armoury_mode=armoury_mode or "NOT_RECORDED", armoury_mode_recorded=bool(armoury_mode), chrome_running=procsnap.chrome_running(procs),
+    import psutil
+    boot = psutil.boot_time()
+    meta = dict(utc=datetime.now(timezone.utc).isoformat(), boot_utc=datetime.fromtimestamp(boot, timezone.utc).isoformat(), uptime_s=round(time.time() - boot), battery_charge_mode=battery_charge_mode,
+                armoury_mode=armoury_mode or "NOT_RECORDED", armoury_mode_recorded=bool(armoury_mode), chrome_running=procsnap.chrome_running(procs),
                 git_head=git, exe_sha256=sha256(EXE) if EXE.exists() else None, helper_ping=helper, processes=procs[:25])
     (d / "meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     if not meta["armoury_mode_recorded"] or meta["chrome_running"]:
