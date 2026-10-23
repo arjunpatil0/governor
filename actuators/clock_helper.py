@@ -274,6 +274,7 @@ class PipeServer:
         self.core, self.name, self.idle_s = core, name, idle_s
         self.stop_flag = threading.Event()
         self.ready = threading.Event()
+        self.finished = threading.Event()                      # set when serve_forever has returned
         self.h = None
         self.connected = False
         self.last_activity = time.monotonic()
@@ -349,15 +350,72 @@ class PipeServer:
                         pass
         finally:
             win32file.CloseHandle(h)
+            self.finished.set()
 
-    def stop(self):
+    def stop(self, timeout_s=2.0):
+        """Wake the serving thread wherever it is blocked (waiting for a client OR reading from a connected one) and wait until it has left serve_forever.
+        CancelIoEx aborts the pending ConnectNamedPipe / ReadFile of the serving thread from this thread (the same call the idle monitor uses); it is repeated because a cancel that
+        arrives between two blocking calls is lost, and the stop flag makes the loop leave at the next check."""
         self.stop_flag.set()
-        try:                                                   # unblock ConnectNamedPipe / ReadFile with a throwaway connection
-            import win32file
-            c = win32file.CreateFile(self.name, PIPE_ACCESS_MASK, 0, None, win32file.OPEN_EXISTING, 0, None)
-            win32file.CloseHandle(c)
+        if self.h is None:
+            return
+        deadline = time.monotonic() + timeout_s
+        while not self.finished.wait(0.05) and time.monotonic() < deadline:
+            ctypes.windll.kernel32.CancelIoEx(ctypes.c_void_p(int(self.h)), None)
+
+
+CTRL_C_EVENT, CTRL_BREAK_EVENT, CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT = 0, 1, 2, 5, 6
+_MUST_FINISH_EVENTS = frozenset({CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT})     # Windows ends the process as soon as the handler returns for these
+
+
+class ShutdownCoordinator:
+    """Console-event handling split in two so that Ctrl+C is answered at once and the clock is reset exactly once.
+    request(event) is the console-control handler body: it only sets `stop` and returns True (= handled, the default handler never runs). A second Ctrl+C / Ctrl+Break while the
+    cleanup runs finds `stop` already set and is swallowed. Close / logoff / shutdown events block until the cleanup is finished (the OS kills the process when the handler returns).
+    run_cleanup() is called from the main thread (and from atexit / finally as a safety net): the first caller runs cleanup() and prints the outcome, later callers wait and get the result."""
+
+    def __init__(self, cleanup, say=print, close_wait_s=4.0):
+        self.cleanup, self.say, self.close_wait_s = cleanup, say, close_wait_s
+        self.stop = threading.Event()
+        self.done = threading.Event()
+        self.result = None
+        self._lk = threading.Lock()
+        self._started = False
+
+    def request(self, event):
+        self.stop.set()
+        if event in _MUST_FINISH_EVENTS:
+            self.done.wait(self.close_wait_s)
+        return True
+
+    def run_cleanup(self):
+        with self._lk:
+            first = not self._started
+            self._started = True
+        if not first:
+            self.done.wait()
+            return self.result
+        self.say("shutting down...")
+        try:
+            ok = bool(self.cleanup())
         except Exception:                                      # noqa: BLE001
-            pass
+            log.exception("cleanup raised")
+            ok = False
+        self.result = ok
+        self.say("shutting down... clock reset done" if ok else "shutting down... clock reset FAILED (see the helper log; run nvidia-smi -rgc)")
+        self.done.set()
+        return ok
+
+
+def run_helper(srv, coord):
+    """Serve until a stop is requested (Ctrl+C etc.) or the server thread dies, then stop the server, reset the clock and return the cleanup result."""
+    th = threading.Thread(target=srv.serve_forever, daemon=True)
+    th.start()
+    while th.is_alive() and not coord.stop.wait(0.2):
+        pass
+    srv.stop()
+    th.join(2.0)
+    return coord.run_cleanup()
 
 
 # ---------------------------------------------------------------- entry point
@@ -380,17 +438,15 @@ def main():
     if not core.startup():
         raise SystemExit("startup reset failed: NVML clock control does not work here; not serving")
     srv = PipeServer(core, a.pipe)
+    coord = ShutdownCoordinator(core.shutdown)
     handler_type = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_uint)
 
     @handler_type
-    def on_ctrl(_event):                                       # Ctrl+C, Ctrl+Break, console close, logoff, shutdown: reset, stop serving, exit
-        core.shutdown()
-        srv.stop()
-        logging.shutdown()
-        os._exit(0)
+    def on_ctrl(event):                                        # Ctrl+C, Ctrl+Break, console close, logoff, shutdown: only request the stop (answered at once); the main thread cleans up
+        return 1 if coord.request(event) else 0
 
     ctypes.windll.kernel32.SetConsoleCtrlHandler(on_ctrl, True)
-    atexit.register(core.shutdown)
+    atexit.register(coord.run_cleanup)
     stop = threading.Event()
 
     def watchdog():
@@ -399,11 +455,12 @@ def main():
 
     threading.Thread(target=watchdog, daemon=True).start()
     try:
-        print(f"clock helper listening on {a.pipe}; allowed {sorted(cfg['allowed_mhz'])} MHz; Ctrl+C to stop (the lock is reset on exit)")
-        srv.serve_forever()
+        print(f"clock helper listening on {a.pipe}; allowed {sorted(cfg['allowed_mhz'])} MHz; Ctrl+C to stop (the lock is reset on exit; a second Ctrl+C is ignored while it does)")
+        run_helper(srv, coord)
     finally:
         stop.set()
-        core.shutdown()
+        coord.run_cleanup()
+        logging.shutdown()
 
 
 if __name__ == "__main__":

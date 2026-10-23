@@ -1,0 +1,34 @@
+{
+ "run": {
+  "label": "shift_bg_alone",
+  "ctrl": [
+   0.0,
+   1.0,
+   0.5
+  ],
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "frames": 0,
+  "fg_p50_ms": NaN,
+  "fg_p99_ms": NaN,
+  "fg_miss_frac": 0.0,
+  "bg_tok_s": 98.13157894736842,
+  "mean_power_w_whole_run": 93.34655000000001,
+  "token_end_phase_ms_p10_p50_p90": [
+   1.6707866910537807,
+   8.33413333942535,
+   15.028266680116646
+  ],
+  "ring_dropped": 0,
+  "driver_output_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=3960 t_first=495929.895033 t_last=495970.126075 ctx_end=4472"
+  ]
+ },
+ "tokens": 3960,
+ "shifted_tokens": 5,
+ "tok_ms_p50": 10.1866,
+ "tok_ms_p99": 10.925378,
+ "tok_ms_max": 14.7417,
+ "tok_ms_shifted_median": 12.5575,
+ "done_line": "DONE tokens=3960 t_first=495929.895033 t_last=495970.126075 ctx_end=4472"
+}

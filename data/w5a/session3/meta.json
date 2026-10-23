@@ -1,0 +1,136 @@
+{
+ "utc": "2026-10-22T23:28:24.538875+00:00",
+ "armoury_mode": "Performance",
+ "armoury_mode_recorded": true,
+ "chrome_running": false,
+ "git_head": "ac0f7a9e4330cabb51b22126f96f5c3f9b59302b",
+ "exe_sha256": "bb875fbcaa2cf792f0f015a949b9db6cacf1ac50c4491471c2e1bcd504e78044",
+ "helper_ping": "OK none",
+ "processes": [
+  {
+   "name": "System Idle Process",
+   "count": 1,
+   "cpu_pct": 1529.2
+  },
+  {
+   "name": "python.exe",
+   "count": 2,
+   "cpu_pct": 43.9
+  },
+  {
+   "name": "WindowsTerminal.exe",
+   "count": 1,
+   "cpu_pct": 5.4
+  },
+  {
+   "name": "System",
+   "count": 1,
+   "cpu_pct": 2.6
+  },
+  {
+   "name": "AvastSvc.exe",
+   "count": 1,
+   "cpu_pct": 1.8
+  },
+  {
+   "name": "NVDisplay.Container.exe",
+   "count": 2,
+   "cpu_pct": 0.9
+  },
+  {
+   "name": "aswidsagent.exe",
+   "count": 1,
+   "cpu_pct": 0.9
+  },
+  {
+   "name": "?",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSServ.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSSrcExt.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ASUSSmartDisplayControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AacAmbientLighting.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AcPowerNotification.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AdobeCollabSync.exe",
+   "count": 2,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AggregatorHost.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AppActions.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ApplicationFrameHost.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.Service.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.UserSessionHelper.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrateControlInterface.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmourySwAgent.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsHotplugCtrl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsMonitorControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsusAppService.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsusCertService.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  }
+ ]
+}

@@ -382,3 +382,93 @@ def test_a_lock_attempt_makes_the_state_unknown_again():
     be.fail_reset = True
     c.handle(Command("LOCK", 1200))                                  # lock issued: a later reset error is real
     assert c.handle(Command("RESET")) == "ERR BACKEND"
+
+
+# ---------------------------------------------------------------- Ctrl+C responsiveness (Arjun, 2026-10-23: "Make Ctrl+C responsive (wake/cancel the pipe wait on interrupt), print
+# "shutting down... clock reset done" when cleanup finishes, and ignore a second Ctrl+C while cleanup runs.")
+from actuators.clock_helper import ShutdownCoordinator, run_helper     # noqa: E402
+
+
+def _serving(idle_s=60.0):
+    be = FakeBackend()
+    c = HelperCore(be, allowed_mhz=ALLOWED, watchdog_s=3.0, min_interval_s=0.0)
+    name = r"\\.\pipe\governor_clock_test_" + uuid.uuid4().hex
+    srv = PipeServer(c, name, idle_s=idle_s)
+    th = threading.Thread(target=srv.serve_forever, daemon=True); th.start(); srv.ready.wait(5)
+    return be, c, name, srv, th
+
+
+def test_stop_wakes_a_server_that_is_waiting_for_a_client():
+    be, c, name, srv, th = _serving()
+    time.sleep(0.2)
+    t0 = time.time(); srv.stop(); th.join(3)
+    assert not th.is_alive() and time.time() - t0 < 1.0
+
+
+def test_stop_wakes_a_server_blocked_on_a_connected_silent_client_without_waiting_for_the_idle_timeout():
+    be, c, name, srv, th = _serving(idle_s=60.0)
+    cl = ClockClient(name); assert cl.lock(1500)
+    time.sleep(0.2)
+    t0 = time.time(); srv.stop(); th.join(3)
+    assert not th.is_alive() and time.time() - t0 < 1.0 and ("reset",) in be.calls              # the lock is released on the way out
+    cl.close()
+
+
+def test_ctrl_c_only_requests_the_stop_and_returns_at_once_while_cleanup_runs_elsewhere():
+    ran = []
+    co = ShutdownCoordinator(lambda: ran.append(1) or True, say=lambda s: None)
+    t0 = time.time(); assert co.request(0) and time.time() - t0 < 0.2
+    assert co.stop.is_set() and ran == []                                                         # the handler thread does not do the cleanup
+
+
+def test_cleanup_runs_once_prints_done_and_a_second_ctrl_c_during_cleanup_is_ignored():
+    said, gate, started = [], threading.Event(), threading.Event()
+    n = []
+
+    def slow():
+        n.append(1); started.set(); gate.wait(5); return True
+    co = ShutdownCoordinator(slow, say=said.append)
+    co.request(0)
+    th = threading.Thread(target=co.run_cleanup, daemon=True); th.start()
+    assert started.wait(2)
+    t0 = time.time(); assert co.request(0) and co.request(1) and time.time() - t0 < 0.2          # second Ctrl+C / Ctrl+Break: swallowed, no second cleanup
+    gate.set(); th.join(3)
+    assert n == [1] and co.run_cleanup() is True and n == [1]                                     # later callers (atexit, finally) get the cached result
+    assert said[-1] == "shutting down... clock reset done" and said.count("shutting down... clock reset done") == 1
+
+
+def test_a_failed_cleanup_is_reported_not_called_done():
+    said = []
+    co = ShutdownCoordinator(lambda: False, say=said.append)
+    assert co.run_cleanup() is False and "done" not in said[-1] and "FAILED" in said[-1]
+
+
+def test_console_close_logoff_and_shutdown_events_wait_for_the_cleanup_before_returning():
+    done = []
+
+    def cleanup():
+        time.sleep(0.4); done.append(1); return True
+    co = ShutdownCoordinator(cleanup, say=lambda s: None, close_wait_s=3.0)
+    th = threading.Thread(target=co.run_cleanup, daemon=True)
+    threading.Timer(0.1, th.start).start()
+    assert co.request(2) and done == [1]                                                          # the OS kills the process when the handler returns
+
+
+def test_run_helper_ctrl_c_with_a_connected_client_resets_the_lock_and_returns_fast():
+    be, c, name, srv, th = _serving(idle_s=60.0)
+    srv.stop(); th.join(3)                                                                         # run_helper starts its own serving thread on a fresh server
+    be = FakeBackend()
+    c = HelperCore(be, allowed_mhz=ALLOWED, watchdog_s=3.0, min_interval_s=0.0)
+    name = r"\\.\pipe\governor_clock_test_" + uuid.uuid4().hex
+    srv = PipeServer(c, name, idle_s=60.0)
+    said = []
+    co = ShutdownCoordinator(c.shutdown, say=said.append)
+    out = {}
+    runner = threading.Thread(target=lambda: out.update(ok=run_helper(srv, co)), daemon=True); runner.start()
+    assert srv.ready.wait(5)
+    cl = ClockClient(name); assert cl.lock(1500)
+    t0 = time.time(); co.request(0); co.request(0)                                                 # the impatient double press
+    runner.join(5)
+    assert not runner.is_alive() and out["ok"] is True and time.time() - t0 < 1.5
+    assert be.calls[-1] == ("reset",) and said[-1] == "shutting down... clock reset done"
+    cl.close()

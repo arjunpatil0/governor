@@ -1,19 +1,18 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-23 · Phase: W4-5. W5 yaml committed (1683d3c). Models downloaded and verified, load pre-check PASSED, held-out = Llama-3.1-8B, W5a list FROZEN. Ready for W5a session 1 (your hands; commands in chat and docs/W5A_SESSION1.md).
+Updated 2026-10-23 - Phase: W4-5. W5a data COLLECTED and VERIFIED: 280/280 cells (sessions 94/93/93, run back to back), 0 problems. Waiting for sign-off of the model-selection protocol before anything is fitted.
 
-## Just did (journals 0044-0045; plan addenda J and K)
-- Final review applied and committed; change 7 explained (analysis artefact); analysis/w5_analysis.py (13 tests); W5a design/metrics/runner (tests green); driver context shift; build test restores the exe.
-- Downloads sha256-OK; load pre-check: 1B 17/17, 3B 29/29, Phi-3.5-mini 33/33, 8B 33/33 layers on the GPU at context 2048. Held-out = Llama-3.1-8B (no fallback). Other family = Phi-3.5-mini.
-- W5a list frozen: seed 20261023, 280 cells, sessions 94 / 93 / 93, sha256 8f913519a9988a316ad1c8275b303d60ed25c49ce0831cc240f4f8b8f7458d77.
+## Just did (journal 0046)
+- Verified W5a against the frozen list (analysis/w5a_verify.py, 4 tests; data/w5a/verification.json): no missing/extra/incident cells, manifests match, same Armoury mode / exe hash / git head in all sessions, no clock/offload/ring-drop flags, max 77 C. ~1.8 h per session (the 85 s/cell estimate was too high; ~70 s incl. cool-down).
+- Flag worth knowing: 80 of 280 cells are OVERLOADED (frames abandoned; miss incl. abandoned >= 0.5) and 103 of the other 200 produced zero tokens. Analysis must use miss_frac_incl_abandoned.
+- Helper Ctrl+C: handler only requests stop; main thread cancels the pipe wait, resets once, prints "shutting down... clock reset done"; second Ctrl+C ignored; 7 new tests (52 passed). Root cause of the old delay NOT reproduced; not yet run elevated with the new code.
+- Drafted docs/W5A_MODEL_SELECTION_PROTOCOL.md (nothing fitted, no target values inspected beyond counts).
 
 ## Waiting for
-1. You: W5a session 1 (docs/W5A_SESSION1.md): helper restart (Admin), then in a normal shell: `shift` smoke, one trial cell (--limit 1), then the session. Paste back the outputs of the first two steps before running the full session.
-2. Reviewer: nothing pending.
+1. Reviewer + Arjun: sign off the protocol draft, section 6: (a) whole-cell adaptation K=3 instead of "10 s", (b) targets + extra tok_s/power rule, (c) OK to pip install --use-feature=truststore lightgbm (or use sklearn HistGradientBoosting).
+2. Nothing else blocks me.
 
-## Risks (not verified yet)
-- experiments/w5a/run.py and the `shift` smoke step have had no hardware run; the trial cell is the first.
-- Session length: estimate 2.2 h for 94 cells (yaml says at most 2 h); stop between cells if needed, the runner resumes.
+## Risks (not verified)
+- Candidate 1 (grey-box+RLS) needs a cell-level predict function (not written). HW7 staleness data not analysed. Helper reset errors still unexplained. d'B never simulated.
 
 ## Notes
-- Windows Update and NVIDIA driver updates paused by you. Do NOT rebuild the driver exe, run the build test, or change the tree between sessions (clean committed tree is required by the runner).
-- Run checklist: Administrator PowerShell for the helper; AC power; Armoury mode stated (Performance); Chrome closed; tray apps quit; no clicking; hands off.
+- Do NOT rebuild the driver exe (hash bb875fbc must stay) or change the registered files. The helper is not part of the registered configuration.
