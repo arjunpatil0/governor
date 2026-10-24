@@ -44,6 +44,14 @@ def window_mean(t, v, t_a, t_b):
     return float(np.mean(v[m])) if m.any() else float("nan")
 
 
+def recent_mean(t, v, now, span):
+    """Mean of the samples v taken in (now - span, now]; nan if none (the sampled power source of the Governor loop; the sampler appends from another thread, so only a copy of the tail is read)."""
+    tt, vv = list(t[-200:]), list(v[-200:])
+    n = min(len(tt), len(vv))
+    sel = [vv[i] for i in range(n) if now - span < tt[i] <= now]
+    return float(np.mean(sel)) if sel else float("nan")
+
+
 def fg_spec(scene, c0):
     base = build(scene or "S0").fg
     scale = float(c0) / C0_MS
@@ -112,7 +120,10 @@ class SimExecutor:
 class HwExecutor:
     name = "hw"
 
-    def __init__(self):
+    def __init__(self, power_source="energy"):
+        """power_source for the Governor loop: 'energy' (its own delta of the NVML energy counter every tick: ~10 extra reads/s, each adds ~4.2 J of phantom energy) or 'sampled' (the mean of the NVML
+        power samples of the last tick, no energy reads in the loop; plan addendum O-4)."""
+        self.power_source = power_source
         import pynvml as nv
         import smoke
         from actuators.startup_reset import reset_clocks
@@ -295,6 +306,7 @@ class HwExecutor:
             gov.start(0.0)
             ok_clock = True
         pr, smp, stop, acc, pstop = None, None, threading.Event(), [0], threading.Event()
+        reads, lastpw = [0], [0.0]
         try:
             time.sleep(1.5)
             pr = self._launch(spec["workload"], ctrl, pace, tokens, cdir / "driver.csv", WARM_S + MEASURE_S + 12)
@@ -304,14 +316,25 @@ class HwExecutor:
             threading.Thread(target=self._poll_reasons, args=(pstop, acc), daemon=True).start()
             gth = None
             if gov is not None:
+                source = spec.get("power_source") or self.power_source
+
                 def loop_gov():
                     tick = time.perf_counter()
                     while not stop.is_set():
                         tick += 0.1
                         time.sleep(max(0.0, tick - time.perf_counter()))
                         try:
-                            e = 0.0 if spec.get("gov_no_energy") else smp.nv.nvmlDeviceGetTotalEnergyConsumption(smp.h) / 1000.0
-                            a = gov.step(time.perf_counter() * 1000.0, e, smp.sm[-1])
+                            pw = None
+                            if spec.get("gov_no_energy"):
+                                e = 0.0
+                            elif source == "sampled":
+                                e, pw = 0.0, recent_mean(smp.t, smp.pw, time.perf_counter(), 0.1)
+                                pw = lastpw[0] if pw != pw else pw                            # no sample in the span (rare): keep the last good value
+                                lastpw[0] = pw
+                            else:
+                                e = smp.nv.nvmlDeviceGetTotalEnergyConsumption(smp.h) / 1000.0
+                                reads[0] += 1
+                            a = gov.step(time.perf_counter() * 1000.0, e, smp.sm[-1], power_w=pw)
                             glog.append((time.perf_counter(), a.clock, a.duty, a.guard_ms, smp.sm[-1]))
                         except Exception as ex:                  # noqa: BLE001
                             gerr.append(f"{type(ex).__name__}: {ex}"); return
@@ -338,9 +361,10 @@ class HwExecutor:
             np.savez_compressed(cdir / "frames.npz", t_sched=[r["t_sched"] for r in recs], lat_ms=[r["lat_ms"] for r in recs], tok_end=tk[:, 0] if len(tk) else [], tok_ms=tk[:, 1] if len(tk) else [], t0=t0,
                                 gov_log=np.array(glog, float).reshape(-1, 5))
             changes = int(sum(1 for a, b in zip(glog, glog[1:]) if a[1] != b[1]))
+            reads_n = int(reads[0])
             out = dict(miss=float(miss), miss_completed=res["miss_frac"], tok_s=res["bg_tok_s"], power_w=res["power_w"], power_sampled_w=window_mean(np.array(smp.t), np.array(smp.pw), t0 + WARM_S, t0 + WARM_S + MEASURE_S), fg_p50_ms=res["fg_p50_ms"], fg_p99_ms=res["fg_p99_ms"], frames=res["frames"], abandoned=n_ab,
                        bg_tokens=res["bg_tokens"], tok_ms_p50=res["tok_ms_p50"], sm_mhz_median=float(np.median(sm[win])) if win.any() else float("nan"), temp_before_c=temp_before, temp_after_c=self.temp(),
-                       clock_changes=changes, clamp_events=0 if gov is None else len(gov.clamped), clamp_examples=[] if gov is None else gov.clamped[:3], final_pacing_mode=getattr(obj, 'mode', None) if gov is not None else None, clock_ok=bool(ok_clock), ring_dropped=int(dropped), thermal_reason_bits=int(acc[0]), executor="hw")
+                       clock_changes=changes, clamp_events=0 if gov is None else len(gov.clamped), power_source=None if gov is None else ('none' if spec.get('gov_no_energy') else (spec.get('power_source') or self.power_source)), gov_reads=reads_n, gov_reads_per_s=reads_n / (WARM_S + MEASURE_S), clamp_examples=[] if gov is None else gov.clamped[:3], final_pacing_mode=getattr(obj, 'mode', None) if gov is not None else None, clock_ok=bool(ok_clock), ring_dropped=int(dropped), thermal_reason_bits=int(acc[0]), executor="hw")
         finally:
             stop.set(); pstop.set()
             if smp is not None:

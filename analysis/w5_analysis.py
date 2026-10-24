@@ -162,6 +162,12 @@ def hw7_staleness(tokens, clock_changes, settle_s=1.0, window_s=2.0, min_clean=8
     return pd.DataFrame(rows)
 
 
+def ni_line(scene, c, r):
+    """One non-inferiority report line. A pass that rests on a comparator scoring 0 in every block is marked VACUOUS (plan addendum O-4 section 3: reporting only, pass/fail unchanged)."""
+    vac = " VACUOUS (comparator scored 0 in every block)" if r["n"] == 0 and r["pass"] else ""
+    return f"- {scene} vs {c}: median ratio {r['median']:.3f}, CI [{r['lo']:.3f}, {r['hi']:.3f}], blocks used {r['n']}, excluded (comparator 0) {r['n_excluded']}, pass {r['pass']}{vac}"
+
+
 def main(path):
     df = pd.read_csv(path)
     L = [f"# W5b confirmatory analysis (analysis/w5_analysis.py on {Path(path).name}); registered in experiments/w5_governor.yaml", ""]
@@ -176,7 +182,7 @@ def main(path):
             L += ["", f"Non-inferiority (ratio d'B / comparator, 90% CI lower bound >= {NI_MARGIN}):"]
             for scene, d in rep["ni"].items():
                 for c, r in d.items():
-                    L.append(f"- {scene} vs {c}: median ratio {r['median']:.3f}, CI [{r['lo']:.3f}, {r['hi']:.3f}], blocks used {r['n']}, excluded (comparator 0) {r['n_excluded']}, pass {r['pass']}")
+                    L.append(ni_line(scene, c, r))
             L += ["", "HW1 for d'B in every primary scene: " + ", ".join(f"{s} {v}" for s, v in rep["hw1"].items()), "",
                   f"**d'B {'EARNS ITS PLACE' if earns_place(rep) else 'DOES NOT EARN ITS PLACE'}** under the registered reading (S5 win against all three, non-inferiority in S0 and S2 against all three, HW1 in every primary scene).", ""]
             L += ["### HW3 (d'B vs g'B and eB; Holm over the 5 scenes)", ""]

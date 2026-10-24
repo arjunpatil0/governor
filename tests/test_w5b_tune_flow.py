@@ -88,3 +88,17 @@ def test_a_t3b_sitting_runs_through_the_planner_hook_and_writes_its_decisions(tm
     s = tune.run_sitting(tmp_path, Stub(fake_world(good_c0=7)), log=lambda *a: None, planner=lambda r: tl.next_batch_t3b(r, 7))
     d = json.loads((tmp_path / "decisions.json").read_text(encoding="utf-8"))
     assert s["finished"] and d["c0"] == 7 and d["d_b"]["margin"] == 0.2 and d["c_b"]["rule_met"] is True
+
+
+# ---------------------------------------------------------------- power source for the Governor loop (plan addendum O-4)
+def test_the_power_source_for_t3b_comes_from_the_diagnostic_gate_and_is_refused_without_it(tmp_path):
+    import pytest
+    assert tune.resolve_power_source("t1t3", "auto", tmp_path) == "energy"                          # the first sitting is not changed retroactively
+    with pytest.raises(SystemExit):
+        tune.resolve_power_source("t3b", "auto", tmp_path)                                         # no gate result: T3b must not guess
+    (tmp_path / "power_source.json").write_text(json.dumps(dict(power_source="sampled", verdict="CONFIRMED_PHANTOM")))
+    assert tune.resolve_power_source("t3b", "auto", tmp_path) == "sampled"
+    (tmp_path / "power_source.json").write_text(json.dumps(dict(power_source=None, verdict="STOP")))
+    with pytest.raises(SystemExit):
+        tune.resolve_power_source("t3b", "auto", tmp_path)
+    assert tune.resolve_power_source("t3b", "energy", tmp_path) == "energy"                          # an explicit choice is honoured (and recorded)

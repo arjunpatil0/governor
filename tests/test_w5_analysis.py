@@ -133,3 +133,12 @@ def test_hw7_staleness_error_and_unrecovered_changes():
     sparse.loc[sparse.t_start > 3.2, "overlapped"] = 1
     r2 = hw7_staleness(sparse, clock_changes=[2.0])
     assert bool(r2.loc[0, "unrecovered"])
+
+
+def test_a_vacuous_non_inferiority_pass_is_marked_in_the_report_line():
+    """Plan addendum O-4 section 3 (reporting only): a pass that rests on a comparator scoring 0 in every block must say so; pass/fail is unchanged."""
+    from analysis.w5_analysis import ni_line
+    vac = ni_line("S0", "g'B", {"median": float("nan"), "lo": float("nan"), "hi": float("nan"), "n": 0, "n_excluded": 10, "pass": True})
+    assert "VACUOUS (comparator scored 0 in every block)" in vac and "blocks used 0" in vac and "excluded (comparator 0) 10" in vac
+    real = ni_line("S2", "c'B", {"median": 1.02, "lo": 0.97, "hi": 1.08, "n": 8, "n_excluded": 2, "pass": True})
+    assert "VACUOUS" not in real and "blocks used 8" in real

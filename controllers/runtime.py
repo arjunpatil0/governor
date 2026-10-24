@@ -1,6 +1,9 @@
 """Governor loop: ring data -> Obs -> controller.act -> actuators. The controllers are the same objects the simulator evaluates."""
 
 
+import dataclasses
+
+
 class Governor:
     def __init__(self, controller, obs_builder, actuator, frame_ring, token_ring, period_ms, deadline_ms, params=None):
         self.ctl, self.ob, self.act_, self.frames, self.tokens = controller, obs_builder, actuator, frame_ring, token_ring
@@ -18,8 +21,9 @@ class Governor:
         self._t = t_ms
         return a
 
-    def step(self, t_ms, energy_j, clock_mhz):
-        """energy_j is the cumulative NVML energy counter (J); the power over the tick is its delta / dt."""
+    def step(self, t_ms, energy_j, clock_mhz, power_w=None):
+        """energy_j is the cumulative NVML energy counter (J); the power over the tick is its delta / dt. power_w (plan addendum O-4): a power measured elsewhere (the mean of the NVML power samples), which REPLACES
+        the energy-derived one so that the loop does not have to read the counter every tick (every extra read adds ~4.2 J of phantom energy, journal 0005)."""
         if self.params is not None and hasattr(self.params, "clamp_clock"):
             c = self.params.clamp_clock(clock_mhz)
             if c != float(clock_mhz):
@@ -33,6 +37,8 @@ class Governor:
         tok_ms = tk[:, 1] if tk.ndim == 2 and tk.shape[1] >= 2 else None
         tok_end = tk[:, 0] if tok_ms is not None else None          # token ring record [t_end_s, token_ms] (older one-field rings: no durations)
         self.last_obs = self.ob.build(fr, len(tk), de, dt, clock_mhz, t_ms, tok_ms=tok_ms, tok_end=tok_end)
+        if power_w is not None:
+            self.last_obs = dataclasses.replace(self.last_obs, power_w=float(power_w))
         a = self.ctl.act(self.last_obs)
         self.act_.apply(a)
         return a

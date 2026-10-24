@@ -72,3 +72,14 @@ def test_a_static_action_can_run_through_the_governor_loop_for_the_ab_diagnostic
 def test_the_hardware_executor_records_the_sampled_power_next_to_the_energy_counter_power():
     src = (ROOT / "experiments" / "w5b" / "executors.py").read_text(encoding="utf-8")
     assert "power_sampled_w" in src and "gov_no_energy" in src
+
+
+def test_recent_mean_uses_only_the_last_span_of_samples():
+    import numpy as np
+    t = [0.0, 0.5, 0.9, 1.0]; v = [100.0, 100.0, 40.0, 60.0]
+    assert abs(ex.recent_mean(t, v, 1.0, 0.2) - 50.0) < 1e-9 and np.isnan(ex.recent_mean(t, v, 5.0, 0.2)) and np.isnan(ex.recent_mean([], [], 1.0, 0.2))
+
+
+def test_the_governed_cell_can_take_its_power_from_the_sampled_source_without_reading_the_energy_counter():
+    src = (ROOT / "experiments" / "w5b" / "executors.py").read_text(encoding="utf-8")
+    assert 'power_source' in src and '"sampled"' in src and "gov_reads" in src and "power_w=pw" in src

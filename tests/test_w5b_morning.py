@@ -37,30 +37,64 @@ def test_incidents_flags_missing_decisions_and_manifest_mismatch_are_reported(tm
     assert "thermal" in f and "clock_ok" in f and "abandoned" in f and "ring_dropped" in f and "temp" in f
 
 
-def test_energy_and_sampled_power_that_disagree_are_flagged(tmp_path):
+def test_energy_and_sampled_power_that_disagree_fail_the_check_except_in_diagnostic_cells(tmp_path):
     write_cell(tmp_path, "a", power_w=90.0, power_sampled_w=45.0)
     write_cell(tmp_path, "b", power_w=50.0, power_sampled_w=48.0)
-    f = " | ".join(check(tmp_path)["flags"])
-    assert "a: energy-counter power 90.0 W vs sampled 45.0 W" in f and "b:" not in f
+    write_cell(tmp_path, "diag_gov_static", power_w=90.0, power_sampled_w=45.0)
+    r = check(tmp_path)
+    p = " | ".join(r["problems"])
+    assert "a: energy-counter power 90.0 W vs sampled 45.0 W" in p and "b:" not in p and "diag_gov_static: energy" not in p
 
 
-# ---------------------------------------------------------------- diagnostic gate for block T3b (plan addendum O-3 section 2)
+# ---------------------------------------------------------------- diagnostic gate for block T3b (plan addendum O-4)
 from morning import diag_gate  # noqa: E402
 
 
-def diag_cells(d, static=45.0, gov=45.0, noenergy=45.0, cb=45.0, sampled=45.0, cb_sampled=45.0):
-    for cid, p, s in (("diag_static", static, sampled), ("diag_gov_static", gov, sampled), ("diag_gov_static_noenergy", noenergy, sampled), ("diag_cb", cb, cb_sampled)):
-        write_cell(d, cid, power_w=p, power_sampled_w=s)
+def arm(d, cid, e, m, tok=20.0, reads=0.0):
+    write_cell(d, cid, power_w=e, power_sampled_w=m, tok_s=tok, gov_reads_per_s=reads)
 
 
-def test_the_diag_gate_passes_when_the_governed_path_matches_the_static_path_and_both_power_measures_agree(tmp_path):
-    diag_cells(tmp_path, static=45.0, gov=48.0, noenergy=46.0, cb=44.0)
+def arms(d, e_s=45.0, e_g=87.0, e_n=45.0, e_c=88.0, e_cs=44.0, m=45.0, r=10.0):
+    arm(d, "diag_static", e_s, m)
+    arm(d, "diag_gov_static", e_g, m, reads=r)
+    arm(d, "diag_gov_static_noenergy", e_n, m)
+    arm(d, "diag_cb", e_c, m, tok=3.0, reads=r)
+    arm(d, "diag_cb_sampled", e_cs, 45.0, tok=18.0)
+
+
+def test_phantom_energy_confirmed_selects_the_sampled_power_source(tmp_path):
+    arms(tmp_path)                                                         # +42 W on both arms with 10 reads/s (4.2 J each), none on the no-reads and static arms
     g = diag_gate(tmp_path)
-    assert g["ok"] is True and g["reasons"] == []
+    assert g["ok"] is True and g["verdict"] == "CONFIRMED_PHANTOM" and g["power_source"] == "sampled"
+    assert abs(g["predicted_inflation_w"] - 42.0) < 1e-9 and abs(g["observed_inflation_w"] - 42.0) < 1e-9
+    assert json.loads((tmp_path / "power_source.json").read_text(encoding="utf-8"))["power_source"] == "sampled"
+    assert any("diag_gov_static" in line and "87.0" in line for line in g["lines"])
 
 
-def test_the_diag_gate_fails_on_an_inflated_governed_path_or_a_disagreeing_sampled_power(tmp_path):
-    diag_cells(tmp_path, static=45.0, gov=85.0, noenergy=84.0, cb=90.0, sampled=45.0, cb_sampled=45.0)
+def test_no_anomaly_keeps_the_energy_source(tmp_path):
+    arms(tmp_path, e_g=46.0, e_c=45.0)
     g = diag_gate(tmp_path)
-    assert g["ok"] is False and any("diag_gov_static" in r for r in g["reasons"]) and any("diag_cb" in r for r in g["reasons"])
+    assert g["ok"] is True and g["verdict"] == "NO_ANOMALY" and g["power_source"] == "energy"
+
+
+def test_an_anomaly_that_the_phantom_does_not_explain_stops_the_run(tmp_path):
+    arms(tmp_path, e_n=85.0)                                               # the no-reads arm is also inflated: a new problem
+    g = diag_gate(tmp_path)
+    assert g["ok"] is False and g["verdict"] == "STOP" and g["power_source"] is None and any("no-reads" in r or "noenergy" in r for r in g["reasons"])
+    arms2 = tmp_path / "b"; arms2.mkdir()
+    arms(arms2, e_g=60.0, e_c=60.0)                                        # inflated by 15 W, but 10 reads/s predict 42 W: not the phantom
+    assert diag_gate(arms2)["verdict"] == "STOP"
+
+
+def test_the_sampled_source_must_itself_look_right_on_the_c_b_arm(tmp_path):
+    arms(tmp_path, e_cs=80.0)                                              # the fix arm still disagrees with its sampled power
+    g = diag_gate(tmp_path)
+    assert g["ok"] is False and any("diag_cb_sampled" in r for r in g["reasons"])
     assert diag_gate(tmp_path / "nowhere")["ok"] is False
+
+
+def test_cells_without_a_sampled_power_stop_the_gate_instead_of_crashing(tmp_path):
+    for cid in ("diag_static", "diag_gov_static", "diag_gov_static_noenergy", "diag_cb", "diag_cb_sampled"):
+        write_cell(tmp_path, cid, power_w=45.0)
+    g = diag_gate(tmp_path)
+    assert g["ok"] is False and any("power_sampled_w missing" in r for r in g["reasons"])

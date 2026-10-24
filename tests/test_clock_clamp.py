@@ -67,3 +67,13 @@ def test_clamping_is_logged():
     gov.step(200.0, 2.0, 2475.0)
     gov.step(300.0, 3.0, 210.0)
     assert [(c[1], c[2]) for c in gov.clamped] == [(2475.0, 2460.0), (210.0, 600.0)]
+
+
+def test_a_power_override_replaces_the_energy_derived_power_of_the_obs():
+    gov = Governor(PIController(P, "unaligned"), ObsBuilder(1000 / 60, 1000 / 60), Act(), Ring(np.empty((0, 3)), 3), Ring(np.empty((0, 2)), 2), 1000 / 60, 1000 / 60, params=P)
+    gov.start(0.0)
+    gov.step(100.0, 10.0, 1800.0)
+    gov.step(200.0, 14.2, 1800.0)                                       # 4.2 J in 0.1 s = 42 W from the energy counter
+    assert abs(gov.last_obs.power_w - 42.0) < 1e-6
+    gov.step(300.0, 18.4, 1800.0, power_w=33.0)
+    assert gov.last_obs.power_w == 33.0

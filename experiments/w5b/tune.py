@@ -45,6 +45,21 @@ def is_resume(meta, boot_ts):
         return False
 
 
+def resolve_power_source(plan, requested, diag_dir):
+    """Power source of the Governor loop (plan addendum O-4). 'auto': the first sitting keeps 'energy'; T3b takes the verdict of the diagnostic gate (power_source.json) and is REFUSED without a usable one."""
+    if requested != "auto":
+        return requested
+    if plan != "t3b":
+        return "energy"
+    f = Path(diag_dir) / "power_source.json"
+    if not f.exists():
+        sys.exit(f"refused: {f} not found - run the diagnostic and its gate first (docs/W5B_T3B_SITTING.md)")
+    v = json.loads(f.read_text(encoding="utf-8"))
+    if v.get("power_source") not in ("energy", "sampled"):
+        sys.exit(f"refused: the diagnostic gate verdict is {v.get('verdict')}: T3b must not start")
+    return v["power_source"]
+
+
 def load_results(cells_dir):
     res = {}
     for p in sorted(Path(cells_dir).glob("*/cell.json")):
@@ -100,6 +115,8 @@ def main():
     ap.add_argument("--max-uptime-s", type=float, default=7200.0); ap.add_argument("--max-hours", type=float, default=None, help="stop starting new cells after this many hours (resumable)")
     ap.add_argument("--plan", choices=["t1t3", "t3b"], default="t1t3", help="t1t3 = the first sitting; t3b = d'B margin grid + c'B constants re-tuned (needs --c0)")
     ap.add_argument("--c0", type=int, default=None, help="the chosen c0 (ms nominal) for --plan t3b")
+    ap.add_argument("--power-source", choices=["auto", "energy", "sampled"], default="auto", help="power signal of the Governor loop; auto = from the diagnostic gate for --plan t3b")
+    ap.add_argument("--diag-dir", default=str(ROOT / "data" / "w5b" / "diag"), help="where the diagnostic gate wrote power_source.json")
     ap.add_argument("--diag", action="store_true", help="diagnostic A/B of the governed-cell power anomaly (4 cells; not data, not the plan)")
     ap.add_argument("--trial", action="store_true", help="supervised trial: one cell of every executor path (not data, not the plan), results printed and stored under --out")
     a = ap.parse_args()
@@ -121,14 +138,16 @@ def main():
         if resume:                                                                  # same boot: keep the sitting's meta.json, note the resume
             old.setdefault("resumed_utc", []).append(datetime.now(timezone.utc).isoformat())
             (out / "meta.json").write_text(json.dumps(old, indent=1), encoding="utf-8")
-            ex = HwExecutor()
+            ex = HwExecutor(power_source=resolve_power_source(a.plan, a.power_source, a.diag_dir))
             return _finish(out, ex, a)
         smoke.write_meta(out, a.armoury_mode)
         m = json.loads((out / "meta.json").read_text(encoding="utf-8"))
         m.update(sitting_start_utc=datetime.now(timezone.utc).isoformat(), relaxation=RELAXATION, plan_addendum="docs/W5B_ADDENDUM_O.md", addendum_o_sha256=hashlib.sha256((ROOT / "docs" / "W5B_ADDENDUM_O.md").read_bytes()).hexdigest(),
                  yaml_sha256=hashlib.sha256((ROOT / "experiments" / "w5_governor.yaml").read_bytes()).hexdigest())
         (out / "meta.json").write_text(json.dumps(m, indent=1), encoding="utf-8")
-        ex = HwExecutor()
+        ex = HwExecutor(power_source=resolve_power_source(a.plan, a.power_source, a.diag_dir))
+        m = json.loads((out / "meta.json").read_text(encoding="utf-8")); m["power_source"] = ex.power_source; m["plan"] = a.plan
+        (out / "meta.json").write_text(json.dumps(m, indent=1), encoding="utf-8")
     else:
         from executors import SimExecutor
         out.mkdir(parents=True, exist_ok=True)
@@ -145,7 +164,7 @@ def _finish(out, ex, a):
                 t0 = time.time()
                 m = ex.run(spec, cdir)
                 (cdir / "cell.json").write_text(json.dumps(dict(id=spec["id"], spec=spec, metrics=m, executor=ex.name, wall_s=time.time() - t0), indent=1, default=str), encoding="utf-8")
-                print(f"TRIAL {spec['id']}: " + ", ".join(f"{k}={v:.3f}" if isinstance(v, float) else f"{k}={v}" for k, v in m.items() if k in ("miss", "tok_s", "power_w", "power_sampled_w", "temp_after_c", "c0m", "clock_changes", "abandoned", "thermal_reason_bits", "sm_mhz_median", "exec_mode")) + f" ({time.time() - t0:.0f} s)", flush=True)
+                print(f"TRIAL {spec['id']}: " + ", ".join(f"{k}={v:.3f}" if isinstance(v, float) else f"{k}={v}" for k, v in m.items() if k in ("miss", "tok_s", "power_w", "power_sampled_w", "gov_reads_per_s", "power_source", "temp_after_c", "c0m", "clock_changes", "abandoned", "thermal_reason_bits", "sm_mhz_median", "exec_mode")) + f" ({time.time() - t0:.0f} s)", flush=True)
         finally:
             ex.close()
         return

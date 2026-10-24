@@ -52,11 +52,17 @@ def test_heavy_frames_switch_to_unaligned_after_the_window_fills():
     assert c.mode == "unaligned" and a.pacing == "unaligned"
 
 
+def make_fixed(thr=6.57):
+    c = SwitchingPIController(P, power_budget_w=60.0, threshold_ms=thr)            # fixed threshold: the hysteresis band is tested in isolation from the clock-scaled token estimate
+    c.reset(dict(params=P, period_ms=PERIOD, deadline_ms=PERIOD))
+    return c
+
+
 def test_hysteresis_keeps_the_mode_inside_the_band():
-    c = make()
+    c = make_fixed()
     feed(c, 6.7, 200)                                   # between 6.57 and 6.57 + 0.3: stay aligned
     assert c.mode == "aligned"
-    c2 = make()
+    c2 = make_fixed()
     feed(c2, 6.95, 120)                                 # above 6.87: switch
     assert c2.mode == "unaligned"
     feed(c2, 6.4, 300, t0=100000)                       # between 6.27 and 6.57: stay unaligned
@@ -111,6 +117,11 @@ def test_runs_in_the_simulator_without_error_and_makes_tokens(cost):
 
 
 # ---------------------------------------------------------------- token-aware threshold (reviewer 2026-10-24): threshold = period - the CLEAN token duration, same hysteresis and dwell
+def clean_at(c, tok_ms, observed_at=1800.0):
+    """The clean token duration scaled from the clock it was observed at to the clock c is commanding (token time ~ 1 / tok_s(clock), the L table shape)."""
+    return tok_ms * P.tok_s(observed_at) / P.tok_s(P.clamp_clock(c.clock))
+
+
 def obs_tok(t, lat_ms, tok_ms, n=6, clock=1800.0):
     return Obs(t_ms=float(t), lat_ms=np.full(n, float(lat_ms)) if n else np.empty(0), n_missed=0, n_arrived=n, tokens=2, power_w=50.0, clock_mhz=clock, period_ms=PERIOD, deadline_ms=PERIOD,
                tok_ms=np.array([tok_ms, tok_ms]), overrun_ms=None)
@@ -124,7 +135,7 @@ def run_tok(c, lat, tok, ticks, t0=0):
 def test_threshold_equals_6_57_ms_for_the_3b_token_and_the_prior_is_used_without_tokens():
     c = make()
     run_tok(c, 4.0, 10.1, 5)
-    assert abs(c.threshold() - (PERIOD - 10.1)) < 1e-6
+    assert abs(c.threshold() - (PERIOD - clean_at(c, 10.1))) < 1e-6
     c2 = make()
     assert abs(c2.threshold() - (PERIOD - 1000.0 / P.tok_s(P.UNLOCKED_MHZ))) < 1e-6                 # no token seen yet: the L-table prior
 
@@ -132,7 +143,7 @@ def test_threshold_equals_6_57_ms_for_the_3b_token_and_the_prior_is_used_without
 def test_a_short_token_workload_keeps_aligned_pacing_at_frames_that_the_fixed_rule_would_reject():
     c = make()
     run_tok(c, 8.5, 4.5, 200)                                  # 1B: token 4.5 ms -> threshold 12.2 ms: an 8.5 ms frame still fits a token
-    assert c.mode == "aligned" and abs(c.threshold() - (PERIOD - 4.5)) < 1e-6
+    assert c.mode == "aligned" and abs(c.threshold() - (PERIOD - clean_at(c, 4.5))) < 1e-6
 
 
 def test_a_long_token_workload_is_unaligned_even_at_light_frames_from_the_startup_tokens():
@@ -150,6 +161,24 @@ def test_dilated_tokens_seen_while_unaligned_do_not_move_the_clean_estimate():
     run_tok(c, 9.0, 10.1, 120, t0=10000)                      # heavy frames: switch to unaligned
     assert c.mode == "unaligned"
     run_tok(c, 9.0, 25.0, 100, t0=30000)                      # unaligned tokens are dilated by overlap
-    assert abs(c.threshold() - (PERIOD - 10.1)) < 1e-6
+    assert abs(c.threshold() - (PERIOD - clean_at(c, 10.1))) < 1e-6
     run_tok(c, 4.0, 10.1, 200, t0=60000)                      # frames light again (aligned tokens are clean again): the mode returns to aligned and stays there
-    assert c.mode == "aligned" and abs(c.threshold() - (PERIOD - 10.1)) < 1e-6
+    assert c.mode == "aligned" and abs(c.threshold() - (PERIOD - clean_at(c, 10.1))) < 1e-6
+
+
+# ---------------------------------------------------------------- finding 3 (reviewer 2026-10-24): the clean token duration depends on the clock being commanded
+def test_a_token_seen_at_1800_mhz_is_longer_at_a_lower_commanded_clock_and_the_threshold_drops():
+    c = make()
+    run_tok(c, 4.0, 10.1, 10)                                           # tokens observed at 1800 MHz (obs.clock_mhz default)
+    c.al.clock = c.un.clock = 900.0                                     # the controller now commands 900 MHz
+    t900 = c.clean_token_ms()
+    assert abs(t900 - 10.1 * P.tok_s(1800.0) / P.tok_s(900.0)) < 1e-9 and t900 > 10.1
+    assert abs(c.threshold() - (PERIOD - t900)) < 1e-9 and c.threshold() < PERIOD - 10.1
+
+
+def test_tokens_observed_at_different_clocks_are_normalised_before_the_median():
+    c = make()
+    for i in range(10):
+        c.act(obs_tok(100 * i, 4.0, 10.1 * P.tok_s(1800.0) / P.tok_s(1200.0), clock=1200.0))      # the same clean 3B token seen at 1200 MHz
+    c.al.clock = c.un.clock = 1800.0
+    assert abs(c.clean_token_ms() - 10.1) < 1e-6

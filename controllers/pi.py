@@ -112,10 +112,12 @@ class SwitchingPIController:
         return a
 
     def clean_token_ms(self):
-        """Median of the recent clean token durations; before any token the L-table prior at the current clock. Dilated tokens of the unaligned mode never enter (they are longer by overlap)."""
+        """Median of the recent clean token durations, scaled to the clock the controller is COMMANDING now (token time ~ 1 / tok_s(clock), the L table shape: a lower clock lengthens the token and
+        shrinks the aligned slack, reviewer 2026-10-24 finding 3); each duration is stored normalised to 1800 MHz at the clock it was observed at. Before any token: the L-table prior at the current clock."""
+        f_now = self.P.clamp_clock(self.clock)
         if len(self.tok_clean):
-            return float(np.median(np.fromiter(self.tok_clean, float)))
-        return 1000.0 / self.P.tok_s(self.P.clamp_clock(self.clock))
+            return float(np.median(np.fromiter(self.tok_clean, float))) * self.P.tok_s(1800.0) / self.P.tok_s(f_now)
+        return 1000.0 / self.P.tok_s(f_now)
 
     def threshold(self):
         """The frame time above which a clean token no longer fits the period: fixed threshold_ms if given, else period - the clean token estimate (never below 0)."""
@@ -136,7 +138,8 @@ class SwitchingPIController:
         for x in np.asarray(obs.lat_ms, float).ravel():
             self.frames.append(float(x))
         if obs.tok_ms is not None and len(obs.tok_ms) and (self.mode == "aligned" or len(obs.lat_ms) == 0):
-            self.tok_clean.extend(float(x) for x in np.asarray(obs.tok_ms, float).ravel())
+            k = self.P.tok_s(self.P.clamp_clock(obs.clock_mhz)) / self.P.tok_s(1800.0)         # normalise to 1800 MHz: duration x tok_s(observed clock) / tok_s(1800)
+            self.tok_clean.extend(float(x) * k for x in np.asarray(obs.tok_ms, float).ravel())
         cur = self.al if self.mode == "aligned" else self.un
         a = cur.act(obs)
         if len(obs.lat_ms) and len(self.frames) >= self.window_frames and self.tick - self.tick_of_switch >= self.dwell_ticks:

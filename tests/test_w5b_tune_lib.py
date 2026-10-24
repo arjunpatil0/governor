@@ -149,10 +149,11 @@ def test_batches_are_shuffled_with_a_fixed_seed_so_a_resumed_plan_repeats_its_or
     assert a == b
 
 
-def test_diag_specs_are_a_static_reference_the_same_action_through_the_governor_with_and_without_energy_reads_and_c_b():
+def test_diag_specs_are_five_arms_static_governor_with_reads_governor_without_reads_c_b_with_reads_and_c_b_on_the_sampled_power_source():
     d = tl.diag_specs()
-    assert [s["id"] for s in d] == ["diag_static", "diag_gov_static", "diag_gov_static_noenergy", "diag_cb"]
-    assert d[0]["kind"] == "static" and d[1]["kind"] == "gov_static" and d[2]["kind"] == "gov_static" and d[2].get("gov_no_energy") is True and d[3]["kind"] == "cB"
+    assert [s["id"] for s in d] == ["diag_static", "diag_gov_static", "diag_gov_static_noenergy", "diag_cb", "diag_cb_sampled"]
+    assert d[0]["kind"] == "static" and d[1]["kind"] == "gov_static" and d[2].get("gov_no_energy") is True and d[3]["kind"] == "cB" and d[4]["kind"] == "cB"
+    assert d[1].get("power_source") == "energy" and d[3].get("power_source") == "energy" and d[4].get("power_source") == "sampled"
     assert d[0]["setting"] == d[1]["setting"] == d[2]["setting"]
 
 

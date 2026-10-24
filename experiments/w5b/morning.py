@@ -24,8 +24,8 @@ def check(out):
         if (m.get("temp_after_c") or 0) >= 83:
             flags.append(f"{cid}: temp_after_c {m['temp_after_c']}")
         ps = m.get("power_sampled_w")
-        if ps is not None and ps == ps and m.get("power_w") == m.get("power_w") and m.get("power_w") is not None and abs(m["power_w"] - ps) / max(ps, 1e-9) > 0.15:
-            flags.append(f"{cid}: energy-counter power {m['power_w']:.1f} W vs sampled {ps:.1f} W (differ by more than 15%)")
+        if ps is not None and ps == ps and m.get("power_w") == m.get("power_w") and m.get("power_w") is not None and abs(m["power_w"] - ps) / max(ps, 1e-9) > 0.15 and not cid.startswith("diag_"):
+            problems.append(f"{cid}: energy-counter power {m['power_w']:.1f} W vs sampled {ps:.1f} W (differ by more than 15%: the cell's power is not credible)")
         r0 = m.get("c0m_over_nominal")
         if r0 is not None and not (0.85 <= r0 <= 1.15):
             flags.append(f"{cid}: c0m at a locked 1800 MHz is {r0:.2f} x nominal c0 (expected about 1.0: the FMA calibration may be off)")
@@ -56,12 +56,19 @@ def check(out):
     return dict(cells=n, clamp_events=clamp[0], cells_with_clamp=clamp[1], problems=problems, flags=flags, decisions=dec, meta={k: meta.get(k) for k in ("armoury_mode", "battery_charge_mode", "boot_utc", "uptime_s", "sitting_start_utc", "chrome_running", "exe_sha256", "git_head")})
 
 
-DIAG_IDS = ("diag_static", "diag_gov_static", "diag_gov_static_noenergy", "diag_cb")
+DIAG_IDS = ("diag_static", "diag_gov_static", "diag_gov_static_noenergy", "diag_cb", "diag_cb_sampled")
+PHANTOM_J_PER_READ = 4.2          # journal 0005: the NVML energy counter adds about 4.2 J per extra read
+TOL_REL = 0.15                    # agreement between two measurements of the same power
+TOL_PRED_REL, TOL_PRED_ABS_W = 0.35, 5.0     # observed inflation vs 4.2 J x reads/s
 
 
 def diag_gate(out):
-    """Gate for block T3b (plan addendum O-3 section 2): the same action through the Governor loop must draw within 15% of the static path, and in every diagnostic cell the energy-counter power must be
-    within 15% of the independently sampled power. ok False with the reasons otherwise (also when a diagnostic cell is missing)."""
+    """Gate for block T3b, pre-registered in plan addendum O-4 (docs/W5B_ADDENDUM_O4.md).
+    PREDICTION (phantom energy): on the arms whose Governor loop reads the energy counter (diag_gov_static, diag_cb) the counter power exceeds the independent sampled mean by 4.2 J x (reads/s) within
+    max(35%, 5 W), and exceeds the static arm by the same amount (diag_gov_static); the no-reads arm matches the static arm within 15%; the sampled mean is not inflated (all arms within 15% of the static arm's
+    sampled mean, c'B arms excepted: a controller may change the load); the fix arm (diag_cb_sampled) has counter power within 15% of its sampled mean.
+    VERDICTS: CONFIRMED_PHANTOM (prediction holds) -> power_source 'sampled'; NO_ANOMALY (every arm's counter agrees with its sampled mean and the Governor arm matches the static arm) -> 'energy';
+    anything else -> STOP (a new problem). Writes power_source.json next to the cells and returns the printable lines."""
     out = Path(out)
     reasons, p = [], {}
     for cid in DIAG_IDS:
@@ -69,16 +76,52 @@ def diag_gate(out):
         if not f.exists():
             reasons.append(f"{cid}: cell missing")
             continue
-        m = json.loads(f.read_text(encoding="utf-8"))["metrics"]
-        p[cid] = m
-        w, s = m.get("power_w"), m.get("power_sampled_w")
-        if w is None or s is None or w != w or s != s or abs(w - s) / max(s, 1e-9) > 0.15:
-            reasons.append(f"{cid}: energy-counter power {w} W vs sampled {s} W (differ by more than 15%, or missing)")
-    if "diag_static" in p and "diag_gov_static" in p:
-        a, b = p["diag_static"]["power_w"], p["diag_gov_static"]["power_w"]
-        if abs(b - a) / max(a, 1e-9) > 0.15:
-            reasons.append(f"diag_gov_static: {b:.1f} W through the Governor loop vs {a:.1f} W through the static path (differ by more than 15%)")
-    return dict(ok=not reasons, reasons=reasons, power={k: (v.get("power_w"), v.get("power_sampled_w"), v.get("tok_s")) for k, v in p.items()})
+        p[cid] = json.loads(f.read_text(encoding="utf-8"))["metrics"]
+    res = dict(ok=False, verdict="STOP", power_source=None, reasons=reasons, lines=[], predicted_inflation_w=None, observed_inflation_w=None)
+    for cid, m in p.items():
+        for key in ("power_w", "power_sampled_w"):
+            v = m.get(key)
+            if v is None or v != v:
+                reasons.append(f"{cid}: {key} missing (a simulator cell, or the sampler did not run)")
+    if reasons:
+        return res
+    E = {k: float(v["power_w"]) for k, v in p.items()}
+    M = {k: float(v["power_sampled_w"]) for k, v in p.items()}
+    R = {k: float(v.get("gov_reads_per_s") or 0.0) for k, v in p.items()}
+    pred = PHANTOM_J_PER_READ * R["diag_gov_static"]
+    obs = E["diag_gov_static"] - E["diag_static"]
+    res.update(predicted_inflation_w=pred, observed_inflation_w=obs)
+    for k in DIAG_IDS:
+        res["lines"].append(f"{k}: energy-counter {E[k]:.1f} W | sampled mean {M[k]:.1f} W | counter - sampled {E[k] - M[k]:+.1f} W | governor energy reads/s {R[k]:.1f} | {p[k].get('tok_s', float('nan')):.1f} tok/s")
+    tol = lambda x: max(TOL_PRED_REL * x, TOL_PRED_ABS_W)       # noqa: E731
+    pred_c = PHANTOM_J_PER_READ * R["diag_cb"]
+    res["lines"].append(f"predicted phantom inflation 4.2 J x {R['diag_gov_static']:.1f} reads/s = {pred:.1f} W; observed (governor arm - static arm) = {obs:+.1f} W; observed (counter - sampled, governor arm) = {E['diag_gov_static'] - M['diag_gov_static']:+.1f} W; "
+                        f"c'B arm: predicted {pred_c:.1f} W, observed (counter - sampled) {E['diag_cb'] - M['diag_cb']:+.1f} W")
+    agree = {k: abs(E[k] - M[k]) / max(M[k], 1e-9) <= TOL_REL for k in DIAG_IDS}
+    gov_matches_static = abs(E["diag_gov_static"] - E["diag_static"]) / max(E["diag_static"], 1e-9) <= TOL_REL
+    if all(agree.values()) and gov_matches_static:
+        res.update(ok=True, verdict="NO_ANOMALY", power_source="energy")
+    else:
+        bad = []
+        if not agree["diag_static"]:
+            bad.append("diag_static: the static arm's counter and sampled power disagree (no reference)")
+        if abs(E["diag_gov_static_noenergy"] - E["diag_static"]) / max(E["diag_static"], 1e-9) > TOL_REL:
+            bad.append("diag_gov_static_noenergy: the Governor arm WITHOUT energy reads is also off the static arm: not the phantom energy, a new problem")
+        for k in ("diag_gov_static", "diag_gov_static_noenergy"):
+            if abs(M[k] - M["diag_static"]) / max(M["diag_static"], 1e-9) > TOL_REL:
+                bad.append(f"{k}: the SAMPLED power is inflated against the static arm: the load is real or the sampled source is also affected")
+        if abs((E["diag_gov_static"] - M["diag_gov_static"]) - pred) > tol(pred) or abs(obs - pred) > tol(pred):
+            bad.append(f"diag_gov_static: inflation {obs:+.1f} W (counter - static) / {E['diag_gov_static'] - M['diag_gov_static']:+.1f} W (counter - sampled) does not match the prediction {pred:.1f} W")
+        if abs((E["diag_cb"] - M["diag_cb"]) - pred_c) > tol(pred_c):
+            bad.append(f"diag_cb: inflation {E['diag_cb'] - M['diag_cb']:+.1f} W does not match the prediction {pred_c:.1f} W")
+        if not agree["diag_cb_sampled"]:
+            bad.append("diag_cb_sampled: the proposed fix arm's counter power still disagrees with its sampled power")
+        if bad:
+            res["reasons"] = bad
+        else:
+            res.update(ok=True, verdict="CONFIRMED_PHANTOM", power_source="sampled")
+    (out / "power_source.json").write_text(json.dumps(dict(power_source=res["power_source"], verdict=res["verdict"], predicted_inflation_w=pred, observed_inflation_w=obs, reasons=res["reasons"]), indent=1), encoding="utf-8")
+    return res
 
 
 def main():
@@ -88,9 +131,9 @@ def main():
     a = ap.parse_args()
     if a.gate == "diag":
         g = diag_gate(a.out)
-        for k, v in g["power"].items():
-            print(f"{k}: energy-counter {v[0]} W, sampled {v[1]} W, {v[2]} tok/s")
-        print("DIAG GATE:", "PASS - T3b may start" if g["ok"] else "FAIL - T3b must NOT start")
+        for line in g["lines"]:
+            print(line)
+        print("DIAG GATE:", g["verdict"], "-", ("T3b runs with the power source '%s'" % g["power_source"]) if g["ok"] else "T3b must NOT start")
         for x in g["reasons"]:
             print("  reason:", x)
         raise SystemExit(0 if g["ok"] else 1)

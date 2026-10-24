@@ -147,14 +147,15 @@ def trial_specs():
 
 
 def diag_specs():
-    """Diagnostic A/B (not data, not the plan): the governed cells of the 2026-10-23 sitting reported 63-106 W at a few tok/s and 59-63 C. The same fixed action (the g'B setting 1800_a_g0_d1, 3B, S1) is run
-    through the static path, through the Governor loop, and through the Governor loop WITHOUT its 10 Hz NVML energy reads; c'B (3B, S1) is repeated. Each cell logs the energy-counter power and the
-    sampled power (independent)."""
+    """Diagnostic A/B (not data, not the plan; plan addendum O-4). Hypothesis: the Governor loop reads the NVML energy counter every tick (about 10 reads/s) and every extra read adds about 4.2 J of phantom
+    energy (journal 0005), i.e. about +42 W on the counter. Arms (same g'B action, 3B, S1, c0 = 7): the static path (energy read twice), the Governor loop WITH its energy reads, the Governor loop WITHOUT energy
+    reads, c'B with energy reads, and c'B on the sampled power source (the proposed fix). Each cell logs the energy-counter power, the independent sampled power and the Governor's read rate."""
     st = next(x for x in settings70() if x["sid"] == "1800_a_g0_d1")
     base = dict(workload="llama32_3b", scene="S1", c0=7, setting=st)
-    return [dict(base, id="diag_static", kind="static"), dict(base, id="diag_gov_static", kind="gov_static", budget_w=60.0),
+    cb = dict(kind="cB", workload="llama32_3b", scene="S1", c0=7, params=dict(target=0.5, ki=0.15), budget_w=60.0)
+    return [dict(base, id="diag_static", kind="static"), dict(base, id="diag_gov_static", kind="gov_static", budget_w=60.0, power_source="energy"),
             dict(base, id="diag_gov_static_noenergy", kind="gov_static", budget_w=60.0, gov_no_energy=True),
-            dict(id="diag_cb", kind="cB", workload="llama32_3b", scene="S1", c0=7, params=dict(target=0.5, ki=0.15), budget_w=60.0)]
+            dict(cb, id="diag_cb", power_source="energy"), dict(cb, id="diag_cb_sampled", power_source="sampled")]
 
 
 def _choose_cb(results, prefix):
