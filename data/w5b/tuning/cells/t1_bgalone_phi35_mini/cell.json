@@ -1,0 +1,27 @@
+{
+ "id": "t1_bgalone_phi35_mini",
+ "spec": {
+  "id": "t1_bgalone_phi35_mini",
+  "kind": "bg_alone",
+  "workload": "phi35_mini",
+  "scene": null,
+  "c0": null
+ },
+ "metrics": {
+  "miss": 0.0,
+  "tok_s": 72.23333333333333,
+  "power_w": 95.20733333333332,
+  "tok_ms_p50": 14.02139999999008,
+  "bg_tokens": 2167,
+  "ring_dropped": 0,
+  "exec_mode": "EXEC_MODE cuda offloaded=33/33 n_layer=32 model_size=2392493952 governed=1",
+  "driver_tail": [
+   "EXEC_MODE cuda offloaded=33/33 n_layer=32 model_size=2392493952 governed=1",
+   "DONE tokens=2595 t_first=324.489828 t_last=359.820958 ctx_end=3107"
+  ],
+  "executor": "hw"
+ },
+ "executor": "hw",
+ "wall_s": 80.08516550064087,
+ "utc": "2026-10-23T20:17:08.906265+00:00"
+}

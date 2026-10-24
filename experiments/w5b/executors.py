@@ -37,6 +37,13 @@ class AbortSitting(SystemExit):
     """A yaml abort rule fired (lock not released, temperature, thermal/power-brake event reasons): the sitting stops, finished cells are kept."""
 
 
+def window_mean(t, v, t_a, t_b):
+    """Mean of the samples v taken at times t inside [t_a, t_b); nan if there are none (the second, independent power measure next to the energy counter)."""
+    t, v = np.asarray(t, float), np.asarray(v, float)
+    m = (t >= t_a) & (t < t_b)
+    return float(np.mean(v[m])) if m.any() else float("nan")
+
+
 def fg_spec(scene, c0):
     base = build(scene or "S0").fg
     scale = float(c0) / C0_MS
@@ -54,6 +61,9 @@ def build_controller(P, spec):
         return "static", _static_action(P, spec["setting"])
     if k == "arm_a":
         return "static", Action(clock=P.UNLOCKED_MHZ, pacing="unaligned", duty=1.0, guard_ms=0.5)
+    if k == "gov_static":                                   # diagnostic: the same fixed action, but run through the Governor loop (A/B against the static path)
+        from controllers.static import StaticController
+        return "ctl", StaticController(_static_action(P, spec["setting"]))
     if k == "cB":
         p = spec["params"]
         return "ctl", SwitchingPIController(P, power_budget_w=float(spec["budget_w"]), target=p["target"], ki=p["ki"], guard0=0.5, gmin=0.3)
@@ -300,7 +310,7 @@ class HwExecutor:
                         tick += 0.1
                         time.sleep(max(0.0, tick - time.perf_counter()))
                         try:
-                            e = smp.nv.nvmlDeviceGetTotalEnergyConsumption(smp.h) / 1000.0
+                            e = 0.0 if spec.get("gov_no_energy") else smp.nv.nvmlDeviceGetTotalEnergyConsumption(smp.h) / 1000.0
                             a = gov.step(time.perf_counter() * 1000.0, e, smp.sm[-1])
                             glog.append((time.perf_counter(), a.clock, a.duty, a.guard_ms, smp.sm[-1]))
                         except Exception as ex:                  # noqa: BLE001
@@ -328,7 +338,7 @@ class HwExecutor:
             np.savez_compressed(cdir / "frames.npz", t_sched=[r["t_sched"] for r in recs], lat_ms=[r["lat_ms"] for r in recs], tok_end=tk[:, 0] if len(tk) else [], tok_ms=tk[:, 1] if len(tk) else [], t0=t0,
                                 gov_log=np.array(glog, float).reshape(-1, 5))
             changes = int(sum(1 for a, b in zip(glog, glog[1:]) if a[1] != b[1]))
-            out = dict(miss=float(miss), miss_completed=res["miss_frac"], tok_s=res["bg_tok_s"], power_w=res["power_w"], fg_p50_ms=res["fg_p50_ms"], fg_p99_ms=res["fg_p99_ms"], frames=res["frames"], abandoned=n_ab,
+            out = dict(miss=float(miss), miss_completed=res["miss_frac"], tok_s=res["bg_tok_s"], power_w=res["power_w"], power_sampled_w=window_mean(np.array(smp.t), np.array(smp.pw), t0 + WARM_S, t0 + WARM_S + MEASURE_S), fg_p50_ms=res["fg_p50_ms"], fg_p99_ms=res["fg_p99_ms"], frames=res["frames"], abandoned=n_ab,
                        bg_tokens=res["bg_tokens"], tok_ms_p50=res["tok_ms_p50"], sm_mhz_median=float(np.median(sm[win])) if win.any() else float("nan"), temp_before_c=temp_before, temp_after_c=self.temp(),
                        clock_changes=changes, clamp_events=0 if gov is None else len(gov.clamped), clamp_examples=[] if gov is None else gov.clamped[:3], final_pacing_mode=getattr(obj, 'mode', None) if gov is not None else None, clock_ok=bool(ok_clock), ring_dropped=int(dropped), thermal_reason_bits=int(acc[0]), executor="hw")
         finally:

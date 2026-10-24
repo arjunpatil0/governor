@@ -54,3 +54,21 @@ def test_sim_executor_returns_the_metrics_every_cell_kind_needs(tmp_path):
 def test_hardware_executor_source_never_leaves_a_clock_locked_and_checks_the_abort_rules():
     src = (ROOT / "experiments" / "w5b" / "executors.py").read_text(encoding="utf-8")
     assert "finally" in src and "cl.reset()" in src and "HwThermalSlowdown" in src and "HwPowerBrake" in src and "85" in src
+
+
+# ---------------------------------------------------------------- governed-cell power anomaly (sitting 2026-10-23/24): second, independent power measure and a diagnostic A/B
+def test_window_mean_averages_the_samples_inside_the_window_only():
+    import numpy as np
+    t = np.array([0.0, 1.0, 2.0, 3.0, 4.0]); v = np.array([100.0, 10.0, 20.0, 30.0, 100.0])
+    assert ex.window_mean(t, v, 1.0, 4.0) == 20.0 and np.isnan(ex.window_mean(t, v, 10.0, 11.0))
+
+
+def test_a_static_action_can_run_through_the_governor_loop_for_the_ab_diagnostic():
+    k, c = ex.build_controller(P, spec("gov_static", setting=dict(sid="1800_a_g0_d1", clock=1800, mode="aligned", guard_ms=0.0, duty=1.0)))
+    a = c.reset(dict(params=P, period_ms=1000 / 60, deadline_ms=1000 / 60))
+    assert k == "ctl" and a.clock == 1800.0 and a.pacing == "aligned" and a.duty == 1.0 and c.act(None) == a
+
+
+def test_the_hardware_executor_records_the_sampled_power_next_to_the_energy_counter_power():
+    src = (ROOT / "experiments" / "w5b" / "executors.py").read_text(encoding="utf-8")
+    assert "power_sampled_w" in src and "gov_no_energy" in src

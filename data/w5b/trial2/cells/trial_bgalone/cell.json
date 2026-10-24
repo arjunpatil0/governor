@@ -1,0 +1,26 @@
+{
+ "id": "trial_bgalone",
+ "spec": {
+  "id": "trial_bgalone",
+  "kind": "bg_alone",
+  "workload": "llama32_3b",
+  "scene": null,
+  "c0": null
+ },
+ "metrics": {
+  "miss": 0.0,
+  "tok_s": 96.36666666666666,
+  "power_w": 93.1287,
+  "tok_ms_p50": 10.278700000526442,
+  "bg_tokens": 2891,
+  "ring_dropped": 0,
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "driver_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=3433 t_first=4959.374644 t_last=4994.703237 ctx_end=3945"
+  ],
+  "executor": "hw"
+ },
+ "executor": "hw",
+ "wall_s": 51.16984987258911
+}

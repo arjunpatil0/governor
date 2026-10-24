@@ -35,3 +35,32 @@ def test_incidents_flags_missing_decisions_and_manifest_mismatch_are_reported(tm
     assert "incident" in p and "decisions.json" in p and "manifest" in p
     f = " | ".join(r["flags"])
     assert "thermal" in f and "clock_ok" in f and "abandoned" in f and "ring_dropped" in f and "temp" in f
+
+
+def test_energy_and_sampled_power_that_disagree_are_flagged(tmp_path):
+    write_cell(tmp_path, "a", power_w=90.0, power_sampled_w=45.0)
+    write_cell(tmp_path, "b", power_w=50.0, power_sampled_w=48.0)
+    f = " | ".join(check(tmp_path)["flags"])
+    assert "a: energy-counter power 90.0 W vs sampled 45.0 W" in f and "b:" not in f
+
+
+# ---------------------------------------------------------------- diagnostic gate for block T3b (plan addendum O-3 section 2)
+from morning import diag_gate  # noqa: E402
+
+
+def diag_cells(d, static=45.0, gov=45.0, noenergy=45.0, cb=45.0, sampled=45.0, cb_sampled=45.0):
+    for cid, p, s in (("diag_static", static, sampled), ("diag_gov_static", gov, sampled), ("diag_gov_static_noenergy", noenergy, sampled), ("diag_cb", cb, cb_sampled)):
+        write_cell(d, cid, power_w=p, power_sampled_w=s)
+
+
+def test_the_diag_gate_passes_when_the_governed_path_matches_the_static_path_and_both_power_measures_agree(tmp_path):
+    diag_cells(tmp_path, static=45.0, gov=48.0, noenergy=46.0, cb=44.0)
+    g = diag_gate(tmp_path)
+    assert g["ok"] is True and g["reasons"] == []
+
+
+def test_the_diag_gate_fails_on_an_inflated_governed_path_or_a_disagreeing_sampled_power(tmp_path):
+    diag_cells(tmp_path, static=45.0, gov=85.0, noenergy=84.0, cb=90.0, sampled=45.0, cb_sampled=45.0)
+    g = diag_gate(tmp_path)
+    assert g["ok"] is False and any("diag_gov_static" in r for r in g["reasons"]) and any("diag_cb" in r for r in g["reasons"])
+    assert diag_gate(tmp_path / "nowhere")["ok"] is False

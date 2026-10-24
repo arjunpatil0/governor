@@ -1,19 +1,18 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-23 - Phase: W4-5. Before trial2: c'B now switches pacing mode inside a cell (non-learned rule), c0m redefined at a locked 1800 MHz with the SM clock logged, addendum O-2 written. Waiting for YOU to restart and run helper -> trial2 -> sitting (docs/W5B_TUNING_SITTING.md).
+Updated 2026-10-24 - Phase: W4-5. T1-T3 sitting verified (137 cells, c0 = 7); FINDING: all governed c'B cells report implausible power (63-106 W at 0-10 tok/s, 59-63 C) -> c'B constants VOID; c'B now has a token-aware threshold; T3b is prepared but gated on a diagnostic. Waiting for YOU: restart -> helper -> the diag+gate+T3b block (docs/W5B_T3B_SITTING.md).
 
-## Just did (journal 0052)
-- SwitchingPIController (c'B): unaligned when the recent measured frame time > 6.57 + 0.3 ms, aligned below 6.57 - 0.3 ms, dwell 5 s; 8 tests. d'B keeps its prediction-based switch.
-- c0m = fg alone at a LOCKED 1800 MHz (+ c0m_unlocked, SM clocks of both); no rule reads c0m. The SM clock was NOT logged in trial_fgalone, so the boost-drop hypothesis is only consistent with the files (locked 1500 MHz frame 8.50 vs predicted 8.41 ms; smoke 3's 0.745 = 1800/2460), not confirmed; trial2 logs it.
-- Gate / c0 search re-read: unchanged. At c0 = 7 aligned fits a token only above ~1920 MHz (only the unlocked static), so trial_static's 0 tok/s at 1500 MHz was expected.
+## Verified (journal 0053, addendum O-3)
+- 0 incidents, c0 = 7, background-alone 1B 234 / 3B 96.5 / Phi 72.2 tok/s, c0m 7.05 ms locked 1800 and 6.71 ms unlocked at SM 1890 (no-boost confirmed). g'B 60 W = 1800_a_g0_d1 (feasible in 3 of 6 cells), 35 W = 1500_a_g0_d1 (1 of 6): registered fallback. Ctrl+C fix works.
 
-## Your sequence
-RESTART -> Admin helper -> powercfg -> trial2 (paste six TRIAL lines + the fgalone c0m / sm_ lines) -> overnight sitting -> morning checks. Literal commands: docs/W5B_TUNING_SITTING.md.
+## Just did
+- Token-aware c'B threshold (period - clean token; 6.57 ms for the 3B), test-first, addendum O-3. Second independent power measure in every cell + morning flag; --diag A/B + automatic gate; T3b (d'B margins + c'B re-tune, 67 cells) built.
 
 ## Waiting for
-Reviewer: the fixed 6.57 ms threshold for c'B is wrong for short-token workloads (1B); token-aware alternative offered in O-2.
+1. You: the restart -> helper -> diag -> (gate) -> T3b block. If the gate FAILS nothing else runs: paste the output.
+2. Reviewer / you: d'B-HGB design points (addendum O-3 section 5): margin as required P(feasible) tau = 0.8 + 0.5 m; online calibration; slow loop. Not built.
 
 ## Risks / not verified
-- Governed c'B and d'B cells never completed on hardware; d'B/c'B switching validated only in the frozen simulator and on synthetic observations; unaligned instance uses the 3B L table; cell time and size are estimates (127 cells in the dry run).
+- Cause of the governed-cell power anomaly unknown (energy counter inflated vs real load); governed d'B/c'B behaviour on hardware unverified; c'B clock flip-flops at cell start; d'B-HGB does not exist (dropped if not ready before block 4).
 
 ## Notes
-- Do not run pytest or rebuild before the sitting; tree committed; exe hash bb875fbc unchanged.
+- Do not run pytest or rebuild before the run; exe hash bb875fbc unchanged.

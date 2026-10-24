@@ -90,14 +90,15 @@ class PIController:
 
 class SwitchingPIController:
     """(c'B) The PI controller with a within-cell pacing-mode switch by a simple NON-learned rule (reviewer + Arjun 2026-10-23, fairness against d'B, plan addendum O-2): unaligned when the recent
-    measured frame time exceeds threshold_ms + hyst_ms (6.57 + 0.3 ms: a clean 3B token of 10.1 ms no longer fits the 16.67 ms period), aligned when it falls below threshold_ms - hyst_ms, and never
+    measured frame time exceeds threshold + hyst_ms, aligned when it falls below threshold - hyst_ms (threshold = period - the clean token duration: 6.57 ms for the 3B, 12.2 ms for the 1B, never for the 8B; plan addendum O-3), and never
     sooner than dwell_ticks (50 ticks = 5 s) after the last switch. The frame time is the median of the last window_frames (30) frame latencies while aligned (the frames run alone) and their 10th
     percentile while unaligned (the low quantile is the frame alone; contended frames are longer), the same estimators PIController uses. Two PIController instances share one clock; only the
     executed one sees observations; the incoming one keeps its last duty / guard and gets fresh latency windows. Not learned: no model, no prediction."""
     name = "c'"
 
-    def __init__(self, P, power_budget_w=None, threshold_ms=6.57, hyst_ms=0.3, dwell_ticks=50, window_frames=30, **pi_kw):
-        self.P, self.threshold_ms, self.hyst_ms, self.dwell_ticks, self.window_frames = P, threshold_ms, hyst_ms, int(dwell_ticks), int(window_frames)
+    def __init__(self, P, power_budget_w=None, threshold_ms=None, hyst_ms=0.3, dwell_ticks=50, window_frames=30, token_window=20, **pi_kw):
+        """threshold_ms None (default) = TOKEN-AWARE (plan addendum O-3): period - the clean token duration (6.57 ms for the 3B); a number fixes it (tests, ablations)."""
+        self.P, self.threshold_ms, self.hyst_ms, self.dwell_ticks, self.window_frames, self.token_window = P, threshold_ms, hyst_ms, int(dwell_ticks), int(window_frames), int(token_window)
         self.al = PIController(P, "aligned", power_budget_w=power_budget_w, **pi_kw)
         self.un = PIController(P, "unaligned", **pi_kw)
 
@@ -106,7 +107,19 @@ class SwitchingPIController:
         a = self.al.reset(ctx)
         self.mode, self.tick, self.tick_of_switch = "aligned", 0, 0
         self.frames = deque(maxlen=self.window_frames)
+        self.tok_clean = deque(maxlen=self.token_window)       # token durations seen while aligned (tokens run in the slack, alone) or before any frame: the clean estimate
+        self.period = float(ctx["period_ms"])
         return a
+
+    def clean_token_ms(self):
+        """Median of the recent clean token durations; before any token the L-table prior at the current clock. Dilated tokens of the unaligned mode never enter (they are longer by overlap)."""
+        if len(self.tok_clean):
+            return float(np.median(np.fromiter(self.tok_clean, float)))
+        return 1000.0 / self.P.tok_s(self.P.clamp_clock(self.clock))
+
+    def threshold(self):
+        """The frame time above which a clean token no longer fits the period: fixed threshold_ms if given, else period - the clean token estimate (never below 0)."""
+        return float(self.threshold_ms) if self.threshold_ms is not None else max(0.0, self.period - self.clean_token_ms())
 
     @property
     def clock(self):
@@ -122,15 +135,18 @@ class SwitchingPIController:
         self.tick += 1
         for x in np.asarray(obs.lat_ms, float).ravel():
             self.frames.append(float(x))
+        if obs.tok_ms is not None and len(obs.tok_ms) and (self.mode == "aligned" or len(obs.lat_ms) == 0):
+            self.tok_clean.extend(float(x) for x in np.asarray(obs.tok_ms, float).ravel())
         cur = self.al if self.mode == "aligned" else self.un
         a = cur.act(obs)
         if len(obs.lat_ms) and len(self.frames) >= self.window_frames and self.tick - self.tick_of_switch >= self.dwell_ticks:
             lat = np.fromiter(self.frames, float)
             est = float(np.median(lat)) if self.mode == "aligned" else float(np.percentile(lat, 10))
             to = None
-            if self.mode == "aligned" and est > self.threshold_ms + self.hyst_ms:
+            thr = self.threshold()
+            if self.mode == "aligned" and est > thr + self.hyst_ms:
                 to = "unaligned"
-            elif self.mode == "unaligned" and est < self.threshold_ms - self.hyst_ms:
+            elif self.mode == "unaligned" and est < thr - self.hyst_ms:
                 to = "aligned"
             if to is not None:
                 self.mode, self.tick_of_switch = to, self.tick

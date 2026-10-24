@@ -108,3 +108,48 @@ def test_runs_in_the_simulator_without_error_and_makes_tokens(cost):
     sc = dataclasses.replace(sc, fg=dataclasses.replace(sc.fg, cost_ms=lambda t, b=base, c=cost: b(t) * c / 7.0))
     s = summarise(Plant(P, sc, seed=1).run(SwitchingPIController(P, power_budget_w=60.0)))
     assert s["bg_tok_s"] > 0.5 and s["miss_frac"] <= 0.2
+
+
+# ---------------------------------------------------------------- token-aware threshold (reviewer 2026-10-24): threshold = period - the CLEAN token duration, same hysteresis and dwell
+def obs_tok(t, lat_ms, tok_ms, n=6, clock=1800.0):
+    return Obs(t_ms=float(t), lat_ms=np.full(n, float(lat_ms)) if n else np.empty(0), n_missed=0, n_arrived=n, tokens=2, power_w=50.0, clock_mhz=clock, period_ms=PERIOD, deadline_ms=PERIOD,
+               tok_ms=np.array([tok_ms, tok_ms]), overrun_ms=None)
+
+
+def run_tok(c, lat, tok, ticks, t0=0):
+    for i in range(ticks):
+        c.act(obs_tok(t0 + 100 * i, lat, tok))
+
+
+def test_threshold_equals_6_57_ms_for_the_3b_token_and_the_prior_is_used_without_tokens():
+    c = make()
+    run_tok(c, 4.0, 10.1, 5)
+    assert abs(c.threshold() - (PERIOD - 10.1)) < 1e-6
+    c2 = make()
+    assert abs(c2.threshold() - (PERIOD - 1000.0 / P.tok_s(P.UNLOCKED_MHZ))) < 1e-6                 # no token seen yet: the L-table prior
+
+
+def test_a_short_token_workload_keeps_aligned_pacing_at_frames_that_the_fixed_rule_would_reject():
+    c = make()
+    run_tok(c, 8.5, 4.5, 200)                                  # 1B: token 4.5 ms -> threshold 12.2 ms: an 8.5 ms frame still fits a token
+    assert c.mode == "aligned" and abs(c.threshold() - (PERIOD - 4.5)) < 1e-6
+
+
+def test_a_long_token_workload_is_unaligned_even_at_light_frames_from_the_startup_tokens():
+    c = make()
+    for i in range(3):                                         # startup tokens before any frame (the background runs alone): 8B-like 20 ms
+        c.act(Obs(t_ms=100.0 * i, lat_ms=np.empty(0), n_missed=0, n_arrived=0, tokens=2, power_w=60.0, clock_mhz=1800.0, period_ms=PERIOD, deadline_ms=PERIOD, tok_ms=np.array([20.0, 20.0]), overrun_ms=None))
+    assert c.threshold() <= 0.0
+    run_tok(c, 4.0, 20.0, 120, t0=1000)
+    assert c.mode == "unaligned"
+
+
+def test_dilated_tokens_seen_while_unaligned_do_not_move_the_clean_estimate():
+    c = make()
+    run_tok(c, 4.0, 10.1, 10)
+    run_tok(c, 9.0, 10.1, 120, t0=10000)                      # heavy frames: switch to unaligned
+    assert c.mode == "unaligned"
+    run_tok(c, 9.0, 25.0, 100, t0=30000)                      # unaligned tokens are dilated by overlap
+    assert abs(c.threshold() - (PERIOD - 10.1)) < 1e-6
+    run_tok(c, 4.0, 10.1, 200, t0=60000)                      # frames light again (aligned tokens are clean again): the mode returns to aligned and stays there
+    assert c.mode == "aligned" and abs(c.threshold() - (PERIOD - 10.1)) < 1e-6

@@ -1,0 +1,40 @@
+{
+ "id": "trial_arma",
+ "spec": {
+  "id": "trial_arma",
+  "kind": "arm_a",
+  "workload": "llama32_3b",
+  "scene": "S1",
+  "c0": 7
+ },
+ "metrics": {
+  "miss": 0.4272222222222222,
+  "miss_completed": 0.4272222222222222,
+  "tok_s": 46.85,
+  "power_w": 87.87885,
+  "fg_p50_ms": 13.232849999894825,
+  "fg_p99_ms": 404.30596800052626,
+  "frames": 3600,
+  "abandoned": 0,
+  "bg_tokens": 2811,
+  "tok_ms_p50": 19.663799999761977,
+  "sm_mhz_median": 2460.0,
+  "temp_before_c": 48,
+  "temp_after_c": 80,
+  "clock_changes": 0,
+  "clamp_events": 0,
+  "clamp_examples": [],
+  "final_pacing_mode": null,
+  "clock_ok": true,
+  "ring_dropped": 0,
+  "thermal_reason_bits": 0,
+  "executor": "hw",
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "driver_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=3087 t_first=5082.843429 t_last=5148.333639 ctx_end=3599"
+  ]
+ },
+ "executor": "hw",
+ "wall_s": 80.21483063697815
+}

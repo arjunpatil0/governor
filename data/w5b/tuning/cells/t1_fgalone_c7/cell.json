@@ -1,0 +1,52 @@
+{
+ "id": "t1_fgalone_c7",
+ "spec": {
+  "id": "t1_fgalone_c7",
+  "kind": "fg_alone",
+  "workload": "llama32_3b",
+  "scene": null,
+  "c0": 7
+ },
+ "metrics": {
+  "miss": 0.0,
+  "tok_s": 0.0,
+  "power_w": NaN,
+  "c0m": 7.049083333413364,
+  "c0m_unlocked": 6.707950000020446,
+  "fg_p99_ms": 7.624814000117795,
+  "sm_locked_median": 1800.0,
+  "sm_unlocked_median": 1890.0,
+  "sm_unlocked_p10_p90": [
+   1890.0,
+   1905.0
+  ],
+  "c0m_over_nominal": 1.0070119047733377,
+  "fg_alone_detail": {
+   "locked": {
+    "p50": 7.049083333413364,
+    "p99": 7.624814000117795,
+    "miss": 0.0,
+    "sm_median": 1800.0,
+    "sm_p10": 1800.0,
+    "sm_p90": 1800.0,
+    "abandoned": 0,
+    "clock_ok": true
+   },
+   "unlocked": {
+    "p50": 6.707950000020446,
+    "p99": 7.2025063333649095,
+    "miss": 0.0,
+    "sm_median": 1890.0,
+    "sm_p10": 1890.0,
+    "sm_p90": 1905.0,
+    "abandoned": 0,
+    "clock_ok": true
+   }
+  },
+  "abandoned": 0,
+  "executor": "hw"
+ },
+ "executor": "hw",
+ "wall_s": 67.16689801216125,
+ "utc": "2026-10-23T20:22:53.872378+00:00"
+}

@@ -1,0 +1,41 @@
+{
+ "id": "t1_arma_c7",
+ "spec": {
+  "id": "t1_arma_c7",
+  "kind": "arm_a",
+  "workload": "llama32_3b",
+  "scene": "S1",
+  "c0": 7
+ },
+ "metrics": {
+  "miss": 0.42694444444444446,
+  "miss_completed": 0.42694444444444446,
+  "tok_s": 46.63333333333333,
+  "power_w": 90.19296666666668,
+  "fg_p50_ms": 13.270483333371885,
+  "fg_p99_ms": 439.25031600004104,
+  "frames": 3600,
+  "abandoned": 0,
+  "bg_tokens": 2798,
+  "tok_ms_p50": 19.643000000030497,
+  "sm_mhz_median": 2460.0,
+  "temp_before_c": 55,
+  "temp_after_c": 83,
+  "clock_changes": 0,
+  "clamp_events": 0,
+  "clamp_examples": [],
+  "final_pacing_mode": null,
+  "clock_ok": true,
+  "ring_dropped": 0,
+  "thermal_reason_bits": 0,
+  "executor": "hw",
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "driver_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=3084 t_first=572.234057 t_last=637.844258 ctx_end=3596"
+  ]
+ },
+ "executor": "hw",
+ "wall_s": 112.1289849281311,
+ "utc": "2026-10-23T20:21:46.703215+00:00"
+}

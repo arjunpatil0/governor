@@ -53,14 +53,15 @@ def load_results(cells_dir):
     return res
 
 
-def run_sitting(out_dir, executor, limit=None, log=print, deadline=None):
+def run_sitting(out_dir, executor, limit=None, log=print, deadline=None, planner=None):
     out_dir = Path(out_dir)
     cells_dir = out_dir / "cells"
     cells_dir.mkdir(parents=True, exist_ok=True)
     results = load_results(cells_dir)
     fails, consecutive, ran = {}, 0, 0
+    planner = planner or tl.next_batch
     while True:
-        ans = tl.next_batch(results)
+        ans = planner(results)
         if not ans["batch"]:
             (out_dir / "decisions.json").write_text(json.dumps(dict(ans["decisions"], stop=ans["stop"], executor=executor.name, utc=datetime.now(timezone.utc).isoformat()), indent=1, default=str), encoding="utf-8")
             return dict(finished=True, stop=ans["stop"], cells_run=ran, decisions=ans["decisions"])
@@ -97,6 +98,9 @@ def main():
     ap.add_argument("--out", required=True); ap.add_argument("--armoury-mode", default=None)
     ap.add_argument("--executor", choices=["hw", "sim"], default="hw"); ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--max-uptime-s", type=float, default=7200.0); ap.add_argument("--max-hours", type=float, default=None, help="stop starting new cells after this many hours (resumable)")
+    ap.add_argument("--plan", choices=["t1t3", "t3b"], default="t1t3", help="t1t3 = the first sitting; t3b = d'B margin grid + c'B constants re-tuned (needs --c0)")
+    ap.add_argument("--c0", type=int, default=None, help="the chosen c0 (ms nominal) for --plan t3b")
+    ap.add_argument("--diag", action="store_true", help="diagnostic A/B of the governed-cell power anomaly (4 cells; not data, not the plan)")
     ap.add_argument("--trial", action="store_true", help="supervised trial: one cell of every executor path (not data, not the plan), results printed and stored under --out")
     a = ap.parse_args()
     out = Path(a.out)
@@ -133,20 +137,25 @@ def main():
 
 
 def _finish(out, ex, a):
-    if a.trial:
+    if a.trial or a.diag:
         try:
-            for spec in tl.trial_specs():
+            for spec in (tl.trial_specs() if a.trial else tl.diag_specs()):
                 ex.between_cells()
                 cdir = out / "cells" / spec["id"]; cdir.mkdir(parents=True, exist_ok=True)
                 t0 = time.time()
                 m = ex.run(spec, cdir)
                 (cdir / "cell.json").write_text(json.dumps(dict(id=spec["id"], spec=spec, metrics=m, executor=ex.name, wall_s=time.time() - t0), indent=1, default=str), encoding="utf-8")
-                print(f"TRIAL {spec['id']}: " + ", ".join(f"{k}={v:.3f}" if isinstance(v, float) else f"{k}={v}" for k, v in m.items() if k in ("miss", "tok_s", "power_w", "c0m", "clock_changes", "abandoned", "thermal_reason_bits", "sm_mhz_median", "exec_mode")) + f" ({time.time() - t0:.0f} s)", flush=True)
+                print(f"TRIAL {spec['id']}: " + ", ".join(f"{k}={v:.3f}" if isinstance(v, float) else f"{k}={v}" for k, v in m.items() if k in ("miss", "tok_s", "power_w", "power_sampled_w", "temp_after_c", "c0m", "clock_changes", "abandoned", "thermal_reason_bits", "sm_mhz_median", "exec_mode")) + f" ({time.time() - t0:.0f} s)", flush=True)
         finally:
             ex.close()
         return
     try:
-        s = run_sitting(out, ex, limit=a.limit, deadline=None if a.max_hours is None else time.time() + 3600.0 * a.max_hours)
+        planner = None
+        if a.plan == "t3b":
+            if a.c0 is None:
+                sys.exit("--plan t3b needs --c0 (the chosen c0 of the T1-T3 sitting)")
+            planner = lambda r, c0=a.c0: tl.next_batch_t3b(r, c0)       # noqa: E731
+        s = run_sitting(out, ex, limit=a.limit, deadline=None if a.max_hours is None else time.time() + 3600.0 * a.max_hours, planner=planner)
     finally:
         ex.close()
     sd = {str(p.relative_to(out)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.rglob("*")) if p.is_file() and p.name != "manifest.json"}

@@ -81,3 +81,10 @@ def test_a_resume_in_the_same_boot_is_recognised_and_a_reboot_is_not():
     boot = 1_700_000_000.0
     meta = dict(boot_utc=datetime.fromtimestamp(boot, timezone.utc).isoformat())
     assert tune.is_resume(meta, boot + 1.0) and not tune.is_resume(meta, boot + 3600.0) and not tune.is_resume({}, boot)
+
+
+def test_a_t3b_sitting_runs_through_the_planner_hook_and_writes_its_decisions(tmp_path):
+    import tune_lib as tl
+    s = tune.run_sitting(tmp_path, Stub(fake_world(good_c0=7)), log=lambda *a: None, planner=lambda r: tl.next_batch_t3b(r, 7))
+    d = json.loads((tmp_path / "decisions.json").read_text(encoding="utf-8"))
+    assert s["finished"] and d["c0"] == 7 and d["d_b"]["margin"] == 0.2 and d["c_b"]["rule_met"] is True

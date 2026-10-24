@@ -1,0 +1,139 @@
+{
+ "bg_alone_tok_s": {
+  "llama32_1b": 233.96666666666667,
+  "llama32_3b": 96.53333333333333,
+  "phi35_mini": 72.23333333333333
+ },
+ "c0_search": [
+  {
+   "c0": 7,
+   "c0m": 7.049083333413364,
+   "c0m_unlocked": 6.707950000020446,
+   "arm_a_miss": 0.42694444444444446,
+   "swept": true,
+   "feasible_statics_60": 5,
+   "feasible_statics_35": 1
+  }
+ ],
+ "c0": 7,
+ "c0m": 7.049083333413364,
+ "c0m_unlocked": 6.707950000020446,
+ "c0m_basis": "locked 1800 MHz p50 latency; c0m_unlocked = the same with the clock unlocked and no background (it can sit below the boost clock when the GPU idles between frames)",
+ "sm_median_fg_alone": {
+  "locked": 1800.0,
+  "unlocked": 1890.0
+ },
+ "stage1_top": {
+  "60": [
+   "unlocked_a_g0_d0.5",
+   "unlocked_a_g1_d1",
+   "1800_a_g0_d1",
+   "1800_a_g1_d1",
+   "1500_a_g0_d1"
+  ],
+  "35": [
+   "1500_a_g0_d1"
+  ]
+ },
+ "g_b": {
+  "60": {
+   "setting": {
+    "sid": "1800_a_g0_d1",
+    "clock": 1800,
+    "mode": "aligned",
+    "guard_ms": 0.0,
+    "duty": 1.0
+   },
+   "feasible_cells": 3,
+   "of": 6,
+   "feasible_in_all": false,
+   "mean_tok_s": 35.27777777777778
+  },
+  "35": {
+   "setting": {
+    "sid": "1500_a_g0_d1",
+    "clock": 1500,
+    "mode": "aligned",
+    "guard_ms": 0.0,
+    "duty": 1.0
+   },
+   "feasible_cells": 1,
+   "of": 6,
+   "feasible_in_all": false,
+   "mean_tok_s": 26.566666666666666
+  }
+ },
+ "c_b": {
+  "pacing": "auto (non-learned switch at 6.57 +- 0.3 ms measured frame time, dwell 5 s; plan addendum O-2)",
+  "params": {
+   "target": 0.5,
+   "ki": 0.15,
+   "guard0": 0.5,
+   "gmin": 0.3
+  },
+  "rule_met": false,
+  "mean_miss": 0.008472222222222221,
+  "mean_tok_s": 4.122222222222223,
+  "mean_power_w": 93.72919722222223,
+  "grid": [
+   {
+    "params": {
+     "target": 0.5,
+     "ki": 0.05
+    },
+    "miss": 0.01490740740740741,
+    "power_w": 91.65808888888888,
+    "tok_s": 4.591666666666667
+   },
+   {
+    "params": {
+     "target": 0.5,
+     "ki": 0.15
+    },
+    "miss": 0.008472222222222221,
+    "power_w": 93.72919722222223,
+    "tok_s": 4.122222222222223
+   },
+   {
+    "params": {
+     "target": 0.65,
+     "ki": 0.05
+    },
+    "miss": 0.015694444444444445,
+    "power_w": 86.26620000000001,
+    "tok_s": 5.097222222222222
+   },
+   {
+    "params": {
+     "target": 0.65,
+     "ki": 0.15
+    },
+    "miss": 0.012175925925925925,
+    "power_w": 90.74860000000001,
+    "tok_s": 4.7
+   },
+   {
+    "params": {
+     "target": 0.8,
+     "ki": 0.05
+    },
+    "miss": 0.017268518518518516,
+    "power_w": 93.17979722222223,
+    "tok_s": 5.033333333333334
+   },
+   {
+    "params": {
+     "target": 0.8,
+     "ki": 0.15
+    },
+    "miss": 0.017777777777777778,
+    "power_w": 87.669625,
+    "tok_s": 4.7444444444444445
+   }
+  ]
+ },
+ "d_b": "deferred to block T3b (addendum O-1: d'B action-space fix first)",
+ "stop": null,
+ "executor": "hw",
+ "utc": "2026-10-24T00:01:36.856382+00:00"
+}

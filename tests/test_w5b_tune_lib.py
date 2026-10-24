@@ -147,3 +147,51 @@ def test_batches_are_shuffled_with_a_fixed_seed_so_a_resumed_plan_repeats_its_or
     a = [c["id"] for c in tl.next_batch(res)["batch"]]
     b = [c["id"] for c in tl.next_batch(res)["batch"]]
     assert a == b
+
+
+def test_diag_specs_are_a_static_reference_the_same_action_through_the_governor_with_and_without_energy_reads_and_c_b():
+    d = tl.diag_specs()
+    assert [s["id"] for s in d] == ["diag_static", "diag_gov_static", "diag_gov_static_noenergy", "diag_cb"]
+    assert d[0]["kind"] == "static" and d[1]["kind"] == "gov_static" and d[2]["kind"] == "gov_static" and d[2].get("gov_no_energy") is True and d[3]["kind"] == "cB"
+    assert d[0]["setting"] == d[1]["setting"] == d[2]["setting"]
+
+
+# ---------------------------------------------------------------- block T3b (addendum O-3): d'B margin grid + the c'B constants re-tuned under the final controller, at the chosen c0
+def run_t3b(fake, c0=7, results=None, rounds=20):
+    results = {} if results is None else results
+    for _ in range(rounds):
+        ans = tl.next_batch_t3b(results, c0)
+        if not ans["batch"]:
+            return results, ans
+        for spec in ans["batch"]:
+            results[spec["id"]] = fake(spec)
+    raise AssertionError("T3b did not finish")
+
+
+def test_t3b_starts_with_one_discarded_cell_then_runs_30_d_b_and_36_c_b_cells():
+    ans = tl.next_batch_t3b({}, 7)
+    assert [c["id"] for c in ans["batch"]] == ["t3b_discard"] and ans["batch"][0]["discard"] is True
+    res, ans = run_t3b(fake_world(good_c0=7))
+    assert sum(1 for k in res if k.startswith("db_")) == 30 and sum(1 for k in res if k.startswith("cb2_")) == 36 and len(res) == 67
+    assert all(v["c0"] == 7 for k, v in ((s["id"], s) for s in tl.next_batch_t3b({"t3b_discard": metrics()}, 7)["batch"]))
+
+
+def test_t3b_applies_the_d_b_margin_rule_and_the_c_b_rule_and_flags_when_a_rule_is_not_met():
+    res, ans = run_t3b(fake_world(good_c0=7))
+    d = ans["decisions"]
+    assert d["d_b"]["margin"] == 0.2 and d["d_b"]["rule_met"] is True and d["c_b"]["params"]["ki"] == 0.15 and d["c_b"]["rule_met"] is True and d["c0"] == 7
+
+    def bad(spec):
+        r = fake_world(good_c0=7)(spec)
+        return metrics(miss=0.05, tok=10.0, power=55.0) if spec["kind"] in ("dB", "cB") else r
+    res, ans = run_t3b(bad)
+    assert ans["decisions"]["d_b"]["margin"] == 0.4 and ans["decisions"]["d_b"]["rule_met"] is False and ans["decisions"]["c_b"]["rule_met"] is False
+
+
+def test_t3b_is_resumable_and_deterministic():
+    fake = fake_world(good_c0=7)
+    res = {"t3b_discard": fake(tl.next_batch_t3b({}, 7)["batch"][0])}
+    a = [c["id"] for c in tl.next_batch_t3b(res, 7)["batch"]]
+    res[a[0]] = metrics()
+    b = [c["id"] for c in tl.next_batch_t3b(res, 7)["batch"]]
+    assert a[0] not in b and len(b) == len(a) - 1

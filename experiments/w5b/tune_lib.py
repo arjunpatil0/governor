@@ -144,3 +144,50 @@ def trial_specs():
             dict(id="trial_static", kind="static", workload="llama32_3b", scene="S1", c0=7, setting=st),
             dict(id="trial_cb", kind="cB", workload="llama32_3b", scene="S1", c0=7, params=dict(target=0.65, ki=0.15), budget_w=60.0),
             dict(id="trial_db", kind="dB", workload="llama32_3b", scene="S1", c0=7, params=dict(margin=0.2), budget_w=60.0)]
+
+
+def diag_specs():
+    """Diagnostic A/B (not data, not the plan): the governed cells of the 2026-10-23 sitting reported 63-106 W at a few tok/s and 59-63 C. The same fixed action (the g'B setting 1800_a_g0_d1, 3B, S1) is run
+    through the static path, through the Governor loop, and through the Governor loop WITHOUT its 10 Hz NVML energy reads; c'B (3B, S1) is repeated. Each cell logs the energy-counter power and the
+    sampled power (independent)."""
+    st = next(x for x in settings70() if x["sid"] == "1800_a_g0_d1")
+    base = dict(workload="llama32_3b", scene="S1", c0=7, setting=st)
+    return [dict(base, id="diag_static", kind="static"), dict(base, id="diag_gov_static", kind="gov_static", budget_w=60.0),
+            dict(base, id="diag_gov_static_noenergy", kind="gov_static", budget_w=60.0, gov_no_energy=True),
+            dict(id="diag_cb", kind="cB", workload="llama32_3b", scene="S1", c0=7, params=dict(target=0.5, ki=0.15), budget_w=60.0)]
+
+
+def _choose_cb(results, prefix):
+    """c'B constants rule (addendum O section 4): highest mean tok/s among the combinations with mean miss <= 1% and mean power <= 60 W, else the lowest mean miss."""
+    combos = []
+    for t in CB_TARGETS:
+        for k in CB_KIS:
+            ms = [results[f"{prefix}_{w}_{sc}_t{t:g}_k{k:g}"] for w in WORKLOADS for sc in SCENES]
+            combos.append(dict(params=dict(target=t, ki=k), miss=sum(m["miss"] for m in ms) / 6, power_w=sum(m["power_w"] for m in ms) / 6, tok_s=sum(m["tok_s"] for m in ms) / 6))
+    ok = [c for c in combos if c["miss"] <= MISS_MAX and c["power_w"] <= 60.0]
+    pick = max(ok, key=lambda c: (c["tok_s"], -c["params"]["target"], -c["params"]["ki"])) if ok else min(combos, key=lambda c: (c["miss"], -c["tok_s"]))
+    return dict(pacing="auto (non-learned, token-aware switch: period - clean token, +- 0.3 ms, dwell 5 s; plan addendum O-3)", params=dict(pick["params"], guard0=0.5, gmin=0.3), rule_met=bool(ok),
+                mean_miss=pick["miss"], mean_tok_s=pick["tok_s"], mean_power_w=pick["power_w"], grid=combos)
+
+
+def next_batch_t3b(results, c0):
+    """Block T3b (plan addendum O-3): after the action-space fix, the clock clamp and the token-aware c'B threshold, at the chosen c0: one discarded cell, then the d'B margin grid (addendum O section 2:
+    5 margins x 3 workloads x {S0, S1} at 60 W = 30 cells) and the c'B constants grid re-run under the final controller (36 cells; the sitting's c'B cells are void: old threshold and the governed-power anomaly).
+    Same cell rules as T1-T3. Deterministic and resumable like next_batch."""
+    dec = dict(c0=c0)
+    disc = dict(id="t3b_discard", kind="arm_a", workload="llama32_3b", scene="S0", c0=c0, discard=True)
+    if disc["id"] not in results:
+        return dict(batch=[disc], stop=None, decisions=dec)
+    db = [dict(id=f"db_{w}_{sc}_m{m:g}", kind="dB", workload=w, scene=sc, c0=c0, params=dict(margin=m), budget_w=60.0) for m in DB_MARGINS for w in WORKLOADS for sc in SCENES]
+    cb = [dict(id=f"cb2_{w}_{sc}_t{t:g}_k{k:g}", kind="cB", workload=w, scene=sc, c0=c0, params=dict(target=t, ki=k), budget_w=60.0) for t in CB_TARGETS for k in CB_KIS for w in WORKLOADS for sc in SCENES]
+    miss = _missing(db + cb, results)
+    if miss:
+        return dict(batch=_shuffled(miss, "t3b"), stop=None, decisions=dec)
+    margins = []
+    for m in DB_MARGINS:
+        ms = [results[f"db_{w}_{sc}_m{m:g}"] for w in WORKLOADS for sc in SCENES]
+        margins.append(dict(margin=m, mean_miss=sum(x["miss"] for x in ms) / 6, mean_tok_s=sum(x["tok_s"] for x in ms) / 6, mean_power_w=sum(x["power_w"] for x in ms) / 6))
+    met = [r for r in margins if r["mean_miss"] <= MISS_MAX]
+    dec["d_b"] = dict(margin=min(r["margin"] for r in met) if met else DB_MARGINS[-1], rule_met=bool(met), grid=margins)
+    dec["c_b"] = _choose_cb(results, "cb2")
+    return dict(batch=[], stop=None, decisions=dec)

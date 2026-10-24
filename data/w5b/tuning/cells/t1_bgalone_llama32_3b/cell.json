@@ -1,0 +1,27 @@
+{
+ "id": "t1_bgalone_llama32_3b",
+ "spec": {
+  "id": "t1_bgalone_llama32_3b",
+  "kind": "bg_alone",
+  "workload": "llama32_3b",
+  "scene": null,
+  "c0": null
+ },
+ "metrics": {
+  "miss": 0.0,
+  "tok_s": 96.53333333333333,
+  "power_w": 92.2637,
+  "tok_ms_p50": 10.322099999996226,
+  "bg_tokens": 2896,
+  "ring_dropped": 0,
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "driver_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=3431 t_first=490.088386 t_last=525.396303 ctx_end=3943"
+  ],
+  "executor": "hw"
+ },
+ "executor": "hw",
+ "wall_s": 81.15931177139282,
+ "utc": "2026-10-23T20:19:54.571678+00:00"
+}
