@@ -52,10 +52,13 @@ def recent_mean(t, v, now, span):
     return float(np.mean(sel)) if sel else float("nan")
 
 
-def fg_spec(scene, c0):
+def fg_spec(scene, c0, origin_ms=0.0):
+    """Foreground of a scene at nominal cost c0. origin_ms = the time of the loop at which SCENE TIME 0 is (plan addendum O-6 section 5: evaluation cells start the scene at the measured window,
+    origin 5000 ms; the warm-up before it runs at the scene's t = 0 conditions). origin 0 = the tuning cells' behaviour, unchanged."""
     base = build(scene or "S0").fg
     scale = float(c0) / C0_MS
-    return dataclasses.replace(base, cost_ms=lambda t, b=base, s=scale: b.cost_ms(t) * s)
+    shift = lambda t, o=float(origin_ms): max(t - o, 0.0)       # noqa: E731
+    return dataclasses.replace(base, cost_ms=lambda t, b=base, s=scale, f=shift: b.cost_ms(f(t)) * s, active=lambda t, b=base, f=shift: b.active(f(t)))
 
 
 def _static_action(P, s):
@@ -69,6 +72,9 @@ def build_controller(P, spec):
         return "static", _static_action(P, spec["setting"])
     if k == "arm_a":
         return "static", Action(clock=P.UNLOCKED_MHZ, pacing="unaligned", duty=1.0, guard_ms=0.5)
+    if k == "eB":                                           # g'B action + idle drop to the knee clock with a free background (controllers/static.py)
+        from controllers.static import IdleDropController
+        return "ctl", IdleDropController(P, _static_action(P, spec["setting"]))
     if k == "gov_static":                                   # diagnostic: the same fixed action, but run through the Governor loop (A/B against the static path)
         from controllers.static import StaticController
         return "ctl", StaticController(_static_action(P, spec["setting"]))
@@ -96,7 +102,7 @@ class SimExecutor:
     def run(self, spec, cdir):
         P, k = self.P, spec["kind"]
         fg = fg_spec(spec.get("scene"), spec.get("c0") or 7)
-        bg = BgSpec(kind="llama")
+        bg = BgSpec(kind="llama", profile="fp16" if spec.get("scene") == "S5" else None)
         if k == "bg_alone":
             fg = dataclasses.replace(fg, active=lambda t: False)
         sc = build(spec.get("scene") or "S0")
@@ -133,9 +139,11 @@ class HwExecutor:
         nv.nvmlInit(); self.h = nv.nvmlDeviceGetHandleByIndex(0)
         self.P = load_params(ROOT)
         self.models = json.loads(MODELS.read_text(encoding="utf-8"))
+        self._verified = set()
         for name in ("llama32_1b", "llama32_3b", "phi35_mini"):
             if sha256(Path(self.models[name]["path"])) != self.models[name]["sha256"]:
                 sys.exit(f"refused: model {name} does not match its registered sha256")
+            self._verified.add(name)
         ensure_warm(smoke.EXE, ["m", "p", "o", "-1", "1", "512", smoke.nm("none1"), smoke.nm("none2"), smoke.nm("none3"), "8"], smoke.REGISTRY)
         self.w = W2(); self.cl = smoke.SafeClient(); self.hb = smoke.Heartbeat(self.cl); self.hb.start()
         reset_clocks(self.cl, is_admin=False)
@@ -190,7 +198,17 @@ class HwExecutor:
         if acc[0]:
             raise AbortSitting(f"ABORT: HwThermalSlowdown / HwPowerBrake event reasons {acc[0]:#x} during a cell (cell flagged in cell.json; the sitting stops)")
 
+    def verify_model(self, name):
+        """The held-out Llama-3.1-8B is verified against its registered sha256 the first time a cell needs it (never touched before the evaluation)."""
+        if name in self._verified:
+            return
+        from workloads.common.exe_warm import sha256
+        if sha256(Path(self.models[name]["path"])) != self.models[name]["sha256"]:
+            sys.exit(f"refused: model {name} does not match its registered sha256")
+        self._verified.add(name)
+
     def _launch(self, workload, ctrl, pace, tokens, csv, seconds):
+        self.verify_model(workload)
         smoke = self.smoke
         env = dict(os.environ, PATH=str(smoke.BIN) + ";" + os.environ["PATH"])
         return subprocess.Popen([str(smoke.EXE), str(self.models[workload]["path"]), str(smoke.PROMPT), str(csv), "-1", str(seconds), "512", ctrl.name, pace.name, tokens.name, "65536"],
@@ -339,7 +357,7 @@ class HwExecutor:
                         except Exception as ex:                  # noqa: BLE001
                             gerr.append(f"{type(ex).__name__}: {ex}"); return
                 gth = threading.Thread(target=loop_gov, daemon=True); gth.start()
-            loop = FrameLoop(fg_spec(spec["scene"], spec["c0"]), FmaFrameRunner(self.w, self.cal), FramePublisher(frames, pace))
+            loop = FrameLoop(fg_spec(spec["scene"], spec["c0"], spec.get("origin_ms", 0.0)), FmaFrameRunner(self.w, self.cal), FramePublisher(frames, pace))
             t0 = time.perf_counter() + 0.05
             e = {}
             th = self._energy_thread(t0 + WARM_S, t0 + WARM_S + MEASURE_S, e)

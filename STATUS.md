@@ -1,18 +1,21 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-24 - Phase: W4-5. The diagnostic ran; the pre-registered gate said STOP on magnitude only; every qualitative prediction held; addendum O-5 (POST HOC) adopts the sampled power source for T3b and all evaluation blocks. Waiting for YOU: restart -> helper -> the T3b command (docs/W5B_T3B_SITTING.md, rewritten; no diagnostic any more).
+Updated 2026-10-24 - Phase: W4-5. T3b verified (67 cells; all 66 governed cells on the sampled source, 0 energy reads, counter vs sampled at most 2.9%); addendum O-6 written (c'B grid extension T3c, evaluation power tolerance = none, evaluation details); the evaluation runner is built and tested in the simulator. Waiting for YOU: restart -> helper -> the T3c command (docs/W5B_T3C_SITTING.md, 25 cells, about 42 min).
 
-## Result of the diagnostic (journal 0056, addendum O-5; data/w5b/diag untouched, verdict STOP as computed)
-- Counter inflated only where the Governor loop reads it (+74.7 W g'B state, +26.8 W c'B state); sampled power 39.7 / 39.6 / 39.9 W and throughput 19.9 / 20.0 / 20.0 tok/s identical across static / Governor / no-reads; fix arm: counter = sampled, c'B 5.7 -> 12.7 tok/s (miss 6% at the diagnostic constants).
-- Magnitude failed: 7.5 J/read (g'B state) and 2.7 J/read (c'B state) vs the assumed 4.2 J: state-dependent (recorded in journal 0005 note, CONCEPTS, PAPER_MAP rows 28-29).
+## Verified / decided (journal 0057, addendum O-6)
+- d'B margin 0.3: mean miss 0.875% (rule met), 58.6 W, 26.5 tok/s; per scene S1 3B 2.0%, Phi 3.25%; S0 all 0 miss. Expected headline (pending evaluation): in S0 d'B makes 18.6 (3B) / 13.6 (Phi) tok/s where every budget-compliant aligned static makes none.
+- c'B: rule not met in the T3b grid (3.3-5.8% miss); fallback at the grid edge (target 0.5) -> T3c extends to targets 0.35, 0.2 (24 cells), unchanged rule on the full grid, one extension only.
+- Evaluation power tolerance: NONE (feasible only if counter power <= 60.0 W / 35.0 W; d'B at 58.1-59.9 W so some cells may score 0). O-4 contingency (5 s settle): does NOT trigger (0 of 66 cells with 3+ clock changes in the first 5 s).
+- NOT checked: the helper log of the T3b sitting (Administrators-only; the T3c doc asks you to paste the notable lines).
 
-## Done
-- tune.py: explicit --power-source sampled allowed for T3b (O-5 exists), auto + STOP still refused, explicit energy refused; HwExecutor default 'sampled', rejects a sampled cell whose loop read the counter; morning check fails any non-diag cell with Governor energy reads and keeps the 15% counter-vs-sampled failure. 87 related tests pass. Sweep protocol written (docs/W5B_ENERGY_READ_SWEEP_PROTOCOL.md), NOT run.
+## Built (test-first, 65 related tests pass)
+- Evaluation runner: eval_lib / evaluate.py / freeze.py (frozen constants checked by sha256, whole blocks, 3 h session check, incomplete blocks discarded, results.csv for the registered analysis, 6-cell supervised trial); a simulator dry run of block 4 fed the analysis. Not run on hardware.
 
 ## Waiting for
-You: T3b (67 cells, about 1.9 h): d'B margin grid + c'B grid re-run, power from the sampled source. d'B-HGB is accepted but not built (dropped if not ready by block 4).
+1. You: T3c (docs/W5B_T3C_SITTING.md). Then I freeze data/w5b/constants.json, commit it, and give you the evaluation trial and session commands with the literal hash (docs/W5B_EVALUATION.md).
+2. d'B-HGB: build only after T3c + freeze + evaluation trial; dropped if not ready when block 4 is scheduled (O-6 section 6).
 
 ## Risks / not verified
-- Governed d'B / c'B in T3b on hardware; clock flip-flops (contingency in O-4); the c'B miss rate with the fix (6% at the diagnostic constants) is what the c'B grid tunes; the evaluation runner does not exist yet and must use the sampled source.
+- Evaluation path on hardware (8B governed, eB/c'B/d'B in S2 idle phases, scene-time origin), S3 not built, d'B-HGB not built, helper log unchecked.
 
 ## Notes
 - Do not run pytest or rebuild before the run; exe hash bb875fbc unchanged.

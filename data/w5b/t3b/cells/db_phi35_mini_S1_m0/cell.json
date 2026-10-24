@@ -1,0 +1,65 @@
+{
+ "id": "db_phi35_mini_S1_m0",
+ "spec": {
+  "id": "db_phi35_mini_S1_m0",
+  "kind": "dB",
+  "workload": "phi35_mini",
+  "scene": "S1",
+  "c0": 7,
+  "params": {
+   "margin": 0.0
+  },
+  "budget_w": 60.0
+ },
+ "metrics": {
+  "miss": 0.12611111111111112,
+  "miss_completed": 0.12611111111111112,
+  "tok_s": 20.2,
+  "power_w": 57.37018333333333,
+  "power_sampled_w": 56.994468034844225,
+  "fg_p50_ms": 9.680283333636908,
+  "fg_p99_ms": 34.73771266685588,
+  "frames": 3600,
+  "abandoned": 0,
+  "bg_tokens": 1212,
+  "tok_ms_p50": 26.96894999962751,
+  "sm_mhz_median": 2460.0,
+  "temp_before_c": 49,
+  "temp_after_c": 69,
+  "clock_changes": 4,
+  "clamp_events": 175,
+  "power_source": "sampled",
+  "gov_reads": 0,
+  "gov_reads_per_s": 0.0,
+  "clamp_examples": [
+   [
+    4693759.1302000005,
+    2475.0,
+    2460.0
+   ],
+   [
+    4693859.412699999,
+    2475.0,
+    2460.0
+   ],
+   [
+    4693959.1018,
+    2475.0,
+    2460.0
+   ]
+  ],
+  "final_pacing_mode": "unaligned",
+  "clock_ok": true,
+  "ring_dropped": 0,
+  "thermal_reason_bits": 0,
+  "executor": "hw",
+  "exec_mode": "EXEC_MODE cuda offloaded=33/33 n_layer=32 model_size=2392493952 governed=1",
+  "driver_tail": [
+   "EXEC_MODE cuda offloaded=33/33 n_layer=32 model_size=2392493952 governed=1",
+   "DONE tokens=1298 t_first=4693.476092 t_last=4758.671410 ctx_end=1810"
+  ]
+ },
+ "executor": "hw",
+ "wall_s": 100.1013240814209,
+ "utc": "2026-10-24T05:58:14.011188+00:00"
+}

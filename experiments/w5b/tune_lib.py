@@ -158,17 +158,24 @@ def diag_specs():
             dict(cb, id="diag_cb", power_source="energy"), dict(cb, id="diag_cb_sampled", power_source="sampled")]
 
 
-def _choose_cb(results, prefix):
-    """c'B constants rule (addendum O section 4): highest mean tok/s among the combinations with mean miss <= 1% and mean power <= 60 W, else the lowest mean miss."""
+CB3_TARGETS = (0.35, 0.2)          # addendum O-6: the c'B grid extended below the lowest target of T3b (0.5), same ki values
+
+
+def _choose_cb_grid(results, entries):
+    """c'B constants rule (addendum O section 4) over entries = [(target, ki, id prefix)]: highest mean tok/s among the combinations with mean miss <= 1% and mean power <= 60 W, else the lowest mean miss.
+    at_grid_edge: the chosen target is the lowest of the grid (the comparator may be under-tuned)."""
     combos = []
-    for t in CB_TARGETS:
-        for k in CB_KIS:
-            ms = [results[f"{prefix}_{w}_{sc}_t{t:g}_k{k:g}"] for w in WORKLOADS for sc in SCENES]
-            combos.append(dict(params=dict(target=t, ki=k), miss=sum(m["miss"] for m in ms) / 6, power_w=sum(m["power_w"] for m in ms) / 6, tok_s=sum(m["tok_s"] for m in ms) / 6))
+    for t, k, prefix in entries:
+        ms = [results[f"{prefix}_{w}_{sc}_t{t:g}_k{k:g}"] for w in WORKLOADS for sc in SCENES]
+        combos.append(dict(params=dict(target=t, ki=k), miss=sum(m["miss"] for m in ms) / 6, power_w=sum(m["power_w"] for m in ms) / 6, tok_s=sum(m["tok_s"] for m in ms) / 6))
     ok = [c for c in combos if c["miss"] <= MISS_MAX and c["power_w"] <= 60.0]
     pick = max(ok, key=lambda c: (c["tok_s"], -c["params"]["target"], -c["params"]["ki"])) if ok else min(combos, key=lambda c: (c["miss"], -c["tok_s"]))
     return dict(pacing="auto (non-learned, token-aware switch: period - clean token, +- 0.3 ms, dwell 5 s; plan addendum O-3)", params=dict(pick["params"], guard0=0.5, gmin=0.3), rule_met=bool(ok),
-                mean_miss=pick["miss"], mean_tok_s=pick["tok_s"], mean_power_w=pick["power_w"], grid=combos)
+                mean_miss=pick["miss"], mean_tok_s=pick["tok_s"], mean_power_w=pick["power_w"], grid=combos, at_grid_edge=pick["params"]["target"] == min(t for t, _, _ in entries))
+
+
+def _choose_cb(results, prefix):
+    return _choose_cb_grid(results, [(t, k, prefix) for t in CB_TARGETS for k in CB_KIS])
 
 
 def next_batch_t3b(results, c0):
@@ -191,4 +198,20 @@ def next_batch_t3b(results, c0):
     met = [r for r in margins if r["mean_miss"] <= MISS_MAX]
     dec["d_b"] = dict(margin=min(r["margin"] for r in met) if met else DB_MARGINS[-1], rule_met=bool(met), grid=margins)
     dec["c_b"] = _choose_cb(results, "cb2")
+    return dict(batch=[], stop=None, decisions=dec)
+
+
+def next_batch_t3c(results, c0):
+    """Block T3c (plan addendum O-6, decided after T3b and before any evaluation block): the c'B grid extended to the targets 0.35 and 0.2 x ki {0.05, 0.15} on the same 6 workload / scene cells (24 cells,
+    ids cb3_*) after one discarded cell; `results` must contain the cb2_* cells of T3b (merged read-only). The UNCHANGED choice rule is applied to the FULL grid (5 targets x 2 ki). One extension only."""
+    dec = dict(c0=c0)
+    disc = dict(id="t3c_discard", kind="arm_a", workload="llama32_3b", scene="S0", c0=c0, discard=True)
+    if disc["id"] not in results:
+        return dict(batch=[disc], stop=None, decisions=dec)
+    cb = [dict(id=f"cb3_{w}_{sc}_t{t:g}_k{k:g}", kind="cB", workload=w, scene=sc, c0=c0, params=dict(target=t, ki=k), budget_w=60.0) for t in CB3_TARGETS for k in CB_KIS for w in WORKLOADS for sc in SCENES]
+    miss = _missing(cb, results)
+    if miss:
+        return dict(batch=_shuffled(miss, "t3c"), stop=None, decisions=dec)
+    entries = [(t, k, "cb3") for t in CB3_TARGETS for k in CB_KIS] + [(t, k, "cb2") for t in CB_TARGETS for k in CB_KIS]
+    dec["c_b"] = _choose_cb_grid(results, entries)
     return dict(batch=[], stop=None, decisions=dec)

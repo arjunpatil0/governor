@@ -53,9 +53,10 @@ def resolve_power_source(plan, requested, diag_dir, o5_path=None):
     stays refused). Plan addendum O-5 (post hoc, 2026-10-24) adopts 'sampled' for T3b and all evaluation blocks although the gate said STOP on magnitude only: while docs/W5B_ADDENDUM_O5.md exists an
     EXPLICIT 'sampled' is allowed for T3b and an explicit 'energy' is refused (governed cells never read the energy counter)."""
     o5 = Path(o5_path) if o5_path is not None else O5_PATH
-    if requested == "energy" and plan == "t3b" and o5.exists():
+    governed = plan in ("t3b", "t3c")
+    if requested == "energy" and governed and o5.exists():
         sys.exit("refused: plan addendum O-5: governed T3b / evaluation cells never read the energy counter in their loop (use --power-source sampled)")
-    if requested == "sampled" and plan == "t3b":
+    if requested == "sampled" and governed:
         f = Path(diag_dir) / "power_source.json"
         gate_ok = f.exists() and json.loads(f.read_text(encoding="utf-8")).get("power_source") == "sampled"
         if not gate_ok and not o5.exists():
@@ -63,7 +64,7 @@ def resolve_power_source(plan, requested, diag_dir, o5_path=None):
         return "sampled"
     if requested != "auto":
         return requested
-    if plan != "t3b":
+    if not governed:
         return "energy"
     f = Path(diag_dir) / "power_source.json"
     if not f.exists():
@@ -82,11 +83,12 @@ def load_results(cells_dir):
     return res
 
 
-def run_sitting(out_dir, executor, limit=None, log=print, deadline=None, planner=None):
+def run_sitting(out_dir, executor, limit=None, log=print, deadline=None, planner=None, base_results=None):
     out_dir = Path(out_dir)
     cells_dir = out_dir / "cells"
     cells_dir.mkdir(parents=True, exist_ok=True)
-    results = load_results(cells_dir)
+    results = dict(base_results or {})                              # read-only cells of an earlier block (merged for the planner; never re-run, never written here)
+    results.update(load_results(cells_dir))
     fails, consecutive, ran = {}, 0, 0
     planner = planner or tl.next_batch
     while True:
@@ -127,7 +129,8 @@ def main():
     ap.add_argument("--out", required=True); ap.add_argument("--armoury-mode", default=None)
     ap.add_argument("--executor", choices=["hw", "sim"], default="hw"); ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--max-uptime-s", type=float, default=7200.0); ap.add_argument("--max-hours", type=float, default=None, help="stop starting new cells after this many hours (resumable)")
-    ap.add_argument("--plan", choices=["t1t3", "t3b"], default="t1t3", help="t1t3 = the first sitting; t3b = d'B margin grid + c'B constants re-tuned (needs --c0)")
+    ap.add_argument("--plan", choices=["t1t3", "t3b", "t3c"], default="t1t3", help="t1t3 = the first sitting; t3b = d'B margin grid + c'B constants re-tuned; t3c = c'B grid extended to targets 0.35 / 0.2 (addendum O-6); t3b and t3c need --c0")
+    ap.add_argument("--merge-from", default=None, help="read-only cells of an earlier block merged into the planner's results (t3c: data/w5b/t3b)")
     ap.add_argument("--c0", type=int, default=None, help="the chosen c0 (ms nominal) for --plan t3b")
     ap.add_argument("--power-source", choices=["auto", "energy", "sampled"], default="auto", help="power signal of the Governor loop; auto = from the diagnostic gate for --plan t3b")
     ap.add_argument("--diag-dir", default=str(ROOT / "data" / "w5b" / "diag"), help="where the diagnostic gate wrote power_source.json")
@@ -183,12 +186,15 @@ def _finish(out, ex, a):
             ex.close()
         return
     try:
-        planner = None
-        if a.plan == "t3b":
+        planner, base = None, None
+        if a.plan in ("t3b", "t3c"):
             if a.c0 is None:
-                sys.exit("--plan t3b needs --c0 (the chosen c0 of the T1-T3 sitting)")
-            planner = lambda r, c0=a.c0: tl.next_batch_t3b(r, c0)       # noqa: E731
-        s = run_sitting(out, ex, limit=a.limit, deadline=None if a.max_hours is None else time.time() + 3600.0 * a.max_hours, planner=planner)
+                sys.exit(f"--plan {a.plan} needs --c0 (the chosen c0 of the T1-T3 sitting)")
+            fn = tl.next_batch_t3b if a.plan == "t3b" else tl.next_batch_t3c
+            planner = lambda r, c0=a.c0, fn=fn: fn(r, c0)               # noqa: E731
+        if a.merge_from:
+            base = load_results(Path(a.merge_from) / "cells")
+        s = run_sitting(out, ex, limit=a.limit, deadline=None if a.max_hours is None else time.time() + 3600.0 * a.max_hours, planner=planner, base_results=base)
     finally:
         ex.close()
     sd = {str(p.relative_to(out)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.rglob("*")) if p.is_file() and p.name != "manifest.json"}

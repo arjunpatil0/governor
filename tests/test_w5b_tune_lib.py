@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "experiments" / "w5b"))
+sys.path.insert(0, str(ROOT / "experiments" / "w5b")); sys.path.insert(0, str(ROOT))
 import tune_lib as tl  # noqa: E402
 
 WORKLOADS = ("llama32_1b", "llama32_3b", "phi35_mini")
@@ -196,3 +196,79 @@ def test_t3b_is_resumable_and_deterministic():
     res[a[0]] = metrics()
     b = [c["id"] for c in tl.next_batch_t3b(res, 7)["batch"]]
     assert a[0] not in b and len(b) == len(a) - 1
+
+
+# ---------------------------------------------------------------- block T3c (addendum O-6): the c'B grid extended to targets 0.35 and 0.2, rule applied to the FULL grid
+def run_t3c(fake, base, c0=7, rounds=20):
+    results = dict(base)
+    for _ in range(rounds):
+        ans = tl.next_batch_t3c(results, c0)
+        if not ans["batch"]:
+            return results, ans
+        for spec in ans["batch"]:
+            results[spec["id"]] = fake(spec)
+    raise AssertionError("T3c did not finish")
+
+
+def t3b_base():
+    res, _ = run_t3b(fake_world(good_c0=7))
+    return {k: v for k, v in res.items() if k.startswith("cb2_")}
+
+
+def test_t3c_runs_a_discarded_cell_then_24_cells_for_the_new_targets_only():
+    base = t3b_base()
+    ans = tl.next_batch_t3c(base, 7)
+    assert [c["id"] for c in ans["batch"]] == ["t3c_discard"] and ans["batch"][0]["discard"] is True
+    res, ans = run_t3c(fake_world(good_c0=7), base)
+    new = [k for k in res if k.startswith("cb3_")]
+    assert len(new) == 24 and {k.split("_t")[1].split("_k")[0] for k in new} == {"0.35", "0.2"} and len(ans["decisions"]["c_b"]["grid"]) == 10
+
+
+def test_t3c_applies_the_unchanged_rule_to_the_full_grid_and_flags_an_edge_winner():
+    base = t3b_base()
+
+    def lower_is_safer(spec):                                  # miss falls with the target; nothing reaches 1% -> fallback = lowest mean miss = the new edge 0.2
+        if spec["kind"] != "cB":
+            return metrics()
+        return metrics(miss=0.06 * spec["params"]["target"], tok=30.0 - 20 * spec["params"]["target"], power=45.0)
+    res, ans = run_t3c(lower_is_safer, {k: metrics(miss=0.06 * v_t, tok=30.0 - 20 * v_t, power=45.0) for k, v_t in ((k, float(k.split("_t")[1].split("_k")[0])) for k in base)})
+    cb = ans["decisions"]["c_b"]
+    assert cb["rule_met"] is False and cb["params"]["target"] == 0.2 and cb["at_grid_edge"] is True
+
+    def knee(spec):                                            # 0.35 meets the SLO, 0.2 also but with fewer tokens: the rule picks the highest tok/s among the compliant ones
+        if spec["kind"] != "cB":
+            return metrics()
+        t = spec["params"]["target"]
+        return metrics(miss=0.004 if t <= 0.35 else 0.05, tok=30.0 - 20 * (0.5 - t) ** 2 * 10 if t <= 0.35 else 40.0, power=45.0)
+    res2, ans2 = run_t3c(knee, {k: knee(dict(kind="cB", params=dict(target=float(k.split("_t")[1].split("_k")[0])))) for k in base})
+    assert ans2["decisions"]["c_b"]["rule_met"] is True and ans2["decisions"]["c_b"]["params"]["target"] == 0.35 and ans2["decisions"]["c_b"]["at_grid_edge"] is False
+
+
+def test_the_sitting_can_merge_the_cells_of_an_earlier_block_as_read_only_base_results(tmp_path):
+    import json
+    import tune
+    base = t3b_base()
+
+    class Stub:
+        name = "stub"
+        calls = []
+
+        def run(self, spec, cdir):
+            self.calls.append(spec["id"])
+            return metrics(miss=0.004, tok=30.0, power=45.0)
+
+        def between_cells(self):
+            pass
+    ex = Stub()
+    s = tune.run_sitting(tmp_path, ex, log=lambda *a: None, planner=lambda r: tl.next_batch_t3c(r, 7), base_results=base)
+    assert s["finished"] and len(ex.calls) == 25 and not any(c.startswith("cb2_") for c in ex.calls)
+    assert json.loads((tmp_path / "decisions.json").read_text(encoding="utf-8"))["c_b"]["grid"]
+
+
+def test_t3c_is_governed_so_the_power_source_rules_of_t3b_apply(tmp_path):
+    import pytest
+    import tune
+    o5 = tmp_path / "O5.md"; o5.write_text("x")
+    assert tune.resolve_power_source("t3c", "sampled", tmp_path, o5_path=o5) == "sampled"
+    with pytest.raises(SystemExit):
+        tune.resolve_power_source("t3c", "energy", tmp_path, o5_path=o5)
