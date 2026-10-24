@@ -14,3 +14,5 @@ Which sensors and actuators actually work on this machine (RTX 4070 Laptop, 36 S
 - A placeholder in a command (`<room temp>`) broke PowerShell: trivial but recorded.
 ## Decisions
 ADR-0004, ADR-0005, ADR-0006, ADR-0007.
+
+**NOTE appended 2026-10-24 (journal 0056; the text above is unchanged):** the "about 4.2 J per extra read" of the measurement-surprises line is the figure of THAT GPU state. The W5b diagnostic of 2026-10-24 (10.02 energy reads/s from the Governor loop) implies 7.5 J per read in the g'B static state and 2.7 J per read in the c'B state: the phantom energy per read is STATE-DEPENDENT, not a constant (addendum O-5, data/w5b/diag).

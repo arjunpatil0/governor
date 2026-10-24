@@ -45,8 +45,22 @@ def is_resume(meta, boot_ts):
         return False
 
 
-def resolve_power_source(plan, requested, diag_dir):
-    """Power source of the Governor loop (plan addendum O-4). 'auto': the first sitting keeps 'energy'; T3b takes the verdict of the diagnostic gate (power_source.json) and is REFUSED without a usable one."""
+O5_PATH = ROOT / "docs" / "W5B_ADDENDUM_O5.md"
+
+
+def resolve_power_source(plan, requested, diag_dir, o5_path=None):
+    """Power source of the Governor loop. 'auto': the first sitting keeps 'energy'; T3b takes the verdict of the diagnostic gate (power_source.json) and is REFUSED without a usable one (a STOP verdict
+    stays refused). Plan addendum O-5 (post hoc, 2026-10-24) adopts 'sampled' for T3b and all evaluation blocks although the gate said STOP on magnitude only: while docs/W5B_ADDENDUM_O5.md exists an
+    EXPLICIT 'sampled' is allowed for T3b and an explicit 'energy' is refused (governed cells never read the energy counter)."""
+    o5 = Path(o5_path) if o5_path is not None else O5_PATH
+    if requested == "energy" and plan == "t3b" and o5.exists():
+        sys.exit("refused: plan addendum O-5: governed T3b / evaluation cells never read the energy counter in their loop (use --power-source sampled)")
+    if requested == "sampled" and plan == "t3b":
+        f = Path(diag_dir) / "power_source.json"
+        gate_ok = f.exists() and json.loads(f.read_text(encoding="utf-8")).get("power_source") == "sampled"
+        if not gate_ok and not o5.exists():
+            sys.exit("refused: --power-source sampled for T3b needs a CONFIRMED_PHANTOM gate verdict or plan addendum O-5 (docs/W5B_ADDENDUM_O5.md)")
+        return "sampled"
     if requested != "auto":
         return requested
     if plan != "t3b":
@@ -56,7 +70,7 @@ def resolve_power_source(plan, requested, diag_dir):
         sys.exit(f"refused: {f} not found - run the diagnostic and its gate first (docs/W5B_T3B_SITTING.md)")
     v = json.loads(f.read_text(encoding="utf-8"))
     if v.get("power_source") not in ("energy", "sampled"):
-        sys.exit(f"refused: the diagnostic gate verdict is {v.get('verdict')}: T3b must not start")
+        sys.exit(f"refused: the diagnostic gate verdict is {v.get('verdict')}: T3b must not start with --power-source auto (addendum O-5: pass --power-source sampled explicitly)")
     return v["power_source"]
 
 

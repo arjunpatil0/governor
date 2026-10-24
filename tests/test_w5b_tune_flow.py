@@ -93,12 +93,32 @@ def test_a_t3b_sitting_runs_through_the_planner_hook_and_writes_its_decisions(tm
 # ---------------------------------------------------------------- power source for the Governor loop (plan addendum O-4)
 def test_the_power_source_for_t3b_comes_from_the_diagnostic_gate_and_is_refused_without_it(tmp_path):
     import pytest
-    assert tune.resolve_power_source("t1t3", "auto", tmp_path) == "energy"                          # the first sitting is not changed retroactively
+    none = tmp_path / "no_o5.md"                                                                   # isolate from the real docs/W5B_ADDENDUM_O5.md
+    assert tune.resolve_power_source("t1t3", "auto", tmp_path, o5_path=none) == "energy"            # the first sitting is not changed retroactively
     with pytest.raises(SystemExit):
-        tune.resolve_power_source("t3b", "auto", tmp_path)                                         # no gate result: T3b must not guess
+        tune.resolve_power_source("t3b", "auto", tmp_path, o5_path=none)                           # no gate result: T3b must not guess
     (tmp_path / "power_source.json").write_text(json.dumps(dict(power_source="sampled", verdict="CONFIRMED_PHANTOM")))
-    assert tune.resolve_power_source("t3b", "auto", tmp_path) == "sampled"
+    assert tune.resolve_power_source("t3b", "auto", tmp_path, o5_path=none) == "sampled"
     (tmp_path / "power_source.json").write_text(json.dumps(dict(power_source=None, verdict="STOP")))
     with pytest.raises(SystemExit):
-        tune.resolve_power_source("t3b", "auto", tmp_path)
-    assert tune.resolve_power_source("t3b", "energy", tmp_path) == "energy"                          # an explicit choice is honoured (and recorded)
+        tune.resolve_power_source("t3b", "auto", tmp_path, o5_path=none)
+    assert tune.resolve_power_source("t3b", "energy", tmp_path, o5_path=none) == "energy"                          # an explicit choice is honoured (and recorded)
+
+
+# ---------------------------------------------------------------- addendum O-5 (post hoc): governed T3b / evaluation cells use the sampled power source and never read the energy counter
+def test_with_addendum_o5_an_explicit_sampled_source_is_allowed_for_t3b_despite_a_stop_verdict_and_energy_is_refused(tmp_path):
+    import pytest
+    o5 = tmp_path / "O5.md"
+    diag = tmp_path / "diag"; diag.mkdir()
+    (diag / "power_source.json").write_text(json.dumps(dict(power_source=None, verdict="STOP")))
+    with pytest.raises(SystemExit):
+        tune.resolve_power_source("t3b", "auto", diag, o5_path=o5)                                  # auto still honours the gate: STOP -> refused
+    with pytest.raises(SystemExit):
+        tune.resolve_power_source("t3b", "sampled", diag, o5_path=o5)                               # explicit override needs addendum O-5 to exist
+    o5.write_text("addendum O-5 (post hoc)")
+    assert tune.resolve_power_source("t3b", "sampled", diag, o5_path=o5) == "sampled"
+    with pytest.raises(SystemExit):
+        tune.resolve_power_source("t3b", "energy", diag, o5_path=o5)                                # O-5: governed cells never read the counter
+    with pytest.raises(SystemExit):
+        tune.resolve_power_source("t3b", "auto", diag, o5_path=o5)                                  # auto with a STOP verdict stays refused even with O-5
+    assert tune.resolve_power_source("t1t3", "auto", diag, o5_path=o5) == "energy"                  # the finished first sitting is not re-labelled

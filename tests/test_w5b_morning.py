@@ -132,3 +132,12 @@ def test_the_c_b_arms_throughput_is_printed_side_by_side_and_not_gated(tmp_path)
     b = tmp_path / "b"; b.mkdir()
     arms(b, tok_cs=1.0)                                                     # even a fix arm that still starves the background does not fail the gate (it is printed)
     assert diag_gate(b)["ok"] is True
+
+
+def test_a_governed_cell_that_read_the_energy_counter_in_its_loop_is_a_problem_except_in_diagnostic_cells(tmp_path):
+    write_cell(tmp_path, "db_x", power_w=45.0, power_sampled_w=45.0, gov_reads=600, gov_reads_per_s=10.0, power_source="energy")
+    write_cell(tmp_path, "cb2_y", power_w=45.0, power_sampled_w=45.0, gov_reads=0, gov_reads_per_s=0.0, power_source="sampled")
+    write_cell(tmp_path, "diag_cb", power_w=45.0, power_sampled_w=45.0, gov_reads=600, gov_reads_per_s=10.0, power_source="energy")
+    write_cell(tmp_path, "old_cell", power_w=45.0, power_sampled_w=45.0)                               # cells from before the field existed are not judged
+    p = " | ".join(check(tmp_path)["problems"])
+    assert "db_x: the Governor loop read the energy counter" in p and "cb2_y" not in p and "diag_cb:" not in p and "old_cell" not in p

@@ -120,8 +120,8 @@ class SimExecutor:
 class HwExecutor:
     name = "hw"
 
-    def __init__(self, power_source="energy"):
-        """power_source for the Governor loop: 'energy' (its own delta of the NVML energy counter every tick: ~10 extra reads/s, each adds ~4.2 J of phantom energy) or 'sampled' (the mean of the NVML
+    def __init__(self, power_source="sampled"):
+        """power_source for the Governor loop (default 'sampled' since plan addendum O-5; 'energy' only for the diagnostic and the finished first sitting): 'energy' (its own delta of the NVML energy counter every tick: ~10 extra reads/s, each adds ~4.2 J of phantom energy) or 'sampled' (the mean of the NVML
         power samples of the last tick, no energy reads in the loop; plan addendum O-4)."""
         self.power_source = power_source
         import pynvml as nv
@@ -362,6 +362,8 @@ class HwExecutor:
                                 gov_log=np.array(glog, float).reshape(-1, 5))
             changes = int(sum(1 for a, b in zip(glog, glog[1:]) if a[1] != b[1]))
             reads_n = int(reads[0])
+            if (spec.get("power_source") or self.power_source) == "sampled" and reads_n:
+                raise RuntimeError(f"cell {spec['id']}: the sampled-source Governor loop read the energy counter {reads_n} times (plan addendum O-5: governed cells never read the energy counter)")
             out = dict(miss=float(miss), miss_completed=res["miss_frac"], tok_s=res["bg_tok_s"], power_w=res["power_w"], power_sampled_w=window_mean(np.array(smp.t), np.array(smp.pw), t0 + WARM_S, t0 + WARM_S + MEASURE_S), fg_p50_ms=res["fg_p50_ms"], fg_p99_ms=res["fg_p99_ms"], frames=res["frames"], abandoned=n_ab,
                        bg_tokens=res["bg_tokens"], tok_ms_p50=res["tok_ms_p50"], sm_mhz_median=float(np.median(sm[win])) if win.any() else float("nan"), temp_before_c=temp_before, temp_after_c=self.temp(),
                        clock_changes=changes, clamp_events=0 if gov is None else len(gov.clamped), power_source=None if gov is None else ('none' if spec.get('gov_no_energy') else (spec.get('power_source') or self.power_source)), gov_reads=reads_n, gov_reads_per_s=reads_n / (WARM_S + MEASURE_S), clamp_examples=[] if gov is None else gov.clamped[:3], final_pacing_mode=getattr(obj, 'mode', None) if gov is not None else None, clock_ok=bool(ok_clock), ring_dropped=int(dropped), thermal_reason_bits=int(acc[0]), executor="hw")

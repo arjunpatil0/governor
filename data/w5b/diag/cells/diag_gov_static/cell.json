@@ -1,0 +1,53 @@
+{
+ "id": "diag_gov_static",
+ "spec": {
+  "workload": "llama32_3b",
+  "scene": "S1",
+  "c0": 7,
+  "setting": {
+   "sid": "1800_a_g0_d1",
+   "clock": 1800,
+   "mode": "aligned",
+   "guard_ms": 0.0,
+   "duty": 1.0
+  },
+  "id": "diag_gov_static",
+  "kind": "gov_static",
+  "budget_w": 60.0,
+  "power_source": "energy"
+ },
+ "metrics": {
+  "miss": 0.0,
+  "miss_completed": 0.0,
+  "tok_s": 19.983333333333334,
+  "power_w": 114.31528333333334,
+  "power_sampled_w": 39.59996789961334,
+  "fg_p50_ms": 7.039899999995214,
+  "fg_p99_ms": 9.523375333322974,
+  "frames": 3600,
+  "abandoned": 0,
+  "bg_tokens": 1199,
+  "tok_ms_p50": 10.38690000001452,
+  "sm_mhz_median": 1800.0,
+  "temp_before_c": 53,
+  "temp_after_c": 60,
+  "clock_changes": 0,
+  "clamp_events": 0,
+  "power_source": "energy",
+  "gov_reads": 651,
+  "gov_reads_per_s": 10.015384615384615,
+  "clamp_examples": [],
+  "final_pacing_mode": null,
+  "clock_ok": true,
+  "ring_dropped": 0,
+  "thermal_reason_bits": 0,
+  "executor": "hw",
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "driver_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=1211 t_first=270.455338 t_last=335.630063 ctx_end=1723"
+  ]
+ },
+ "executor": "hw",
+ "wall_s": 80.08853888511658
+}

@@ -99,3 +99,6 @@ A shared-memory block with a sequence counter (seqlock) is read by retrying whil
 
 ## Granularity of aligned (slack-filling) pacing
 Slack filling can only start whole tokens. If one token (10.1 ms for the 3B model) is longer than the slack (period minus frame time), no token is admitted; if the slack holds exactly one, throughput is capped at one token per frame (60 tok/s at 60 Hz) even though the background alone does 100 tok/s. Pacing inside a token (layer level) would remove the limit and is future work (journal 0042).
+
+## Phantom energy of the NVML energy counter (state-dependent)
+nvmlDeviceGetTotalEnergyConsumption is a cumulative counter; every EXTRA read (beyond the one at the start and the one at the end of a window) adds energy that was not consumed. The size is not a constant: about 4.2 J per read in the W1 audit state (journal 0005), 7.5 J in the g'B static state and 2.7 J in the c'B state of the W5b diagnostic (2026-10-24, addendum O-5). A loop that reads it at 10 Hz therefore sees +27 to +75 W of power that is not there, and a controller that uses that signal throttles the background for nothing. Measure power over a window with two reads, or from the mean of nvmlDeviceGetPowerUsage samples (which the reader does not disturb); never difference the counter at a high rate.

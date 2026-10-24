@@ -1,0 +1,10 @@
+{
+ "power_source": null,
+ "verdict": "STOP",
+ "predicted_inflation_w": 42.06461538461539,
+ "observed_inflation_w": 73.18916666666667,
+ "reasons": [
+  "diag_gov_static: inflation +73.2 W (counter - static) / +74.7 W (counter - sampled) does not match the prediction 42.1 W",
+  "diag_cb: inflation +26.8 W does not match the prediction 42.1 W"
+ ]
+}

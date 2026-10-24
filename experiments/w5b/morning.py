@@ -26,6 +26,8 @@ def check(out):
         ps = m.get("power_sampled_w")
         if ps is not None and ps == ps and m.get("power_w") == m.get("power_w") and m.get("power_w") is not None and abs(m["power_w"] - ps) / max(ps, 1e-9) > 0.15 and not cid.startswith("diag_"):
             problems.append(f"{cid}: energy-counter power {m['power_w']:.1f} W vs sampled {ps:.1f} W (differ by more than 15%: the cell's power is not credible)")
+        if (m.get("gov_reads") or 0) > 0 and not cid.startswith("diag_"):
+            problems.append(f"{cid}: the Governor loop read the energy counter {m['gov_reads']} times (plan addendum O-5: governed cells never read it; the cell's start/end power and its controllers' power signal are not comparable)")
         r0 = m.get("c0m_over_nominal")
         if r0 is not None and not (0.85 <= r0 <= 1.15):
             flags.append(f"{cid}: c0m at a locked 1800 MHz is {r0:.2f} x nominal c0 (expected about 1.0: the FMA calibration may be off)")
@@ -57,7 +59,7 @@ def check(out):
 
 
 DIAG_IDS = ("diag_static", "diag_gov_static", "diag_gov_static_noenergy", "diag_cb", "diag_cb_sampled")
-PHANTOM_J_PER_READ = 4.2          # journal 0005: the NVML energy counter adds about 4.2 J per extra read
+PHANTOM_J_PER_READ = 4.2          # journal 0005: ~4.2 J per extra read in THAT state. STATE-DEPENDENT (diag 2026-10-24: ~7.5 J/read in the g'B state, ~2.7 J/read in the c'B state; addendum O-5): a prediction constant of O-4, not a law
 TOL_REL = 0.15                    # agreement between two measurements of the same power
 TOL_PRED_REL, TOL_PRED_ABS_W = 0.35, 5.0     # observed inflation vs 4.2 J x reads/s
 

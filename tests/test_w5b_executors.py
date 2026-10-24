@@ -83,3 +83,8 @@ def test_recent_mean_uses_only_the_last_span_of_samples():
 def test_the_governed_cell_can_take_its_power_from_the_sampled_source_without_reading_the_energy_counter():
     src = (ROOT / "experiments" / "w5b" / "executors.py").read_text(encoding="utf-8")
     assert 'power_source' in src and '"sampled"' in src and "gov_reads" in src and "power_w=pw" in src
+
+
+def test_the_hardware_executor_defaults_to_the_sampled_power_source_and_rejects_a_cell_whose_loop_read_the_counter():
+    src = (ROOT / "experiments" / "w5b" / "executors.py").read_text(encoding="utf-8")
+    assert 'def __init__(self, power_source="sampled")' in src and "never read the energy counter" in src
