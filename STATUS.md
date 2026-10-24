@@ -6,6 +6,8 @@ Updated 2026-10-24 - Phase: W4-5. The phantom-energy hypothesis for the governed
 - Audit: no W1, W2 or W5a number is affected; smoke-1 governor power (invalid anyway), smoke-1 daemon energy column (unused) and the W5b governed cells (void) are. The morning check now fails a cell whose counter and sampled power differ by more than 15%.
 - c'B token estimate scaled to the commanded clock; infeasible comparators confirmed in writing (score 0; vacuous non-inferiority passes labelled in the report); d'B-HGB accepted with the reviewer's conditions, NOT built.
 
+- Gate amended (journal 0055, O-4 section 5): both passing verdicts also require the no-reads Governor arm to make the same tok/s as the static arm (within 15%), else STOP; diag_cb vs diag_cb_sampled tok/s is printed side by side (not gated).
+
 ## Waiting for
 You: the run. If the gate says STOP, nothing else runs - paste the output (that is the result).
 

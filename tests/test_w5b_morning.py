@@ -54,12 +54,12 @@ def arm(d, cid, e, m, tok=20.0, reads=0.0):
     write_cell(d, cid, power_w=e, power_sampled_w=m, tok_s=tok, gov_reads_per_s=reads)
 
 
-def arms(d, e_s=45.0, e_g=87.0, e_n=45.0, e_c=88.0, e_cs=44.0, m=45.0, r=10.0):
-    arm(d, "diag_static", e_s, m)
+def arms(d, e_s=45.0, e_g=87.0, e_n=45.0, e_c=88.0, e_cs=44.0, m=45.0, r=10.0, tok_s=20.0, tok_n=20.0, tok_cs=18.0):
+    arm(d, "diag_static", e_s, m, tok=tok_s)
     arm(d, "diag_gov_static", e_g, m, reads=r)
-    arm(d, "diag_gov_static_noenergy", e_n, m)
+    arm(d, "diag_gov_static_noenergy", e_n, m, tok=tok_n)
     arm(d, "diag_cb", e_c, m, tok=3.0, reads=r)
-    arm(d, "diag_cb_sampled", e_cs, 45.0, tok=18.0)
+    arm(d, "diag_cb_sampled", e_cs, 45.0, tok=tok_cs)
 
 
 def test_phantom_energy_confirmed_selects_the_sampled_power_source(tmp_path):
@@ -98,3 +98,37 @@ def test_cells_without_a_sampled_power_stop_the_gate_instead_of_crashing(tmp_pat
         write_cell(tmp_path, cid, power_w=45.0)
     g = diag_gate(tmp_path)
     assert g["ok"] is False and any("power_sampled_w missing" in r for r in g["reasons"])
+
+
+# ---------------------------------------------------------------- throughput check on both passing verdicts + the c'B side-by-side line (plan addendum O-4 section 1, amended 2026-10-24)
+REASON = "throughput differs on the Governor path for reasons other than power"
+
+
+def test_both_passing_verdicts_require_the_no_reads_governor_arm_to_match_the_static_throughput_within_15_percent(tmp_path):
+    arms(tmp_path, tok_n=10.0)                                              # power says CONFIRMED_PHANTOM, but the same action makes half the tokens on the Governor path
+    g = diag_gate(tmp_path)
+    assert g["ok"] is False and g["verdict"] == "STOP" and g["power_source"] is None and any(REASON in r for r in g["reasons"])
+    assert json.loads((tmp_path / "power_source.json").read_text(encoding="utf-8"))["power_source"] is None
+    b = tmp_path / "b"; b.mkdir()
+    arms(b, e_g=46.0, e_c=45.0, tok_n=10.0)                                 # the same for NO_ANOMALY
+    g2 = diag_gate(b)
+    assert g2["verdict"] == "STOP" and any(REASON in r for r in g2["reasons"])
+
+
+def test_a_throughput_difference_inside_15_percent_still_passes_and_zero_tokens_on_both_arms_is_a_match(tmp_path):
+    arms(tmp_path, tok_n=17.5)                                              # -12.5%
+    assert diag_gate(tmp_path)["verdict"] == "CONFIRMED_PHANTOM"
+    b = tmp_path / "b"; b.mkdir()
+    arms(b, tok_s=0.0, tok_n=0.4)                                           # a static action that admits no token: both arms ~0
+    assert diag_gate(b)["verdict"] == "CONFIRMED_PHANTOM"
+
+
+def test_the_c_b_arms_throughput_is_printed_side_by_side_and_not_gated(tmp_path):
+    arms(tmp_path)                                                          # diag_cb 3.0 tok/s (starved), diag_cb_sampled 18.0 tok/s (restored)
+    g = diag_gate(tmp_path)
+    line = [x for x in g["lines"] if "diag_cb vs diag_cb_sampled" in x]
+    assert len(line) == 1 and "3.0 tok/s" in line[0] and "18.0 tok/s" in line[0] and "not gated" in line[0]
+    assert g["ok"] is True                                                  # a bad c'B throughput alone does not fail the gate
+    b = tmp_path / "b"; b.mkdir()
+    arms(b, tok_cs=1.0)                                                     # even a fix arm that still starves the background does not fail the gate (it is printed)
+    assert diag_gate(b)["ok"] is True

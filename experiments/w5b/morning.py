@@ -120,6 +120,13 @@ def diag_gate(out):
             res["reasons"] = bad
         else:
             res.update(ok=True, verdict="CONFIRMED_PHANTOM", power_source="sampled")
+    if res["ok"]:                                              # both passing verdicts: the same action must make the same tokens on the Governor path (the diagnosis claims the phantom power starved the background)
+        ts, tn = float(p["diag_static"].get("tok_s") or 0.0), float(p["diag_gov_static_noenergy"].get("tok_s") or 0.0)
+        if not (max(ts, tn) < 1.0 or abs(tn - ts) / max(ts, 1e-9) <= TOL_REL):
+            res.update(ok=False, verdict="STOP", power_source=None)
+            res["reasons"] = list(res["reasons"]) + [f"diag_gov_static_noenergy: {tn:.1f} tok/s vs {ts:.1f} tok/s on the static path (differ by more than 15%): throughput differs on the Governor path for reasons other than power"]
+    res["lines"].append(f"diag_cb vs diag_cb_sampled: {p['diag_cb'].get('tok_s', float('nan')):.1f} tok/s (energy source) vs {p['diag_cb_sampled'].get('tok_s', float('nan')):.1f} tok/s (sampled source) - reported, not gated: "
+                        "the direct evidence whether the fix restores the background")
     (out / "power_source.json").write_text(json.dumps(dict(power_source=res["power_source"], verdict=res["verdict"], predicted_inflation_w=pred, observed_inflation_w=obs, reasons=res["reasons"]), indent=1), encoding="utf-8")
     return res
 
