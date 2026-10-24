@@ -85,7 +85,7 @@ def test_eb_is_the_g_b_action_with_the_idle_drop_to_the_knee():
 def test_constants_are_frozen_from_the_decisions_and_the_runner_refuses_a_wrong_hash(tmp_path):
     t = tmp_path / "tuning.json"; t.write_text(json.dumps(dict(c0=7, g_b={"60": dict(setting=G60, feasible_cells=3), "35": dict(setting=G35, feasible_cells=1)})))
     b = tmp_path / "t3b.json"; b.write_text(json.dumps(dict(d_b=dict(margin=0.3, rule_met=True))))
-    c = tmp_path / "t3c.json"; c.write_text(json.dumps(dict(c_b=dict(params=dict(target=0.35, ki=0.15, guard0=0.5, gmin=0.3), rule_met=False, at_grid_edge=False))))
+    c = tmp_path / "t3c.json"; c.write_text(json.dumps(dict(c_b=dict(params=dict(target=0.35, ki=0.15, guard0=0.5, gmin=0.3), rule_met=False, at_grid_edge=False), headroom=dict(w=2.692), d_b_headroom=dict(rule_holds=True, mean_miss=0.004))))
     out = tmp_path / "constants.json"
     const = freeze.build_constants(t, b, c, out)
     assert const["c0"] == 7 and const["g_b"]["60"] == G60 and const["g_b"]["35"] == G35 and const["d_b"]["margin"] == 0.3 and const["c_b"]["target"] == 0.35
@@ -129,3 +129,82 @@ def test_the_supervised_trial_runs_six_cells_one_per_new_hardware_path_outside_a
     assert any(c["workload"] == "llama31_8b" for c in cells)
     s = evaluate.run_trial(tmp_path, CONST, ex.SimExecutor(), log=lambda *a: None)
     assert s["cells"] == 6 and not list(tmp_path.glob("block*/block.json")) and (tmp_path / "trial" / "cells").exists()
+
+
+def test_evaluation_cells_of_c_b_and_d_b_carry_the_steering_budget_parameter_from_the_frozen_headroom():
+    const = dict(CONST, headroom=dict(w=2.692))
+    cells = el.block_cells(4, const)
+    cb60 = next(c for c in cells if c["controller"] == "c'B" and c["budget_w"] == 60.0)
+    db35 = next(c for c in cells if c["controller"] == "d'B" and c["budget_w"] == 35.0)
+    assert abs(cb60["steer_budget_w"] - (60.0 - 2.692) / 0.97) < 1e-9 and abs(db35["steer_budget_w"] - (35.0 - 2.692) / 0.97) < 1e-9
+    assert all("steer_budget_w" not in c for c in cells if c["controller"] in ("g'B", "eB", "a"))
+    assert all("steer_budget_w" not in c for c in el.block_cells(4, CONST) if c["controller"] in ("c'B", "d'B"))        # constants without a headroom: the plain budget
+
+
+def test_freeze_carries_the_headroom_and_the_confirmation_and_refuses_a_t3c_without_it(tmp_path):
+    t = tmp_path / "tuning.json"; t.write_text(json.dumps(dict(c0=7, g_b={"60": dict(setting=G60, feasible_cells=3), "35": None})))
+    b = tmp_path / "t3b.json"; b.write_text(json.dumps(dict(d_b=dict(margin=0.3, rule_met=True))))
+    c = tmp_path / "t3c.json"
+    c.write_text(json.dumps(dict(c_b=dict(params=dict(target=0.35, ki=0.15, guard0=0.5, gmin=0.3), rule_met=True, at_grid_edge=False), headroom=dict(w=2.692, sensor_p95_w=1.05, spread_p95_w=1.642),
+                                 d_b_headroom=dict(rule_holds=False, mean_miss=0.02))))
+    const = freeze.build_constants(t, b, c, tmp_path / "constants.json")
+    assert const["headroom"]["w"] == 2.692 and const["rules"]["d_b_headroom_rule_holds"] is False and const["g_b"]["35"] is None
+    c2 = tmp_path / "t3c_old.json"; c2.write_text(json.dumps(dict(c_b=dict(params=dict(target=0.35, ki=0.15), rule_met=True))))
+    with pytest.raises(SystemExit):
+        freeze.build_constants(t, b, c2, tmp_path / "x.json")
+
+
+def test_the_trial_check_is_mechanical(tmp_path):
+    def cell(name, **m):
+        d = tmp_path / "trial" / "cells" / name
+        d.mkdir(parents=True)
+        base = dict(miss=0.0, tok_s=20.0, power_w=40.0, power_sampled_w=40.5, gov_reads=0, power_source="sampled", exec_mode="EXEC_MODE cuda offloaded=33/33 n_layer=32 governed=1")
+        base.update(m)
+        (d / "cell.json").write_text(json.dumps(dict(id=name, spec=dict(id=name, workload="llama31_8b" if "S5" in name else "llama32_3b", kind="dB" if "d" in name else "static"), metrics=base, executor="hw")))
+    cell("ev04_S5_dB_60"); cell("ev04_S2_eB_60", gov_reads=0); cell("ev04_S0_gB_60", power_source=None, gov_reads=None)
+    ok = evaluate.check_trial(tmp_path)
+    assert ok["ok"] is True and ok["problems"] == []
+    (tmp_path / "trial" / "cells" / "ev04_S2_eB_60" / "cell.json").unlink()
+    cell_bad = tmp_path / "trial" / "cells" / "ev04_S2_eB_60"
+    (cell_bad / "cell.json").write_text(json.dumps(dict(id="ev04_S2_eB_60", spec=dict(id="x", workload="llama32_3b", kind="eB"), metrics=dict(miss=0.0, tok_s=1.0, power_w=90.0, power_sampled_w=40.0, gov_reads=300, power_source="energy",
+                                                                                                                      exec_mode="EXEC_MODE cuda offloaded=10/33 n_layer=32 governed=1"), executor="hw")))
+    bad = evaluate.check_trial(tmp_path)
+    p = " | ".join(bad["problems"])
+    assert bad["ok"] is False and "read the energy counter" in p and "differ" in p and "offload" in p and "sampled" in p
+    assert evaluate.check_trial(tmp_path / "nowhere")["ok"] is False
+
+
+# ---------------------------------------------------------------- the unattended chain (docs/W5B_T3C_SITTING.md, scripts/w5b_t3c_chain.ps1)
+CHAIN = ROOT / "scripts" / "w5b_t3c_chain.ps1"
+
+
+def test_the_chain_script_parses_orders_the_steps_guards_each_one_and_never_starts_a_block():
+    import re
+    import shutil
+    import subprocess
+    src = CHAIN.read_text(encoding="utf-8")
+    order = [src.index(k) for k in ("powercfg /change standby-timeout-ac 0", "tune.py --out data/w5b/t3c --plan t3c", "morning.py --out data/w5b/t3c --strict", "freeze.py", "evaluate.py --trial", "evaluate.py --check-trial")]
+    assert order == sorted(order)
+    for line in src.splitlines():
+        if "evaluate.py" in line and not line.lstrip().startswith("#"):
+            assert "--trial" in line or "--check-trial" in line, line                      # no evaluation block can be started from here
+    assert src.count("Stop-Chain") >= 5 and "$LASTEXITCODE" in src and "NOT started" in src and "--power-source sampled" in src and "Start-Transcript" in src
+    assert not re.search(r"evaluate\.py --blocks", src)
+    ps = shutil.which("powershell")
+    if ps:
+        cmd = f"$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile('{CHAIN}', [ref]$null, [ref]$e); if ($e.Count) {{ $e | ForEach-Object {{ $_.Message }}; exit 1 }}"
+        r = subprocess.run([ps, "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=60)
+        assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_the_chain_summary_prints_the_decisions_the_hash_and_the_trial_checks(tmp_path):
+    import chain_summary as cs
+    (tmp_path / "t3c").mkdir()
+    (tmp_path / "t3c" / "decisions.json").write_text(json.dumps(dict(c_b=dict(params=dict(target=0.35, ki=0.15), rule_met=True, at_grid_edge=False, mean_miss=0.008, mean_tok_s=21.0, mean_power_w=41.0),
+                                                                    headroom=dict(w=2.692, sensor_p95_w=1.05, spread_p95_w=1.642), d_b_headroom=dict(rule_holds=True, mean_miss=0.006, mean_tok_s=25.0, mean_power_w=57.0, margin=0.3))))
+    (tmp_path / "constants.json").write_text(json.dumps(dict(c0=7, g_b={"60": G60, "35": G35}, c_b=dict(target=0.35, ki=0.15), d_b=dict(margin=0.3), headroom=dict(w=2.692), rules={})))
+    (tmp_path / "constants.sha256").write_text("ab" * 32)
+    lines = cs.summary(tmp_path / "t3c" / "decisions.json", tmp_path / "constants.json", tmp_path / "constants.sha256", tmp_path / "none")
+    text = "\n".join(lines)
+    assert "target 0.35" in text and "2.69" in text and "rule_holds" in text.replace(" ", "_") or "still holds" in text
+    assert "ab" * 32 in text and "trial" in text.lower()

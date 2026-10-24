@@ -201,17 +201,65 @@ def next_batch_t3b(results, c0):
     return dict(batch=[], stop=None, decisions=dec)
 
 
+STEADY_TARGET_W = 0.97 * 60.0       # the controllers (ModelController, PIController) aim at 97% of their power-budget parameter
+
+
+def _d_b_margin(results):
+    """The d'B margin of the registered rule (smallest margin with mean miss <= 1% over its 6 cells, else 0.4) from the db_* cells; None when a margin is incomplete."""
+    rows = {}
+    for m in DB_MARGINS:
+        ms = [results.get(f"db_{w}_{sc}_m{m:g}") for w in WORKLOADS for sc in SCENES]
+        if any(x is None for x in ms):
+            return None
+        rows[m] = sum(x["miss"] for x in ms) / 6
+    met = [m for m in DB_MARGINS if rows[m] <= MISS_MAX]
+    return min(met) if met else DB_MARGINS[-1]
+
+
+def headroom_from_results(results):
+    """Power headroom (addendum O-6 amendment 2026-10-24): feasibility is judged on the energy counter (<= budget, no tolerance) while the controllers steer on the sampled power, so the steering target is
+    budget - headroom with headroom = max(0, p95 over the T3b cells of (counter - sampled power)) + max(0, p95 over the d'B cells at the chosen margin of (counter power - the controllers' steady target 58.2 W)).
+    Computed ONLY from T3b data (the cells in `results`); None if the data are missing. The two terms overlap partly (the counter spread contains the sensor offset): kept as specified, conservative."""
+    import numpy as np
+    diffs = [m["power_w"] - m["power_sampled_w"] for m in results.values() if m.get("power_sampled_w") is not None and m.get("power_sampled_w") == m.get("power_sampled_w") and m.get("power_w") is not None]
+    margin = _d_b_margin(results)
+    if not diffs or margin is None:
+        return None
+    sensor = max(0.0, float(np.percentile(diffs, 95)))
+    dev = [results[f"db_{w}_{sc}_m{margin:g}"]["power_w"] - STEADY_TARGET_W for w in WORKLOADS for sc in SCENES]
+    spread = max(0.0, float(np.percentile(dev, 95)))
+    return dict(w=sensor + spread, sensor_p95_w=sensor, spread_p95_w=spread, steady_target_w=STEADY_TARGET_W, margin=margin, n_cells_sensor=len(diffs), n_cells_spread=len(dev),
+                formula="headroom = max(0, p95(counter - sampled)) + max(0, p95(counter power of the d'B cells at the chosen margin - 0.97 x 60 W)); steering target = budget - headroom; "
+                        "the controllers' power-budget parameter = steering target / 0.97 (they aim at 97% of it)")
+
+
+def steer_budget_param(budget_w, headroom_w):
+    """The power-budget PARAMETER given to c'B / d'B so that their aim point (97% of it) equals budget - headroom."""
+    return (float(budget_w) - float(headroom_w)) / 0.97
+
+
 def next_batch_t3c(results, c0):
-    """Block T3c (plan addendum O-6, decided after T3b and before any evaluation block): the c'B grid extended to the targets 0.35 and 0.2 x ki {0.05, 0.15} on the same 6 workload / scene cells (24 cells,
-    ids cb3_*) after one discarded cell; `results` must contain the cb2_* cells of T3b (merged read-only). The UNCHANGED choice rule is applied to the FULL grid (5 targets x 2 ki). One extension only."""
+    """Block T3c (plan addendum O-6): after one discarded cell, (1) the c'B grid extended to the targets 0.35 and 0.2 x ki {0.05, 0.15} on the same 6 workload / scene cells (24 cells, ids cb3_*) with the UNCHANGED
+    choice rule applied to the FULL 10-combination grid (cb2_* cells of T3b merged read-only), and (2) six d'B cells at the chosen margin with the power headroom (ids dbh_*, same 6 cells) to confirm that the
+    margin rule still holds with the steering target budget - headroom; if it does not, the headroom is kept and the result reported (no further tuning). One extension only."""
     dec = dict(c0=c0)
     disc = dict(id="t3c_discard", kind="arm_a", workload="llama32_3b", scene="S0", c0=c0, discard=True)
     if disc["id"] not in results:
         return dict(batch=[disc], stop=None, decisions=dec)
+    head = headroom_from_results(results)
+    if head is None:
+        return dict(batch=[], stop="T3c needs the T3b d'B cells and their sampled power (use --merge-from data/w5b/t3b)", decisions=dec)
+    dec["headroom"] = head
     cb = [dict(id=f"cb3_{w}_{sc}_t{t:g}_k{k:g}", kind="cB", workload=w, scene=sc, c0=c0, params=dict(target=t, ki=k), budget_w=60.0) for t in CB3_TARGETS for k in CB_KIS for w in WORKLOADS for sc in SCENES]
-    miss = _missing(cb, results)
+    dbh = [dict(id=f"dbh_{w}_{sc}_m{head['margin']:g}", kind="dB", workload=w, scene=sc, c0=c0, params=dict(margin=head["margin"]), budget_w=60.0, steer_budget_w=steer_budget_param(60.0, head["w"]), headroom_w=head["w"])
+           for w in WORKLOADS for sc in SCENES]
+    miss = _missing(cb + dbh, results)
     if miss:
         return dict(batch=_shuffled(miss, "t3c"), stop=None, decisions=dec)
     entries = [(t, k, "cb3") for t in CB3_TARGETS for k in CB_KIS] + [(t, k, "cb2") for t in CB_TARGETS for k in CB_KIS]
     dec["c_b"] = _choose_cb_grid(results, entries)
+    ms = [results[c["id"]] for c in dbh]
+    mean_miss = sum(m["miss"] for m in ms) / 6
+    dec["d_b_headroom"] = dict(margin=head["margin"], mean_miss=mean_miss, mean_tok_s=sum(m["tok_s"] for m in ms) / 6, mean_power_w=sum(m["power_w"] for m in ms) / 6, rule_holds=bool(mean_miss <= MISS_MAX),
+                               note="the headroom is kept either way (addendum O-6 amendment: no further tuning)")
     return dict(batch=[], stop=None, decisions=dec)

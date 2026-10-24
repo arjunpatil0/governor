@@ -141,3 +141,16 @@ def test_a_governed_cell_that_read_the_energy_counter_in_its_loop_is_a_problem_e
     write_cell(tmp_path, "old_cell", power_w=45.0, power_sampled_w=45.0)                               # cells from before the field existed are not judged
     p = " | ".join(check(tmp_path)["problems"])
     assert "db_x: the Governor loop read the energy counter" in p and "cb2_y" not in p and "diag_cb:" not in p and "old_cell" not in p
+
+
+def test_strict_mode_returns_a_failing_exit_code_for_problems_only(tmp_path):
+    import subprocess
+    write_cell(tmp_path, "a", power_w=45.0, power_sampled_w=45.0)
+    (tmp_path / "decisions.json").write_text(json.dumps(dict(c0=7, stop=None)))
+    (tmp_path / "manifest.json").write_text(json.dumps({}))
+    ok = subprocess.run([sys.executable, str(ROOT / "experiments" / "w5b" / "morning.py"), "--out", str(tmp_path), "--strict"], capture_output=True, text=True)
+    assert ok.returncode == 0
+    write_cell(tmp_path, "b", power_w=90.0, power_sampled_w=45.0)
+    (tmp_path / "manifest.json").unlink()
+    bad = subprocess.run([sys.executable, str(ROOT / "experiments" / "w5b" / "morning.py"), "--out", str(tmp_path), "--strict"], capture_output=True, text=True)
+    assert bad.returncode == 1 and "PROBLEM" in bad.stdout

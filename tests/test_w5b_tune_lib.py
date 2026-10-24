@@ -12,7 +12,7 @@ WORKLOADS = ("llama32_1b", "llama32_3b", "phi35_mini")
 
 
 def metrics(miss=0.0, tok=30.0, power=40.0, c0m=None):
-    return dict(miss=miss, tok_s=tok, power_w=power, c0m=c0m)
+    return dict(miss=miss, tok_s=tok, power_w=power, c0m=c0m, power_sampled_w=power - 0.8)         # the counter reads 0.8 W above the sampled mean in the synthetic world
 
 
 def run_plan(fake, max_rounds=60, results=None):
@@ -212,7 +212,7 @@ def run_t3c(fake, base, c0=7, rounds=20):
 
 def t3b_base():
     res, _ = run_t3b(fake_world(good_c0=7))
-    return {k: v for k, v in res.items() if k.startswith("cb2_")}
+    return {k: v for k, v in res.items() if k.startswith(("cb2_", "db_"))}
 
 
 def test_t3c_runs_a_discarded_cell_then_24_cells_for_the_new_targets_only():
@@ -222,6 +222,7 @@ def test_t3c_runs_a_discarded_cell_then_24_cells_for_the_new_targets_only():
     res, ans = run_t3c(fake_world(good_c0=7), base)
     new = [k for k in res if k.startswith("cb3_")]
     assert len(new) == 24 and {k.split("_t")[1].split("_k")[0] for k in new} == {"0.35", "0.2"} and len(ans["decisions"]["c_b"]["grid"]) == 10
+    assert len([k for k in res if k.startswith("dbh_")]) == 6
 
 
 def test_t3c_applies_the_unchanged_rule_to_the_full_grid_and_flags_an_edge_winner():
@@ -231,7 +232,7 @@ def test_t3c_applies_the_unchanged_rule_to_the_full_grid_and_flags_an_edge_winne
         if spec["kind"] != "cB":
             return metrics()
         return metrics(miss=0.06 * spec["params"]["target"], tok=30.0 - 20 * spec["params"]["target"], power=45.0)
-    res, ans = run_t3c(lower_is_safer, {k: metrics(miss=0.06 * v_t, tok=30.0 - 20 * v_t, power=45.0) for k, v_t in ((k, float(k.split("_t")[1].split("_k")[0])) for k in base)})
+    res, ans = run_t3c(lower_is_safer, {k: (metrics(miss=0.06 * float(k.split("_t")[1].split("_k")[0]), tok=30.0 - 20 * float(k.split("_t")[1].split("_k")[0]), power=45.0) if k.startswith("cb2_") else v) for k, v in base.items()})
     cb = ans["decisions"]["c_b"]
     assert cb["rule_met"] is False and cb["params"]["target"] == 0.2 and cb["at_grid_edge"] is True
 
@@ -240,7 +241,7 @@ def test_t3c_applies_the_unchanged_rule_to_the_full_grid_and_flags_an_edge_winne
             return metrics()
         t = spec["params"]["target"]
         return metrics(miss=0.004 if t <= 0.35 else 0.05, tok=30.0 - 20 * (0.5 - t) ** 2 * 10 if t <= 0.35 else 40.0, power=45.0)
-    res2, ans2 = run_t3c(knee, {k: knee(dict(kind="cB", params=dict(target=float(k.split("_t")[1].split("_k")[0])))) for k in base})
+    res2, ans2 = run_t3c(knee, {k: (knee(dict(kind="cB", params=dict(target=float(k.split("_t")[1].split("_k")[0])))) if k.startswith("cb2_") else v) for k, v in base.items()})
     assert ans2["decisions"]["c_b"]["rule_met"] is True and ans2["decisions"]["c_b"]["params"]["target"] == 0.35 and ans2["decisions"]["c_b"]["at_grid_edge"] is False
 
 
@@ -261,7 +262,7 @@ def test_the_sitting_can_merge_the_cells_of_an_earlier_block_as_read_only_base_r
             pass
     ex = Stub()
     s = tune.run_sitting(tmp_path, ex, log=lambda *a: None, planner=lambda r: tl.next_batch_t3c(r, 7), base_results=base)
-    assert s["finished"] and len(ex.calls) == 25 and not any(c.startswith("cb2_") for c in ex.calls)
+    assert s["finished"] and len(ex.calls) == 31 and not any(c.startswith(("cb2_", "db_")) for c in ex.calls)
     assert json.loads((tmp_path / "decisions.json").read_text(encoding="utf-8"))["c_b"]["grid"]
 
 
@@ -272,3 +273,53 @@ def test_t3c_is_governed_so_the_power_source_rules_of_t3b_apply(tmp_path):
     assert tune.resolve_power_source("t3c", "sampled", tmp_path, o5_path=o5) == "sampled"
     with pytest.raises(SystemExit):
         tune.resolve_power_source("t3c", "energy", tmp_path, o5_path=o5)
+
+
+
+# ---------------------------------------------------------------- power headroom (addendum O-6 amendment, 2026-10-24): steering target = budget - headroom, headroom from the T3b data only
+def headroom_world():
+    """d'B cells at every margin; the chosen margin (0.3 in fake_world) has counter powers whose p95 above the steady target 58.2 W is known; the counter reads 0.8 W above the sampled mean."""
+    res = {}
+    for m in tl.DB_MARGINS:
+        for w in WORKLOADS:
+            for sc in tl.SCENES:
+                miss = 0.03 if m < 0.2 else 0.004
+                res[f"db_{w}_{sc}_m{m:g}"] = metrics(miss=miss, tok=30.0, power=58.2 + (1.0 if sc == "S0" else -2.0) + (0.0 if m == 0.2 else 0.0))
+    return res
+
+
+def test_headroom_is_the_p95_of_counter_minus_sampled_plus_the_p95_of_counter_above_the_steady_target_of_the_chosen_margin_cells():
+    import numpy as np
+    h = tl.headroom_from_results(headroom_world())
+    assert abs(h["sensor_p95_w"] - 0.8) < 1e-9 and abs(h["steady_target_w"] - 58.2) < 1e-9 and h["margin"] == 0.2
+    # chosen margin 0.2 here (smallest with mean miss <= 1%): its 6 cells are +1.0 (S0 x3) and -2.0 (S1 x3) around 58.2 -> p95 of the deviations
+    assert abs(h["spread_p95_w"] - float(np.percentile([1.0, 1.0, 1.0, -2.0, -2.0, -2.0], 95))) < 1e-9
+    assert abs(h["w"] - (0.8 + 1.0)) < 1e-9 and "p95" in h["formula"]
+
+
+def test_headroom_never_goes_negative_and_needs_the_data():
+    res = {k: dict(v, power_w=40.0, power_sampled_w=41.0) for k, v in headroom_world().items()}                  # counter below the sampled mean and below the target: no headroom needed
+    assert tl.headroom_from_results(res)["w"] == 0.0
+    assert tl.headroom_from_results({}) is None
+
+
+def test_t3c_adds_six_d_b_cells_at_the_chosen_margin_with_the_steering_budget_and_reports_whether_the_rule_still_holds():
+    base = dict(t3b_base())
+    base.update(headroom_world())
+    base = {k: v for k, v in base.items() if k.startswith(("db_", "cb2_"))}
+    seen = []
+
+    def fake(spec):
+        if spec["id"].startswith("dbh_"):
+            seen.append(spec)
+            return metrics(miss=0.004, tok=28.0, power=57.0)
+        return fake_world(good_c0=7)(spec)
+    res, ans = run_t3c(fake, base)
+    d = ans["decisions"]
+    assert len(seen) == 6 and all(s["params"]["margin"] == 0.2 and abs(s["steer_budget_w"] - (60.0 - d["headroom"]["w"]) / 0.97) < 1e-9 for s in seen)
+    assert d["d_b_headroom"]["rule_holds"] is True and abs(d["d_b_headroom"]["mean_miss"] - 0.004) < 1e-9
+
+    def worse(spec):
+        return metrics(miss=0.02, tok=20.0, power=55.0) if spec["id"].startswith("dbh_") else fake_world(good_c0=7)(spec)
+    res2, ans2 = run_t3c(worse, base)
+    assert ans2["decisions"]["d_b_headroom"]["rule_holds"] is False and ans2["decisions"]["headroom"]["w"] == d["headroom"]["w"]          # keep the headroom, report, no further tuning

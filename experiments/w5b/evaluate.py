@@ -87,6 +87,42 @@ def run_trial(out, const, executor, log=print):
     return dict(cells=n)
 
 
+def check_trial(out, expected=None):
+    """Automatic checks of the supervised evaluation trial: every cell present, no incident, governed cells on the sampled source with 0 energy reads, counter vs sampled power within 15%, full GPU offload,
+    and the held-out 8B among the cells. Returns {ok, problems, n}."""
+    out = Path(out) / "trial" / "cells"
+    problems, n, has8b = [], 0, False
+    if not out.exists():
+        return dict(ok=False, problems=[f"{out} does not exist"], n=0)
+    for p in sorted(out.glob("*/incident.json")):
+        problems.append(f"incident in {p.parent.name}: {p.read_text(encoding='utf-8')[:200]}")
+    for p in sorted(out.glob("*/cell.json")):
+        d = json.loads(p.read_text(encoding="utf-8"))
+        m, sp, cid = d["metrics"], d["spec"], d["id"]
+        n += 1
+        has8b = has8b or sp.get("workload") == "llama31_8b"
+        if sp.get("kind") in ("cB", "dB", "eB"):
+            if m.get("power_source") != "sampled":
+                problems.append(f"{cid}: governed cell power_source {m.get('power_source')}, expected sampled")
+            if (m.get("gov_reads") or 0) > 0:
+                problems.append(f"{cid}: the Governor loop read the energy counter {m['gov_reads']} times")
+        w, s_ = m.get("power_w"), m.get("power_sampled_w")
+        if w is None or s_ is None or w != w or s_ != s_ or abs(w - s_) / max(s_, 1e-9) > 0.15:
+            problems.append(f"{cid}: counter power {w} W and sampled power {s_} W differ by more than 15% (or are missing)")
+        em = m.get("exec_mode") or ""
+        if "offloaded=" in em:
+            a, b = em.split("offloaded=")[1].split()[0].split("/")
+            if a != b:
+                problems.append(f"{cid}: not a full GPU offload ({em})")
+        elif sp.get("kind") != "fg_alone":
+            problems.append(f"{cid}: no EXEC_MODE line (full offload not confirmed)")
+    if not has8b:
+        problems.append("no cell of the held-out Llama-3.1-8B")
+    if expected is not None and n != expected:
+        problems.append(f"{n} trial cells found, {expected} expected")
+    return dict(ok=not problems, problems=problems, n=n)
+
+
 def run_blocks(out, blocks, const, executor, log=print, as_blocks=None):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -121,12 +157,21 @@ def run_blocks(out, blocks, const, executor, log=print, as_blocks=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--blocks", type=int, nargs="+", required=True); ap.add_argument("--as-block", type=int, nargs="+", default=None)
-    ap.add_argument("--constants", required=True); ap.add_argument("--constants-sha256", required=True)
+    ap.add_argument("--blocks", type=int, nargs="+", default=None); ap.add_argument("--as-block", type=int, nargs="+", default=None)
+    ap.add_argument("--constants", default=None); ap.add_argument("--constants-sha256", default=None)
+    ap.add_argument("--check-trial", action="store_true", help="check the cells of --out/trial automatically (exit code 0 = pass) instead of running anything")
     ap.add_argument("--out", default=str(ROOT / "data" / "w5b" / "eval")); ap.add_argument("--armoury-mode", default=None)
     ap.add_argument("--executor", choices=["hw", "sim"], default="hw"); ap.add_argument("--max-uptime-s", type=float, default=7200.0)
     ap.add_argument("--trial", action="store_true", help="supervised trial: six cells, one per path the evaluation adds (not data, not a block)")
     a = ap.parse_args()
+    if a.check_trial:
+        r = check_trial(a.out, expected=6)
+        print(f"TRIAL CHECK: {'PASS' if r['ok'] else 'FAIL'} ({r['n']} cells)")
+        for x in r["problems"]:
+            print("  problem:", x)
+        raise SystemExit(0 if r["ok"] else 1)
+    if not (a.blocks and a.constants and a.constants_sha256):
+        sys.exit("--blocks, --constants and --constants-sha256 are required")
     const = load_constants(a.constants, a.constants_sha256)
     as_blocks = a.as_block or a.blocks
     why = el.check_session(as_blocks, const)

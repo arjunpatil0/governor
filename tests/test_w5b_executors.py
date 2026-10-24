@@ -88,3 +88,12 @@ def test_the_governed_cell_can_take_its_power_from_the_sampled_source_without_re
 def test_the_hardware_executor_defaults_to_the_sampled_power_source_and_rejects_a_cell_whose_loop_read_the_counter():
     src = (ROOT / "experiments" / "w5b" / "executors.py").read_text(encoding="utf-8")
     assert 'def __init__(self, power_source="sampled")' in src and "never read the energy counter" in src
+
+
+def test_c_b_and_d_b_steer_on_the_budget_minus_headroom_parameter_when_the_spec_gives_one():
+    k, c = ex.build_controller(P, spec("cB", params=dict(target=0.35, ki=0.15), steer_budget_w=59.08))
+    assert c.al.power_budget_w == 59.08
+    k, d = ex.build_controller(P, spec("dB", params=dict(margin=0.3), steer_budget_w=59.08))
+    assert d.model.power_budget_w == 59.08 and d.model_un.power_budget_w == 59.08
+    k, d0 = ex.build_controller(P, spec("dB", params=dict(margin=0.3)))
+    assert d0.model.power_budget_w == 60.0                                               # tuning cells without headroom keep the plain budget

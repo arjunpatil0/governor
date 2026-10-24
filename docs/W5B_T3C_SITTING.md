@@ -1,8 +1,15 @@
-# W5b block T3c sitting (written 2026-10-24; rules: addendum O-6 = docs/W5B_ADDENDUM_O6.md; T1-T3, the diagnostic and T3b are DONE)
-T3c extends the c'B comparator grid to the targets 0.35 and 0.2 (x ki 0.05 and 0.15) on the same six workload / scene cells, so that the comparator is not under-tuned: 1 discarded cell + 24 cells = 25 cells, about 42 min at 100 s. The unchanged choice rule is then applied to the full 10-combination grid. Power source: sampled (addendum O-5). One extension only.
+# W5b block T3c + freeze + evaluation trial: ONE unattended chain (written 2026-10-24, revised the same day; rules: addendum O-6 and its section 7 = docs/W5B_ADDENDUM_O6.md; T1-T3, the diagnostic and T3b are DONE)
+The chain runs, each step only if the previous one passed, and STOPS on any failure or at the end:
+0. the no-sleep power settings (standby and hibernate timeout 0 on AC);
+1. T3c: 1 discarded cell + the c'B comparator grid extension (targets 0.35 and 0.2 x ki 0.05 and 0.15 on the six workload / scene cells = 24 cells) + 6 d'B cells at margin 0.3 WITH the power headroom (2.69 W, steering target 57.31 W) to confirm the margin rule still holds (the headroom is kept either way) = 31 cells, about 52 min; power source sampled (addendum O-5);
+2. the morning check in strict mode (any problem fails the chain);
+3. freeze: experiments/w5b/freeze.py writes data/w5b/constants.json and its sha256 mechanically from the registered rules (c0 and g'B from the T1-T3 decisions, d'B's margin from T3b, c'B's constants and the headroom from T3c);
+4. the evaluation trial (6 cells, one per path the evaluation adds: d'B on the held-out 8B, eB with an idle phase, c'B in S1d, a static g'B, arm a on the 8B, a 35 W d'B cell; not a block, not data), about 12 min;
+5. the automatic checks of the trial (governed cells on the sampled source with 0 energy reads, counter vs sampled power within 15%, full GPU offload, the 8B present, no incident);
+then it prints an end summary (steps, c'B constants and whether the rule was met, the headroom, the d'B confirmation, the constants hash, the trial cells) and stops. IT CANNOT START EVALUATION BLOCK 1. Re-freezing after review is allowed since no evaluation block will have run. Total about 1.1 h, inside the 2 h uptime limit if you start within minutes of the restart.
 
 ## Before you start
-RESTART the laptop (uptime must be <= 2 h). Windows Update and NVIDIA driver updates paused; AC power; Armoury Crate Performance; Battery Health Charging Balanced 80%; Chrome closed; tray apps quit; nothing else running. Do NOT run pytest or rebuild anything. The tree is committed.
+RESTART the laptop (the tools refuse an uptime above 2 h). Windows Update and NVIDIA driver updates paused; AC power; Armoury Crate Performance; Battery Health Charging Balanced 80%; Chrome closed; tray apps quit; nothing else running. Do NOT run pytest or rebuild anything. The tree is committed.
 
 ## 1. Administrator PowerShell: start the helper (leave it open)
 ```powershell
@@ -10,25 +17,20 @@ nvidia-smi -rgc; nvidia-smi -rmc
 cd C:\Users\arjun\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
 ```
 
-## 2. Normal PowerShell: T3c (resumable)
+## 2. Normal PowerShell: the chain (one command)
 ```powershell
 cd C:\Users\arjun\governor
-for ($i = 1; $i -le 3; $i++) { python experiments/w5b/tune.py --out data/w5b/t3c --plan t3c --c0 7 --merge-from data/w5b/t3b --power-source sampled --armoury-mode Performance --max-hours 2; if ((Test-Path data/w5b/t3c/decisions.json) -or ($LASTEXITCODE -eq 1) -or ($LASTEXITCODE -eq 3)) { break }; Start-Sleep -Seconds 60 }
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\w5b_t3c_chain.ps1
 ```
-The T3b cells are merged read-only (never re-run); only the discarded cell and the 24 new cells run. Same exit-code rules as before (2 = plain stop, resumed; 1 = abort or refusal, 3 = time limit).
+The whole output is also written to data\w5b\chain_t3c_transcript.txt. The last lines are the summary; "RESULT: ALL STEPS PASSED. Evaluation block 1 was NOT started." means success; "RESULT: STOPPED ON A FAILURE" names the failed step and nothing after it was run.
 
-## 3. After the run
-```powershell
-cd C:\Users\arjun\governor
-python experiments/w5b/morning.py --out data/w5b/t3c
-nvidia-smi --query-gpu=temperature.gpu,clocks.sm,power.draw --format=csv
-```
-Paste the output (expect 0 problems; the c_b line shows the chosen constants, rule_met and whether the winner is again at the grid edge). Then Ctrl+C the helper once and in the ADMIN window paste BOTH:
+## 3. After the chain
+Paste the whole end summary. Then press Ctrl+C in the helper window once (note the time to the prompt and the message) and, in the ADMIN window, paste:
 ```powershell
 Get-Content C:\ProgramData\governor\clock_helper.log | Select-String "ERR|FAIL|refused|WARNING|startup|shutdown|not needed|rate" | Select-Object -Last 80
 Get-Content C:\ProgramData\governor\clock_helper.log -Tail 30
 ```
-I cannot read the helper log from my side (Administrators only); the T3b sitting's log was not checked for that reason (addendum O-6 section 4). If you still have the window of that sitting open or the file untouched, the first command also covers it (it lists the last 80 notable lines). Tell me the /export path if you made one.
+The sleep settings were changed by the chain; the summary prints the revert commands (standby 30, hibernate 0; use your previous values if they were different). I cannot read the helper log from my side (Administrators only).
 
 ## 4. What I do next (not yours)
-Freeze the constants (experiments/w5b/freeze.py from the three decisions files), commit data/w5b/constants.json, and give you the supervised evaluation trial and the session commands with the literal hash (docs/W5B_EVALUATION.md).
+Review the summary, commit data/w5b/constants.json (the evaluation runner checks its sha256), and give you the literal evaluation session commands (docs/W5B_EVALUATION.md).

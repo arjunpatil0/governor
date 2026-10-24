@@ -136,6 +136,7 @@ def diag_gate(out):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
+    ap.add_argument("--strict", action="store_true", help="exit code 1 when there are problems (flags do not fail); for the unattended chain")
     ap.add_argument("--gate", choices=["diag"], default=None, help="diag: check the diagnostic A/B (exit code 0 = T3b may start, 1 = it must not)")
     a = ap.parse_args()
     if a.gate == "diag":
@@ -162,6 +163,8 @@ def main():
         print("PROBLEM", x)
     for x in r["flags"]:
         print("FLAG", x)
+    if a.strict and r["problems"]:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

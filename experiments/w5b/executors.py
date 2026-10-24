@@ -80,9 +80,9 @@ def build_controller(P, spec):
         return "ctl", StaticController(_static_action(P, spec["setting"]))
     if k == "cB":
         p = spec["params"]
-        return "ctl", SwitchingPIController(P, power_budget_w=float(spec["budget_w"]), target=p["target"], ki=p["ki"], guard0=0.5, gmin=0.3)
+        return "ctl", SwitchingPIController(P, power_budget_w=float(spec.get("steer_budget_w", spec["budget_w"])), target=p["target"], ki=p["ki"], guard0=0.5, gmin=0.3)
     if k == "dB":
-        return "ctl", HybridController(P, float(spec["budget_w"]), safety=1.0 - float(spec["params"]["margin"]), switch_gain=2.0, clock_every=20)
+        return "ctl", HybridController(P, float(spec.get("steer_budget_w", spec["budget_w"])), safety=1.0 - float(spec["params"]["margin"]), switch_gain=2.0, clock_every=20)
     raise ValueError(f"no controller for cell kind {k}")
 
 

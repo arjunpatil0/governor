@@ -27,9 +27,12 @@ def _cell(block, scene, ctrl, budget, const, exploratory):
         if setting is None:
             return None
         return dict(base, kind="static" if ctrl == "g'B" else "eB", setting=setting)
+    steer = {}
+    if const.get("headroom"):                      # addendum O-6 amendment: c'B / d'B steer on budget - headroom (feasibility stays on the counter, no tolerance)
+        steer = dict(steer_budget_w=(float(budget) - float(const["headroom"]["w"])) / 0.97, headroom_w=float(const["headroom"]["w"]))
     if ctrl == "c'B":
-        return dict(base, kind="cB", params=dict(target=const["c_b"]["target"], ki=const["c_b"]["ki"]))
-    return dict(base, kind="dB", params=dict(margin=const["d_b"]["margin"]))
+        return dict(base, kind="cB", params=dict(target=const["c_b"]["target"], ki=const["c_b"]["ki"]), **steer)
+    return dict(base, kind="dB", params=dict(margin=const["d_b"]["margin"]), **steer)
 
 
 def block_cells(block, const, seed=SEED, hgb=False, seed_block=None):
