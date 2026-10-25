@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SLO = 0.01
 NI_MARGIN = 0.95
 PRIMARY_SCENES = ("S0", "S1", "S1d", "S2", "S5")
-COMPARATORS = ("c'B", "g'B", "eB")
+COMPARATORS = ("c'B-T3b", "g'B", "eB")        # c'B-T3b = PRIMARY c'B comparator (target 0.5, ki 0.15: the registered rule's output on the T3b grid; addendum O-7 amendment 2026-10-25)
+SECONDARY = ("c'B-T3c",)                      # c'B-T3c = the same rule after the O-6 extension: reported, never part of the registered reading
 MIN_NONTIED = 6                 # with fewer non-tied blocks the exact one-sided p cannot go below 0.05/3 (1/64 = 0.0156 < 0.0167 needs n >= 6)
 
 
@@ -103,18 +104,22 @@ def superiority(sc, scene, a, comps, seed, alpha=0.05):
     return out
 
 
+def _ni(sc, scene, c, seed):
+    r, n_ex = ratio_blocks(sc[(scene, "d'B")].to_numpy(), sc[(scene, c)].to_numpy())
+    if len(r) == 0:
+        return {"median": float("nan"), "lo": float("nan"), "hi": float("nan"), "n": 0, "n_excluded": n_ex, "pass": True}          # comparator scored 0 in every block: nothing to be inferior to
+    lo, hi = bootstrap_ci_median(r, seed=_stable_seed(seed, "ni", scene, c))
+    return {"median": float(np.median(r)), "lo": lo, "hi": hi, "n": len(r), "n_excluded": n_ex, "pass": bool(lo >= NI_MARGIN)}
+
+
 def hw2_report(df, budget=60.0, seed=0):
     sc = _scores(df, budget)
-    rep = dict(budget=budget, s5=superiority(sc, "S5", "d'B", COMPARATORS, seed), ni={}, hw1={})
+    rep = dict(budget=budget, s5=superiority(sc, "S5", "d'B", COMPARATORS, seed), ni={}, hw1={}, secondary={})
     for scene in ("S0", "S2"):
-        rep["ni"][scene] = {}
-        for c in COMPARATORS:
-            r, n_ex = ratio_blocks(sc[(scene, "d'B")].to_numpy(), sc[(scene, c)].to_numpy())
-            if len(r) == 0:
-                rep["ni"][scene][c] = {"median": float("nan"), "lo": float("nan"), "hi": float("nan"), "n": 0, "n_excluded": n_ex, "pass": True}          # comparator scored 0 in every block: nothing to be inferior to
-                continue
-            lo, hi = bootstrap_ci_median(r, seed=_stable_seed(seed, "ni", scene, c))
-            rep["ni"][scene][c] = {"median": float(np.median(r)), "lo": lo, "hi": hi, "n": len(r), "n_excluded": n_ex, "pass": bool(lo >= NI_MARGIN)}
+        rep["ni"][scene] = {c: _ni(sc, scene, c, seed) for c in COMPARATORS}
+    sec = [c for c in SECONDARY if ("S5", c) in sc.columns]
+    if sec:                                                  # secondary comparator(s): same tests, own Holm family, NOT part of earns_place
+        rep["secondary"] = dict(s5=superiority(sc, "S5", "d'B", tuple(sec), seed), ni={scene: {c: _ni(sc, scene, c, seed) for c in sec} for scene in ("S0", "S2")})
     h = hw1_table(df, budget)
     for scene in PRIMARY_SCENES:
         rep["hw1"][scene] = bool(h.loc[(scene, "d'B"), "holds"])
@@ -141,6 +146,20 @@ def hw3_report(df, budget=60.0, seed=0):
 
 def earns_place(rep):
     return bool(all(r["reject"] for r in rep["s5"].values()) and all(v["pass"] for sc in rep["ni"].values() for v in sc.values()) and all(rep["hw1"].values()))
+
+
+def secondary_lines(rep):
+    """Report lines of the secondary comparator(s) (c'B-T3c): same tests, labelled SECONDARY, not part of the registered reading."""
+    sec = rep.get("secondary") or {}
+    if not sec:
+        return []
+    L = ["", "### SECONDARY comparator c'B-T3c (not part of the registered reading; reported for the paper)", ""]
+    for c, r in sec["s5"].items():
+        L.append(f"- S5 d'B vs {c}: median diff {r['median_diff']:.2f} tok/s, 90% CI [{r['ci_lo']:.2f}, {r['ci_hi']:.2f}], p {r['p']:.5f}, non-tied blocks {r['n_nontied']}, " + ("INCONCLUSIVE, " if r["inconclusive"] else "") + f"REJECT {r['reject']}")
+    for scene, d in sec["ni"].items():
+        for c, r in d.items():
+            L.append(ni_line(scene, c, r))
+    return L
 
 
 def hw7_staleness(tokens, clock_changes, settle_s=1.0, window_s=2.0, min_clean=8):
@@ -176,13 +195,14 @@ def main(path):
         L += [f"## Budget {b:.0f} W ({tag})", "", "### HW1 per controller and scene", hw1_table(df, b).round(3).to_string(), ""]
         if b == 60.0:
             rep = hw2_report(df, b)
-            L += ["### HW2 (score = tok/s if feasible else 0; paired by block)", "", "S5 superiority of d'B (exact Wilcoxon, Holm over 3, 90% bootstrap CI of the median difference):"]
+            L += ["### HW2 (score = tok/s if feasible else 0; paired by block)", "", "S5 superiority of d'B vs c'B-T3b (PRIMARY), g'B, eB (exact Wilcoxon, Holm over 3, 90% bootstrap CI of the median difference):"]
             for c, r in rep["s5"].items():
                 L.append(f"- vs {c}: median diff {r['median_diff']:.2f} tok/s, 90% CI [{r['ci_lo']:.2f}, {r['ci_hi']:.2f}], p {r['p']:.5f}, non-tied blocks {r['n_nontied']}, " + ("INCONCLUSIVE, " if r["inconclusive"] else "") + f"Holm-reject {r['holm_reject']}, REJECT {r['reject']}")
-            L += ["", f"Non-inferiority (ratio d'B / comparator, 90% CI lower bound >= {NI_MARGIN}):"]
+            L += ["", f"Non-inferiority (ratio d'B / comparator, 90% CI lower bound >= {NI_MARGIN}; PRIMARY c'B comparator = c'B-T3b):"]
             for scene, d in rep["ni"].items():
                 for c, r in d.items():
                     L.append(ni_line(scene, c, r))
+            L += secondary_lines(rep)
             L += ["", "HW1 for d'B in every primary scene: " + ", ".join(f"{s} {v}" for s, v in rep["hw1"].items()), "",
                   f"**d'B {'EARNS ITS PLACE' if earns_place(rep) else 'DOES NOT EARN ITS PLACE'}** under the registered reading (S5 win against all three, non-inferiority in S0 and S2 against all three, HW1 in every primary scene).", ""]
             L += ["### HW3 (d'B vs g'B and eB; Holm over the 5 scenes)", ""]

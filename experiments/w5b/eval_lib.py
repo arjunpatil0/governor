@@ -1,12 +1,13 @@
 """W5b evaluation blocks 4-13: pure composition of a block (plan addendum O-6 section 5; tests/test_w5b_eval.py).
-One block = 25 primary cells (scenes S0, S1, S1d, S2, S5 x controllers g'B, eB, c'B, d'B at 60 W + the reference arm a in the 5 scenes); blocks 4-8 add the exploratory 35 W family (the same 20 cells).
+One block = 30 primary cells (scenes S0, S1, S1d, S2, S5 x controllers g'B, eB, c'B-T3b, c'B-T3c, d'B at 60 W + the reference arm a in the 5 scenes); blocks 4-8 add the exploratory 35 W family (the same 25 cells, no arm a).
+c'B-T3b (target 0.5, ki 0.15: the registered rule's output on the T3b grid) is the PRIMARY c'B comparator of the d'B tests, c'B-T3c (the same rule after the O-6 extension) the SECONDARY one (addendum O-7 amendment 2026-10-25).
 S3 and d'B-HGB are not built. Background: the 3B for S0, S1, S1d, S2; the held-out Llama-3.1-8B for S5. Foreground: synthetic FMA at the frozen c0; scene time starts at the measured window (origin 5000 ms).
 The order inside a block is seeded-random per (block, cell)."""
 import random
 
 SEED = 20261025
 SCENES = ("S0", "S1", "S1d", "S2", "S5")
-CONTROLLERS = ("g'B", "eB", "c'B", "d'B")
+CONTROLLERS = ("g'B", "eB", "c'B-T3b", "c'B-T3c", "d'B")
 EVAL_BLOCKS = tuple(range(4, 14))
 EXPLORATORY_BLOCKS = tuple(range(4, 9))
 HELD_OUT = "llama31_8b"
@@ -14,7 +15,8 @@ KNOWN_BG = "llama32_3b"
 CELL_S = 100.0                      # estimate per cell (measured in the tuning sittings: 100 s mean, 112 s max)
 SESSION_MAX_S = 3 * 3600.0
 WARMUP_ORIGIN_MS = 5000.0
-_CODE = {"g'B": "gB", "eB": "eB", "c'B": "cB", "d'B": "dB", "a": "a"}
+_CODE = {"g'B": "gB", "eB": "eB", "c'B-T3b": "cBb", "c'B-T3c": "cBc", "d'B": "dB", "a": "a"}
+_CB_CONST = {"c'B-T3b": "c_b_t3b", "c'B-T3c": "c_b_t3c"}
 
 
 def _cell(block, scene, ctrl, budget, const, exploratory):
@@ -30,8 +32,9 @@ def _cell(block, scene, ctrl, budget, const, exploratory):
     steer = {}
     if const.get("headroom"):                      # addendum O-6 amendment: c'B / d'B steer on budget - headroom (feasibility stays on the counter, no tolerance)
         steer = dict(steer_budget_w=(float(budget) - float(const["headroom"]["w"])) / 0.97, headroom_w=float(const["headroom"]["w"]))
-    if ctrl == "c'B":
-        return dict(base, kind="cB", params=dict(target=const["c_b"]["target"], ki=const["c_b"]["ki"]), **steer)
+    if ctrl in _CB_CONST:
+        cb = const[_CB_CONST[ctrl]]
+        return dict(base, kind="cB", params=dict(target=cb["target"], ki=cb["ki"]), **steer)
     return dict(base, kind="dB", params=dict(margin=const["d_b"]["margin"]), **steer)
 
 

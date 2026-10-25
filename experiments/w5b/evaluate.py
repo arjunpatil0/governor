@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "experiments" / "w5
 sys.path.insert(0, str(ROOT / "experiments" / "w4_smoke")); sys.path.insert(0, str(ROOT / "workloads" / "common")); sys.path.insert(0, str(ROOT / "telemetry"))
 import eval_lib as el  # noqa: E402
 
-COLUMNS = ["block", "scene", "controller", "budget_w", "bg_tok_s", "miss_frac", "power_w", "exploratory", "cell_id", "power_sampled_w", "gov_reads", "executor"]
+COLUMNS = ["block", "scene", "controller", "budget_w", "bg_tok_s", "miss_frac", "power_w", "exploratory", "cell_id", "power_sampled_w", "gov_reads", "executor", "final_pacing_mode"]
 
 
 def load_constants(path, expected_sha):
@@ -44,6 +44,15 @@ def prepare_block(out, block, as_block):
     return None
 
 
+def pacing_mode(spec, metrics):
+    """The pacing mode a cell ended in (reported per cell: the d'B mode is path dependent, journal 0059): the governed controller's final mode; a static setting's own mode; arm a is unaligned duty pacing."""
+    if metrics.get("final_pacing_mode"):
+        return metrics["final_pacing_mode"]
+    if spec.get("kind") == "arm_a":
+        return "unaligned"
+    return (spec.get("setting") or {}).get("mode") or ""
+
+
 def export_results(out):
     out = Path(out)
     rows = []
@@ -51,7 +60,7 @@ def export_results(out):
         for cj in sorted((bj.parent / "cells").glob("*/cell.json")):
             d = json.loads(cj.read_text(encoding="utf-8"))
             sp, m = d["spec"], d["metrics"]
-            rows.append([sp["block"], sp["scene"], sp["controller"], sp["budget_w"], m["tok_s"], m["miss"], m["power_w"], sp["exploratory"], sp["id"], m.get("power_sampled_w"), m.get("gov_reads"), d["executor"]])
+            rows.append([sp["block"], sp["scene"], sp["controller"], sp["budget_w"], m["tok_s"], m["miss"], m["power_w"], sp["exploratory"], sp["id"], m.get("power_sampled_w"), m.get("gov_reads"), d["executor"], pacing_mode(sp, m)])
     with open(out / "results.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(COLUMNS)
@@ -59,11 +68,11 @@ def export_results(out):
     return len(rows)
 
 
-TRIAL_KEYS = (("S5", "d'B", 60.0), ("S2", "eB", 60.0), ("S1d", "c'B", 60.0), ("S0", "g'B", 60.0), ("S5", "a", 60.0), ("S1", "d'B", 35.0))
+TRIAL_KEYS = (("S5", "d'B", 60.0), ("S2", "eB", 60.0), ("S1d", "c'B-T3c", 60.0), ("S2", "c'B-T3b", 60.0), ("S0", "g'B", 60.0), ("S5", "a", 60.0), ("S1", "d'B", 35.0))
 
 
 def trial_cells(const):
-    """Supervised hardware trial (not data, not a block): one cell for each path the evaluation adds - d'B on the held-out 8B, eB with an idle phase (S2), c'B in S1d, a static g'B, arm a on the 8B, a 35 W cell."""
+    """Supervised hardware trial (not data, not a block): one cell for each path the evaluation adds - d'B on the held-out 8B, eB with an idle phase (S2), c'B-T3c in S1d, c'B-T3b in S2 (idle phases), a static g'B, arm a on the 8B, a 35 W cell (7 cells)."""
     cells = {(c["scene"], c["controller"], c["budget_w"]): c for c in block_cells_all(const)}
     return [cells[k] for k in TRIAL_KEYS]
 
@@ -162,10 +171,10 @@ def main():
     ap.add_argument("--check-trial", action="store_true", help="check the cells of --out/trial automatically (exit code 0 = pass) instead of running anything")
     ap.add_argument("--out", default=str(ROOT / "data" / "w5b" / "eval")); ap.add_argument("--armoury-mode", default=None)
     ap.add_argument("--executor", choices=["hw", "sim"], default="hw"); ap.add_argument("--max-uptime-s", type=float, default=7200.0)
-    ap.add_argument("--trial", action="store_true", help="supervised trial: six cells, one per path the evaluation adds (not data, not a block)")
+    ap.add_argument("--trial", action="store_true", help="supervised trial: seven cells, one per path the evaluation adds (not data, not a block)")
     a = ap.parse_args()
     if a.check_trial:
-        r = check_trial(a.out, expected=6)
+        r = check_trial(a.out, expected=7)
         print(f"TRIAL CHECK: {'PASS' if r['ok'] else 'FAIL'} ({r['n']} cells)")
         for x in r["problems"]:
             print("  problem:", x)

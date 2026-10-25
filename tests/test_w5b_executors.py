@@ -97,3 +97,18 @@ def test_c_b_and_d_b_steer_on_the_budget_minus_headroom_parameter_when_the_spec_
     assert d.model.power_budget_w == 59.08 and d.model_un.power_budget_w == 59.08
     k, d0 = ex.build_controller(P, spec("dB", params=dict(margin=0.3)))
     assert d0.model.power_budget_w == 60.0                                               # tuning cells without headroom keep the plain budget
+
+
+# ---------------------------------------------------------------- trace for the review of exploratory cells (2026-10-25): pacing mode and the sampled power over time in every governed cell
+def test_mode_code_and_trace_bins_for_the_governed_cell_trace():
+    import numpy as np
+    assert ex.mode_code("aligned") == 1.0 and ex.mode_code("unaligned") == 0.0 and ex.mode_code(None) == -1.0 and ex.mode_code("other") == -1.0
+    t, w = ex.trace_bins([0.1, 0.2, 0.6, 1.4], [10.0, 20.0, 40.0, 100.0], 0.0, 1.5, step_s=0.5)
+    assert np.allclose(t, [0.25, 0.75, 1.25]) and abs(w[0] - 15.0) < 1e-9 and abs(w[1] - 40.0) < 1e-9 and abs(w[2] - 100.0) < 1e-9
+    t2, w2 = ex.trace_bins([], [], 0.0, 1.0, step_s=0.5)
+    assert len(t2) == 2 and np.isnan(w2).all()
+
+
+def test_the_governed_cell_log_carries_the_mode_and_the_sampled_power_and_the_cell_stores_the_power_trace():
+    src = (ROOT / "experiments" / "w5b" / "executors.py").read_text(encoding="utf-8")
+    assert "reshape(-1, 7)" in src and "mode_code(getattr(obj" in src and "pw_trace_t=" in src and "pw_trace_w=" in src

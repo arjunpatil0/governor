@@ -118,7 +118,7 @@ def freeze_inputs(tmp_path, rule_met=False):
     tmp_path.mkdir(parents=True, exist_ok=True)
     t =tmp_path / "tuning.json"; t.write_text(json.dumps(dict(c0=7, g_b={"60": dict(setting=dict(sid="1800_a_g0_d1"), feasible_cells=3), "35": None})))
     b = tmp_path / "t3b" / "decisions.json"; b.parent.mkdir()
-    b.write_text(json.dumps(dict(d_b=dict(margin=0.2, rule_met=True))))
+    b.write_text(json.dumps(dict(d_b=dict(margin=0.2, rule_met=True), c_b=dict(params=dict(target=0.65, ki=0.05, guard0=0.5, gmin=0.3), rule_met=False))))
     for k, v in t3b_world().items():
         write_cell(b.parent, k, dict(kind="dB" if k.startswith("db_") else "arm_a", workload="llama32_3b", scene="S0", c0=7), v)
     c = tmp_path / "t3c" / "decisions.json"; c.parent.mkdir()
@@ -133,9 +133,11 @@ def freeze_inputs(tmp_path, rule_met=False):
 def test_freeze_applies_the_o7_fallback_keeps_the_registered_pick_in_the_record_and_recomputes_the_headroom_from_t3b(tmp_path):
     t, b, c, o = freeze_inputs(tmp_path)
     const = freeze.build_constants(t, b, c, tmp_path / "constants.json", o7=o)
-    assert const["c_b"]["target"] == 0.5 and const["c_b"]["ki"] == 0.15 and const["c_b_selection"] == "O-7"
-    assert const["c_b_registered"]["target"] == 0.2 and const["c_b_registered"]["status"] == "registered pick, sensitivity only, NOT run in the evaluation"
-    assert const["o7"]["d"] == 0.0023 and const["rules"]["c_b_rule_met"] is False
+    assert const["c_b_t3c"]["target"] == 0.5 and const["c_b_t3c"]["ki"] == 0.15 and const["c_b_t3c_selection"] == "O-7"
+    assert const["c_b_t3c_registered"]["target"] == 0.2 and "NOT run" not in const["c_b_t3c_registered"]["status"] and "registered" in const["c_b_t3c_registered"]["status"]
+    assert const["c_b_t3b"]["target"] == 0.65 and const["c_b_t3b"]["ki"] == 0.05            # the registered rule's output on the T3b grid (the decisions of block T3b), the PRIMARY comparator
+    assert const["comparators"] == dict(primary="c'B-T3b", secondary="c'B-T3c")
+    assert const["o7"]["d"] == 0.0023 and const["rules"]["c_b_t3c_rule_met"] is False
     h = tl.headroom_from_results(t3b_world())
     assert abs(const["headroom"]["w"] - h["w"]) < 1e-12 and const["headroom"]["source"].startswith("T3b cells") and abs(const["headroom"]["w"] - 2.84) > 0.1
     assert const["rules"]["d_b_headroom_ran_with_w"] == 2.84                                # the confirmation cells' own spec, not the decisions file's merged-set number
@@ -144,7 +146,7 @@ def test_freeze_applies_the_o7_fallback_keeps_the_registered_pick_in_the_record_
 def test_freeze_with_a_met_rule_keeps_the_registered_pick_and_without_the_o7_file_it_refuses(tmp_path):
     t, b, c, o = freeze_inputs(tmp_path, rule_met=True)
     const = freeze.build_constants(t, b, c, tmp_path / "constants.json", o7=o)
-    assert const["c_b"]["target"] == 0.2 and const["c_b_selection"] == "registered (rule met)"
+    assert const["c_b_t3c"]["target"] == 0.2 and const["c_b_t3c_selection"] == "registered (rule met)"
     freeze.build_constants(t, b, c, tmp_path / "x.json")                                  # a met rule needs no tolerance file
     t2, b2, c2, _ = freeze_inputs(tmp_path / "unmet", rule_met=False)
     with pytest.raises(SystemExit):
@@ -153,3 +155,10 @@ def test_freeze_with_a_met_rule_keeps_the_registered_pick_and_without_the_o7_fil
 
 def test_the_session_meta_names_addendum_o7():
     assert "O-5, O-6, O-7" in (ROOT / "experiments" / "w5b" / "evaluate.py").read_text(encoding="utf-8")
+
+
+def test_freeze_refuses_decisions_of_t3b_without_the_c_b_pick(tmp_path):
+    t, b, c, o = freeze_inputs(tmp_path)
+    b.write_text(json.dumps(dict(d_b=dict(margin=0.2, rule_met=True))))
+    with pytest.raises(SystemExit):
+        freeze.build_constants(t, b, c, tmp_path / "x.json", o7=o)

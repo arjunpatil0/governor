@@ -18,17 +18,20 @@ from sim.params import load_params  # noqa: E402
 P = load_params()
 G60 = dict(sid="1800_a_g0_d1", clock=1800, mode="aligned", guard_ms=0.0, duty=1.0)
 G35 = dict(sid="1500_a_g0_d1", clock=1500, mode="aligned", guard_ms=0.0, duty=1.0)
-CONST = dict(c0=7, g_b={"60": G60, "35": G35}, c_b=dict(target=0.35, ki=0.15, guard0=0.5, gmin=0.3), d_b=dict(margin=0.3), power_source="sampled")
+CB_T3B = dict(target=0.5, ki=0.15, guard0=0.5, gmin=0.3)
+CB_T3C = dict(target=0.2, ki=0.15, guard0=0.5, gmin=0.3)
+CONST = dict(c0=7, g_b={"60": G60, "35": G35}, c_b_t3b=CB_T3B, c_b_t3c=CB_T3C, d_b=dict(margin=0.3), power_source="sampled")
 
 
-def test_a_primary_block_has_25_cells_and_blocks_4_to_8_add_the_20_cell_35_w_family():
+def test_a_primary_block_has_30_cells_with_both_c_b_comparators_and_blocks_4_to_8_add_the_25_cell_35_w_family():
     b9 = el.block_cells(9, CONST)
-    assert len(b9) == 25 and len({c["id"] for c in b9}) == 25 and all(c["budget_w"] == 60.0 and not c["exploratory"] for c in b9)
+    assert len(b9) == 30 and len({c["id"] for c in b9}) == 30 and all(c["budget_w"] == 60.0 and not c["exploratory"] for c in b9)
     assert sorted(c["scene"] for c in b9 if c["controller"] == "a") == ["S0", "S1", "S1d", "S2", "S5"]
+    assert {c["controller"] for c in b9} == {"g'B", "eB", "c'B-T3b", "c'B-T3c", "d'B", "a"}
     b4 = el.block_cells(4, CONST)
     exp = [c for c in b4 if c["exploratory"]]
-    assert len(b4) == 45 and len(exp) == 20 and all(c["budget_w"] == 35.0 and c["controller"] != "a" for c in exp)
-    assert {(c["scene"], c["controller"]) for c in exp} == {(s, k) for s in el.SCENES for k in ("g'B", "eB", "c'B", "d'B")}
+    assert len(b4) == 55 and len(exp) == 25 and all(c["budget_w"] == 35.0 and c["controller"] != "a" for c in exp)
+    assert {(c["scene"], c["controller"]) for c in exp} == {(s, k) for s in el.SCENES for k in ("g'B", "eB", "c'B-T3b", "c'B-T3c", "d'B")}
 
 
 def test_cell_specs_carry_workload_setting_constants_and_the_scene_time_origin():
@@ -39,9 +42,11 @@ def test_cell_specs_carry_workload_setting_constants_and_the_scene_time_origin()
     g35 = next(c for c in cells.values() if c["controller"] == "g'B" and c["budget_w"] == 35.0 and c["scene"] == "S0")
     e60 = next(c for c in cells.values() if c["controller"] == "eB" and c["budget_w"] == 60.0 and c["scene"] == "S2")
     assert g60["kind"] == "static" and g60["setting"] == G60 and g35["setting"] == G35 and e60["kind"] == "eB" and e60["setting"] == G60
-    cb = next(c for c in cells.values() if c["controller"] == "c'B")
+    cb = next(c for c in cells.values() if c["controller"] == "c'B-T3b")
+    cc = next(c for c in cells.values() if c["controller"] == "c'B-T3c")
     db = next(c for c in cells.values() if c["controller"] == "d'B")
-    assert cb["kind"] == "cB" and cb["params"] == dict(target=0.35, ki=0.15) and db["kind"] == "dB" and db["params"] == dict(margin=0.3)
+    assert cb["kind"] == "cB" and cb["params"] == dict(target=0.5, ki=0.15) and cc["kind"] == "cB" and cc["params"] == dict(target=0.2, ki=0.15)
+    assert db["kind"] == "dB" and db["params"] == dict(margin=0.3) and cb["id"] != cc["id"]
     assert all(c["c0"] == 7 and c["origin_ms"] == 5000.0 for c in cells.values())
     assert next(c for c in cells.values() if c["controller"] == "a")["kind"] == "arm_a"
 
@@ -56,14 +61,15 @@ def test_the_order_is_seeded_per_block_and_differs_between_blocks():
 def test_a_missing_35_w_g_b_drops_only_those_exploratory_cells_and_d_b_hgb_is_not_built():
     const = dict(CONST, g_b={"60": G60, "35": None})
     b4 = el.block_cells(4, const)
-    assert len(b4) == 45 - 10 and not any(c["controller"] in ("g'B", "eB") and c["budget_w"] == 35.0 for c in b4)
+    assert len(b4) == 55 - 10 and not any(c["controller"] in ("g'B", "eB") and c["budget_w"] == 35.0 for c in b4)
     with pytest.raises(NotImplementedError):
         el.block_cells(4, CONST, hgb=True)
 
 
 def test_a_session_is_limited_to_three_hours_at_100_s_per_cell_and_only_evaluation_blocks_are_accepted():
-    assert el.session_estimate_s([4, 5], CONST) == 90 * 100.0 and el.check_session([4, 5], CONST) is None
-    assert "3 h" in el.check_session([4, 5, 6], CONST) and el.check_session([9, 10, 11, 12], CONST) is None and el.check_session([9, 10, 11, 12, 13], CONST) is not None
+    assert el.session_estimate_s([4, 5], CONST) == 110 * 100.0 and "3 h" in el.check_session([4, 5], CONST)                      # two exploratory blocks (55 cells each) no longer fit: 3.06 h
+    assert el.session_estimate_s([4, 9], CONST) == 85 * 100.0 and el.check_session([4, 9], CONST) is None                          # one exploratory + one primary-only block: 2.4 h
+    assert el.check_session([9, 10, 11], CONST) is None and "3 h" in el.check_session([9, 10, 11, 12], CONST)
     assert "evaluation blocks" in el.check_session([3], CONST) and "evaluation blocks" in el.check_session([14], CONST, allow_rerun_numbers=False)
 
 
@@ -84,13 +90,13 @@ def test_eb_is_the_g_b_action_with_the_idle_drop_to_the_knee():
 
 def test_constants_are_frozen_from_the_decisions_and_the_runner_refuses_a_wrong_hash(tmp_path):
     t = tmp_path / "tuning.json"; t.write_text(json.dumps(dict(c0=7, g_b={"60": dict(setting=G60, feasible_cells=3), "35": dict(setting=G35, feasible_cells=1)})))
-    b = tmp_path / "t3b.json"; b.write_text(json.dumps(dict(d_b=dict(margin=0.3, rule_met=True))))
+    b = tmp_path / "t3b.json"; b.write_text(json.dumps(dict(d_b=dict(margin=0.3, rule_met=True), c_b=dict(params=dict(target=0.5, ki=0.15, guard0=0.5, gmin=0.3), rule_met=False))))
     c = tmp_path / "t3c.json"; c.write_text(json.dumps(dict(c_b=dict(params=dict(target=0.35, ki=0.15, guard0=0.5, gmin=0.3), rule_met=True, at_grid_edge=False), headroom=dict(w=2.692), d_b_headroom=dict(rule_holds=True, mean_miss=0.004))))
     out = tmp_path / "constants.json"
     const = freeze.build_constants(t, b, c, out)
-    assert const["c0"] == 7 and const["g_b"]["60"] == G60 and const["g_b"]["35"] == G35 and const["d_b"]["margin"] == 0.3 and const["c_b"]["target"] == 0.35
+    assert const["c0"] == 7 and const["g_b"]["60"] == G60 and const["g_b"]["35"] == G35 and const["d_b"]["margin"] == 0.3 and const["c_b_t3c"]["target"] == 0.35 and const["c_b_t3b"]["target"] == 0.5
     assert len(const["sources"]) == 3 and all(k.endswith("/" + n) for k, n in zip(sorted(const["sources"]), ("t3b.json", "t3c.json", "tuning.json")))
-    assert const["power_source"] == "sampled" and const["rules"]["c_b_rule_met"] is True and const["c_b_selection"] == "registered (rule met)" and json.loads(out.read_text())["c0"] == 7
+    assert const["power_source"] == "sampled" and const["rules"]["c_b_t3c_rule_met"] is True and const["c_b_t3c_selection"] == "registered (rule met)" and json.loads(out.read_text())["c0"] == 7
     sha = freeze.sha256_file(out)
     assert evaluate.load_constants(out, sha)["c0"] == 7
     with pytest.raises(SystemExit):
@@ -118,32 +124,33 @@ def test_a_simulated_block_runs_end_to_end_and_the_results_table_feeds_the_regis
     s = evaluate.run_blocks(tmp_path, [4], CONST, ex.SimExecutor(), log=lambda *a: None)
     assert s["blocks_done"] == [4] and (tmp_path / "block04" / "block.json").exists()
     df = pd.read_csv(tmp_path / "results.csv")
-    assert list(df.columns[:7]) == ["block", "scene", "controller", "budget_w", "bg_tok_s", "miss_frac", "power_w"] and len(df) == 45
+    assert list(df.columns[:7]) == ["block", "scene", "controller", "budget_w", "bg_tok_s", "miss_frac", "power_w"] and len(df) == 55
     t = hw1_table(df, 60.0)
     assert set(t.index.get_level_values(0)) >= set(el.SCENES) and "d'B" in set(t.index.get_level_values(1))
 
 
-def test_the_supervised_trial_runs_six_cells_one_per_new_hardware_path_outside_any_block(tmp_path):
+def test_the_supervised_trial_runs_seven_cells_one_per_new_hardware_path_outside_any_block(tmp_path):
     cells = evaluate.trial_cells(CONST)
-    assert len(cells) == 6 and {(c["scene"], c["controller"], c["budget_w"]) for c in cells} == {("S5", "d'B", 60.0), ("S2", "eB", 60.0), ("S1d", "c'B", 60.0), ("S0", "g'B", 60.0), ("S5", "a", 60.0), ("S1", "d'B", 35.0)}
+    assert len(cells) == 7 and {(c["scene"], c["controller"], c["budget_w"]) for c in cells} == {("S5", "d'B", 60.0), ("S2", "eB", 60.0), ("S1d", "c'B-T3c", 60.0), ("S2", "c'B-T3b", 60.0), ("S0", "g'B", 60.0), ("S5", "a", 60.0), ("S1", "d'B", 35.0)}
     assert any(c["workload"] == "llama31_8b" for c in cells)
     s = evaluate.run_trial(tmp_path, CONST, ex.SimExecutor(), log=lambda *a: None)
-    assert s["cells"] == 6 and not list(tmp_path.glob("block*/block.json")) and (tmp_path / "trial" / "cells").exists()
+    assert s["cells"] == 7 and not list(tmp_path.glob("block*/block.json")) and (tmp_path / "trial" / "cells").exists()
 
 
 def test_evaluation_cells_of_c_b_and_d_b_carry_the_steering_budget_parameter_from_the_frozen_headroom():
     const = dict(CONST, headroom=dict(w=2.692))
     cells = el.block_cells(4, const)
-    cb60 = next(c for c in cells if c["controller"] == "c'B" and c["budget_w"] == 60.0)
+    cb60 = next(c for c in cells if c["controller"] == "c'B-T3b" and c["budget_w"] == 60.0)
+    assert all(abs(c["steer_budget_w"] - (60.0 - 2.692) / 0.97) < 1e-9 for c in cells if c["controller"] in ("c'B-T3b", "c'B-T3c") and c["budget_w"] == 60.0)
     db35 = next(c for c in cells if c["controller"] == "d'B" and c["budget_w"] == 35.0)
     assert abs(cb60["steer_budget_w"] - (60.0 - 2.692) / 0.97) < 1e-9 and abs(db35["steer_budget_w"] - (35.0 - 2.692) / 0.97) < 1e-9
     assert all("steer_budget_w" not in c for c in cells if c["controller"] in ("g'B", "eB", "a"))
-    assert all("steer_budget_w" not in c for c in el.block_cells(4, CONST) if c["controller"] in ("c'B", "d'B"))        # constants without a headroom: the plain budget
+    assert all("steer_budget_w" not in c for c in el.block_cells(4, CONST) if c["controller"] in ("c'B-T3b", "c'B-T3c", "d'B"))        # constants without a headroom: the plain budget
 
 
 def test_freeze_carries_the_headroom_and_the_confirmation_and_refuses_a_t3c_without_it(tmp_path):
     t = tmp_path / "tuning.json"; t.write_text(json.dumps(dict(c0=7, g_b={"60": dict(setting=G60, feasible_cells=3), "35": None})))
-    b = tmp_path / "t3b.json"; b.write_text(json.dumps(dict(d_b=dict(margin=0.3, rule_met=True))))
+    b = tmp_path / "t3b.json"; b.write_text(json.dumps(dict(d_b=dict(margin=0.3, rule_met=True), c_b=dict(params=dict(target=0.5, ki=0.15), rule_met=False))))
     c = tmp_path / "t3c.json"
     c.write_text(json.dumps(dict(c_b=dict(params=dict(target=0.35, ki=0.15, guard0=0.5, gmin=0.3), rule_met=True, at_grid_edge=False), headroom=dict(w=2.692, sensor_p95_w=1.05, spread_p95_w=1.642),
                                  d_b_headroom=dict(rule_holds=False, mean_miss=0.02))))
@@ -208,3 +215,24 @@ def test_the_chain_summary_prints_the_decisions_the_hash_and_the_trial_checks(tm
     text = "\n".join(lines)
     assert "target 0.35" in text and "2.69" in text and "rule_holds" in text.replace(" ", "_") or "still holds" in text
     assert "ab" * 32 in text and "trial" in text.lower()
+
+
+def test_the_results_table_reports_the_final_pacing_mode_of_every_cell_the_governed_mode_or_the_fixed_one(tmp_path):
+    import csv
+
+    def cell(cid, ctrl, metrics, **spec_extra):
+        d = tmp_path / "block04" / "cells" / cid
+        d.mkdir(parents=True)
+        spec = dict(id=cid, block=4, scene="S0", controller=ctrl, budget_w=60.0, exploratory=False, **spec_extra)
+        m = dict(tok_s=10.0, miss=0.0, power_w=50.0, power_sampled_w=50.0, gov_reads=0, **metrics)
+        (d / "cell.json").write_text(json.dumps(dict(id=cid, spec=spec, metrics=m, executor="hw")))
+    cell("x_dB", "d'B", dict(final_pacing_mode="aligned"), kind="dB")
+    cell("x_cB", "c'B-T3b", dict(final_pacing_mode="unaligned"), kind="cB")
+    cell("x_gB", "g'B", dict(), kind="static", setting=G60)
+    cell("x_a", "a", dict(), kind="arm_a")
+    (tmp_path / "block04" / "block.json").write_text("{}")
+    assert evaluate.export_results(tmp_path) == 4
+    rows = {r["cell_id"]: r for r in csv.DictReader(open(tmp_path / "results.csv", encoding="utf-8"))}
+    assert "final_pacing_mode" in evaluate.COLUMNS
+    assert rows["x_dB"]["final_pacing_mode"] == "aligned" and rows["x_cB"]["final_pacing_mode"] == "unaligned"
+    assert rows["x_gB"]["final_pacing_mode"] == "aligned" and rows["x_a"]["final_pacing_mode"] == "unaligned"          # static settings and arm a have a fixed mode

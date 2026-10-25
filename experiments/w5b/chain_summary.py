@@ -30,7 +30,7 @@ def summary(t3c, constants, sha, trial):
     if constants.exists():
         c = json.loads(constants.read_text(encoding="utf-8"))
         g = {k: (v and v.get("sid")) for k, v in c.get("g_b", {}).items()}
-        L.append(f"frozen constants: c0 {c['c0']} ms, g'B {g}, c'B {c['c_b']}, d'B {c['d_b']}, headroom {c.get('headroom', {}).get('w')} W")
+        L.append(f"frozen constants: c0 {c['c0']} ms, g'B {g}, c'B-T3b (primary) {c.get('c_b_t3b')}, c'B-T3c {c.get('c_b_t3c')}, d'B {c['d_b']}, headroom {c.get('headroom', {}).get('w')} W")
         L.append("sha256 of data/w5b/constants.json: " + (sha.read_text(encoding="utf-8").strip() if sha.exists() else "(not written)"))
     cells = trial / "trial" / "cells"
     if cells.exists():

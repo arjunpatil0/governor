@@ -45,6 +45,9 @@ def build_constants(tuning, t3b, t3c, out, o7=None):
         raise SystemExit("refused: the T3c decisions lack the power headroom / its d'B confirmation (addendum O-6 amendment)")
     cbd = c["c_b"]
     reg = cbd["params"]
+    if not (b.get("c_b") or {}).get("params"):
+        raise SystemExit("refused: the T3b decisions carry no c'B pick (the PRIMARY comparator c'B-T3b is the registered rule's output on the T3b grid)")
+    primary = b["c_b"]["params"]
     if cbd["rule_met"]:
         sel, pick, tol = "registered (rule met)", reg, None
     else:
@@ -59,9 +62,11 @@ def build_constants(tuning, t3b, t3c, out, o7=None):
     git = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     keys = ("w", "sensor_p95_w", "spread_p95_w", "steady_target_w", "margin", "formula", "source", "n_cells_sensor", "n_cells_spread")
     mk = lambda p: dict(target=p["target"], ki=p["ki"], guard0=p.get("guard0", 0.5), gmin=p.get("gmin", 0.3))                    # noqa: E731
-    const = dict(c0=t["c0"], g_b=g, c_b=mk(pick), c_b_selection=sel, c_b_registered=dict(mk(reg), status="registered pick, sensitivity only, NOT run in the evaluation" if sel == "O-7" else "same as c_b (rule met)"),
+    const = dict(c0=t["c0"], g_b=g, c_b_t3b=mk(primary), c_b_t3b_rule_met=b["c_b"].get("rule_met"), c_b_t3c=mk(pick), c_b_t3c_selection=sel,
+                 c_b_t3c_registered=dict(mk(reg), status="registered pick of the T3c grid (the same as c_b_t3c when the selection is 'registered (rule met)' or the O-7 tolerance moves nothing)" if sel == "O-7" else "same as c_b_t3c (rule met)"),
+                 comparators=dict(primary="c'B-T3b", secondary="c'B-T3c"),
                  d_b=dict(margin=b["d_b"]["margin"]), power_source="sampled", headroom={k: head[k] for k in keys if k in head},
-                 rules=dict(c_b_rule_met=cbd["rule_met"], c_b_at_grid_edge=cbd.get("at_grid_edge"), d_b_rule_met=b["d_b"]["rule_met"], d_b_headroom_rule_holds=c["d_b_headroom"]["rule_holds"], d_b_headroom_mean_miss=c["d_b_headroom"]["mean_miss"],
+                 rules=dict(c_b_t3c_rule_met=cbd["rule_met"], c_b_at_grid_edge=cbd.get("at_grid_edge"), d_b_rule_met=b["d_b"]["rule_met"], d_b_headroom_rule_holds=c["d_b_headroom"]["rule_holds"], d_b_headroom_mean_miss=c["d_b_headroom"]["mean_miss"],
                             d_b_headroom_ran_with_w=_ran_with(t3c, c["headroom"]["w"]), g_b_feasible_cells={k: (None if v is None else v.get("feasible_cells")) for k, v in t["g_b"].items()}),
                  sources={f"{Path(x).parent.name}/{Path(x).name}": sha256_file(x) for x in (tuning, t3b, t3c) + ((o7,) if tol else ())}, git_head=git)
     if tol:

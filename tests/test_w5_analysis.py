@@ -8,7 +8,7 @@ import pandas as pd
 from analysis.w5_analysis import (NI_MARGIN, bootstrap_ci_median, cell_scores, earns_place, hw1_table, hw2_report, hw7_staleness, holm, ratio_blocks,
                                   wilcoxon_greater_exact)
 
-CTRL = ("g'B", "eB", "c'B", "d'B")
+CTRL = ("g'B", "eB", "c'B-T3b", "d'B")
 SCENES = ("S0", "S1", "S1d", "S2", "S5")
 
 
@@ -31,7 +31,7 @@ def good_tok():
     """d'B wins S5 clearly, is equal elsewhere (non-inferior); every cell has a small block-dependent jitter."""
     t = {(s, c): jitter(30.0, 0.4) for s in SCENES for c in CTRL}
     t[("S5", "d'B")] = jitter(40.0)
-    t[("S5", "c'B")] = jitter(25.0, 0.4)
+    t[("S5", "c'B-T3b")] = jitter(25.0, 0.4)
     return t
 
 
@@ -85,7 +85,7 @@ def test_hw1_requires_90_percent_feasible_and_mean_miss_at_most_1_percent():
 
 def test_earns_its_place_when_it_wins_s5_is_non_inferior_and_holds_hw1():
     rep = hw2_report(table(good_tok()), budget=60.0, seed=0)
-    assert all(rep["s5"][c]["reject"] for c in ("c'B", "g'B", "eB"))
+    assert all(rep["s5"][c]["reject"] for c in ("c'B-T3b", "g'B", "eB"))
     assert all(v["pass"] for sc in rep["ni"].values() for v in sc.values())
     assert earns_place(rep)
 
@@ -107,15 +107,15 @@ def test_infeasible_cells_count_as_zero_not_dropped():
     bad = (df.scene == "S5") & (df.controller == "d'B") & (df.block < 6)                      # d'B breaks the SLO in 6 of 10 S5 blocks, better in the other four
     df.loc[bad, "miss_frac"] = 0.2
     rep = hw2_report(df, budget=60.0, seed=0)
-    assert not rep["s5"]["c'B"]["reject"] and not earns_place(rep)
+    assert not rep["s5"]["c'B-T3b"]["reject"] and not earns_place(rep)
 
 
 def test_fewer_than_six_non_tied_blocks_is_inconclusive():
     df = table(good_tok())
-    both_zero = (df.scene == "S5") & df.controller.isin(["d'B", "c'B"]) & (df.block < 6)
+    both_zero = (df.scene == "S5") & df.controller.isin(["d'B", "c'B-T3b"]) & (df.block < 6)
     df.loc[both_zero, "miss_frac"] = 0.2                                  # 6 blocks tie at (0, 0): 4 non-tied blocks left
     rep = hw2_report(df, budget=60.0, seed=0)
-    assert rep["s5"]["c'B"]["n_nontied"] == 4 and rep["s5"]["c'B"]["inconclusive"] and not rep["s5"]["c'B"]["reject"]
+    assert rep["s5"]["c'B-T3b"]["n_nontied"] == 4 and rep["s5"]["c'B-T3b"]["inconclusive"] and not rep["s5"]["c'B-T3b"]["reject"]
 
 
 def test_ni_margin_value():
@@ -140,5 +140,27 @@ def test_a_vacuous_non_inferiority_pass_is_marked_in_the_report_line():
     from analysis.w5_analysis import ni_line
     vac = ni_line("S0", "g'B", {"median": float("nan"), "lo": float("nan"), "hi": float("nan"), "n": 0, "n_excluded": 10, "pass": True})
     assert "VACUOUS (comparator scored 0 in every block)" in vac and "blocks used 0" in vac and "excluded (comparator 0) 10" in vac
-    real = ni_line("S2", "c'B", {"median": 1.02, "lo": 0.97, "hi": 1.08, "n": 8, "n_excluded": 2, "pass": True})
+    real = ni_line("S2", "c'B-T3b", {"median": 1.02, "lo": 0.97, "hi": 1.08, "n": 8, "n_excluded": 2, "pass": True})
     assert "VACUOUS" not in real and "blocks used 8" in real
+
+
+# ---------------------------------------------------------------- addendum O-7 amendment 2026-10-25: two c'B comparators, c'B-T3b PRIMARY, c'B-T3c SECONDARY (reported, never decides the reading)
+def test_the_secondary_c_b_comparator_is_reported_separately_and_never_decides_the_registered_reading():
+    from analysis.w5_analysis import secondary_lines
+    ctrl = CTRL + ("c'B-T3c",)
+    t = {(s, c): jitter(30.0, 0.4) for s in SCENES for c in ctrl}
+    t[("S5", "d'B")] = jitter(40.0)
+    t[("S5", "c'B-T3b")] = jitter(25.0, 0.4)
+    t[("S5", "c'B-T3c")] = jitter(25.0, 0.4)
+    t[("S0", "c'B-T3c")] = jitter(60.0, 0.4)                                      # a comparator d'B is NOT non-inferior to in S0
+    df = pd.DataFrame([dict(block=b, scene=s, controller=c, budget_w=60.0, bg_tok_s=(t[(s, c)](b)), miss_frac=0.0, power_w=50.0) for b in range(10) for s in SCENES for c in ctrl])
+    rep = hw2_report(df)
+    assert earns_place(rep) is True and set(rep["s5"]) == {"c'B-T3b", "g'B", "eB"} and set(rep["ni"]["S0"]) == {"c'B-T3b", "g'B", "eB"}
+    assert rep["secondary"]["ni"]["S0"]["c'B-T3c"]["pass"] is False and rep["secondary"]["s5"]["c'B-T3c"]["reject"] is True
+    lines = "\n".join(secondary_lines(rep))
+    assert "SECONDARY" in lines and "c'B-T3c" in lines and "not part of the registered reading" in lines
+
+
+def test_without_the_secondary_comparator_in_the_table_the_report_has_no_secondary_section():
+    df = table(good_tok())
+    assert hw2_report(df)["secondary"] == {}

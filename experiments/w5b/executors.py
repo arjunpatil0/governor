@@ -52,6 +52,21 @@ def recent_mean(t, v, now, span):
     return float(np.mean(sel)) if sel else float("nan")
 
 
+def mode_code(mode):
+    """Pacing mode of the governed-cell log: 1 aligned, 0 unaligned, -1 not applicable (a controller without a mode)."""
+    return {"aligned": 1.0, "unaligned": 0.0}.get(mode, -1.0)
+
+
+def trace_bins(t, v, t_a, t_b, step_s=0.5):
+    """The sampled power as a compact time series for the cell record: mean of v in consecutive bins of step_s from t_a to t_b; returns (bin centres in seconds from t_a, means; nan in an empty bin)."""
+    t, v = np.asarray(t, float), np.asarray(v, float)
+    n = int(round((t_b - t_a) / step_s))
+    edges = t_a + step_s * np.arange(n + 1)
+    centres = step_s * (np.arange(n) + 0.5)
+    means = np.array([float(np.mean(v[(t >= edges[i]) & (t < edges[i + 1])])) if ((t >= edges[i]) & (t < edges[i + 1])).any() else float("nan") for i in range(n)])
+    return centres, means
+
+
 def fg_spec(scene, c0, origin_ms=0.0):
     """Foreground of a scene at nominal cost c0. origin_ms = the time of the loop at which SCENE TIME 0 is (plan addendum O-6 section 5: evaluation cells start the scene at the measured window,
     origin 5000 ms; the warm-up before it runs at the scene's t = 0 conditions). origin 0 = the tuning cells' behaviour, unchanged."""
@@ -353,7 +368,7 @@ class HwExecutor:
                                 e = smp.nv.nvmlDeviceGetTotalEnergyConsumption(smp.h) / 1000.0
                                 reads[0] += 1
                             a = gov.step(time.perf_counter() * 1000.0, e, smp.sm[-1], power_w=pw)
-                            glog.append((time.perf_counter(), a.clock, a.duty, a.guard_ms, smp.sm[-1]))
+                            glog.append((time.perf_counter(), a.clock, a.duty, a.guard_ms, smp.sm[-1], mode_code(getattr(obj, "mode", None)), float("nan") if pw is None else pw))
                         except Exception as ex:                  # noqa: BLE001
                             gerr.append(f"{type(ex).__name__}: {ex}"); return
                 gth = threading.Thread(target=loop_gov, daemon=True); gth.start()
@@ -373,11 +388,12 @@ class HwExecutor:
                 raise RuntimeError("governor loop failed: " + gerr[0])
             t_sm, sm = np.array(smp.t), np.array(smp.sm)
             win = (t_sm >= t0 + WARM_S) & (t_sm < t0 + WARM_S + MEASURE_S)
+            pw_t, pw_w = trace_bins(smp.t, smp.pw, t0, t0 + WARM_S + MEASURE_S, step_s=0.5)
             res = summarise_cell(recs, tk[:, 0] if len(tk) else np.array([]), tk[:, 1] if len(tk) else np.array([]), t0, WARM_S, MEASURE_S, e.get("start", 0.0), e.get("end", 0.0), PERIOD)
             n_ab = int(loop.abandoned)
             miss = (res["miss_frac"] * res["frames"] + n_ab) / (res["frames"] + n_ab) if res["frames"] else float("nan")
             np.savez_compressed(cdir / "frames.npz", t_sched=[r["t_sched"] for r in recs], lat_ms=[r["lat_ms"] for r in recs], tok_end=tk[:, 0] if len(tk) else [], tok_ms=tk[:, 1] if len(tk) else [], t0=t0,
-                                gov_log=np.array(glog, float).reshape(-1, 5))
+                                gov_log=np.array(glog, float).reshape(-1, 7), pw_trace_t=pw_t, pw_trace_w=pw_w)
             changes = int(sum(1 for a, b in zip(glog, glog[1:]) if a[1] != b[1]))
             reads_n = int(reads[0])
             if (spec.get("power_source") or self.power_source) == "sampled" and reads_n:
