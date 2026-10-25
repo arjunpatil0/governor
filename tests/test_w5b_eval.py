@@ -161,6 +161,16 @@ def test_freeze_carries_the_headroom_and_the_confirmation_and_refuses_a_t3c_with
         freeze.build_constants(t, b, c2, tmp_path / "x.json")
 
 
+def write_trace(d, ticks=650, bins=130, mode=1.0, pw=40.0, cols=7, trace=True):
+    """A governed cell's frames.npz as the executor writes it: gov_log (t, clock, duty, guard, sm, mode, sampled power) at 10 Hz over the 65 s loop and the 0.5 s sampled-power trace."""
+    import numpy as np
+    g = np.zeros((ticks, cols)); g[:, 0] = np.arange(ticks) * 0.1; g[:, 1] = 1800.0
+    if cols >= 7:
+        g[:, 5] = mode; g[:, 6] = pw
+    kw = dict(pw_trace_t=0.5 * (np.arange(bins) + 0.5), pw_trace_w=np.full(bins, pw)) if trace else {}
+    np.savez_compressed(Path(d) / "frames.npz", gov_log=g, **kw)
+
+
 def test_the_trial_check_is_mechanical(tmp_path):
     def cell(name, **m):
         d = tmp_path / "trial" / "cells" / name
@@ -169,6 +179,8 @@ def test_the_trial_check_is_mechanical(tmp_path):
         base.update(m)
         (d / "cell.json").write_text(json.dumps(dict(id=name, spec=dict(id=name, workload="llama31_8b" if "S5" in name else "llama32_3b", kind="dB" if "d" in name else "static"), metrics=base, executor="hw")))
     cell("ev04_S5_dB_60"); cell("ev04_S2_eB_60", gov_reads=0); cell("ev04_S0_gB_60", power_source=None, gov_reads=None)
+    write_trace(tmp_path / "trial" / "cells" / "ev04_S5_dB_60")
+    write_trace(tmp_path / "trial" / "cells" / "ev04_S2_eB_60")
     ok = evaluate.check_trial(tmp_path)
     assert ok["ok"] is True and ok["problems"] == []
     (tmp_path / "trial" / "cells" / "ev04_S2_eB_60" / "cell.json").unlink()
@@ -236,3 +248,30 @@ def test_the_results_table_reports_the_final_pacing_mode_of_every_cell_the_gover
     assert "final_pacing_mode" in evaluate.COLUMNS
     assert rows["x_dB"]["final_pacing_mode"] == "aligned" and rows["x_cB"]["final_pacing_mode"] == "unaligned"
     assert rows["x_gB"]["final_pacing_mode"] == "aligned" and rows["x_a"]["final_pacing_mode"] == "unaligned"          # static settings and arm a have a fixed mode
+
+
+def test_the_trial_check_fails_a_governed_cell_without_the_per_tick_logging_or_the_power_trace_or_with_too_short_ones(tmp_path):
+    def trial(**kw):
+        root = tmp_path / f"t{len(list(tmp_path.iterdir()))}"
+        d = root / "trial" / "cells" / "ev04_S5_dB_60"
+        d.mkdir(parents=True)
+        (d / "cell.json").write_text(json.dumps(dict(id="ev04_S5_dB_60", spec=dict(id="x", workload="llama31_8b", kind=kw.pop("kind", "dB")), executor="hw",
+                                                     metrics=dict(miss=0.0, tok_s=5.0, power_w=40.0, power_sampled_w=40.0, gov_reads=0, power_source="sampled", exec_mode="EXEC_MODE cuda offloaded=33/33 n_layer=32 governed=1"))))
+        if kw.pop("nofile", False):
+            return root
+        write_trace(d, **kw)
+        return root
+    assert evaluate.check_trial(trial())["ok"] is True
+    assert evaluate.check_trial(trial(kind="cB"))["ok"] is True and evaluate.check_trial(trial(kind="eB"))["ok"] is True
+    for bad, why in ((trial(nofile=True), "frames.npz"), (trial(trace=False), "power trace"), (trial(cols=5), "7 columns"), (trial(ticks=0), "ticks"), (trial(ticks=500), "ticks"),
+                     (trial(bins=0), "trace"), (trial(bins=100), "trace"), (trial(mode=-1.0), "pacing mode"), (trial(pw=float("nan")), "sampled power")):
+        r = evaluate.check_trial(bad)
+        assert r["ok"] is False and why in " | ".join(r["problems"]), (why, r["problems"])
+    assert evaluate.check_trial(trial(ticks=590, bins=118))["ok"] is True                      # just above 90% of 650 ticks / 130 bins
+    st = trial(kind="static", nofile=True)
+    assert evaluate.check_trial(st)["ok"] is True                                              # static cells have no Governor loop and need no per-tick log
+
+
+def test_the_executor_logs_the_fixed_pacing_of_the_idle_drop_controller_as_its_mode():
+    src = (ROOT / "experiments" / "w5b" / "executors.py").read_text(encoding="utf-8")
+    assert 'getattr(getattr(obj, "a", None), "pacing", None)' in src

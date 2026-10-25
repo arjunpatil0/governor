@@ -368,7 +368,7 @@ class HwExecutor:
                                 e = smp.nv.nvmlDeviceGetTotalEnergyConsumption(smp.h) / 1000.0
                                 reads[0] += 1
                             a = gov.step(time.perf_counter() * 1000.0, e, smp.sm[-1], power_w=pw)
-                            glog.append((time.perf_counter(), a.clock, a.duty, a.guard_ms, smp.sm[-1], mode_code(getattr(obj, "mode", None)), float("nan") if pw is None else pw))
+                            glog.append((time.perf_counter(), a.clock, a.duty, a.guard_ms, smp.sm[-1], mode_code(getattr(obj, "mode", None) or getattr(getattr(obj, "a", None), "pacing", None)), float("nan") if pw is None else pw))
                         except Exception as ex:                  # noqa: BLE001
                             gerr.append(f"{type(ex).__name__}: {ex}"); return
                 gth = threading.Thread(target=loop_gov, daemon=True); gth.start()

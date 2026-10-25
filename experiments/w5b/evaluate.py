@@ -96,6 +96,41 @@ def run_trial(out, const, executor, log=print):
     return dict(cells=n)
 
 
+LOOP_S = 65.0                         # warm-up 5 s + measured window 60 s: the Governor loop runs at 10 Hz and the power trace has 0.5 s bins over the same time (a cell takes about 100 s of wall time including set-up and cool-down)
+MIN_FRAC = 0.9
+
+
+def _per_tick_problems(cid, npz_path):
+    """Per-tick logging of a governed cell: gov_log with 7 columns (t, clock, duty, guard, sm, pacing mode, sampled power) of at least 90% of the 650 expected ticks, with a valid mode (0/1) and a finite
+    sampled power in at least 90% of them, and the 0.5 s sampled-power trace of at least 90% of the 130 expected bins, at least 90% finite."""
+    import numpy as np
+    if not Path(npz_path).exists():
+        return [f"{cid}: frames.npz missing (no per-tick log, no power trace)"]
+    try:
+        z = np.load(npz_path)
+        g, tt, tw = z["gov_log"], z["pw_trace_t"] if "pw_trace_t" in z else None, z["pw_trace_w"] if "pw_trace_w" in z else None
+    except Exception as ex:                                                          # noqa: BLE001
+        return [f"{cid}: frames.npz unreadable ({type(ex).__name__}: {ex})"]
+    pr = []
+    n_ticks, n_bins = int(LOOP_S * 10), int(LOOP_S / 0.5)
+    if g.ndim != 2 or g.shape[1] != 7:
+        pr.append(f"{cid}: gov_log does not have 7 columns (per-tick pacing mode and sampled power missing): shape {g.shape}")
+    else:
+        if len(g) < MIN_FRAC * n_ticks:
+            pr.append(f"{cid}: per-tick log has {len(g)} ticks, expected about {n_ticks} (at least {int(MIN_FRAC * n_ticks)})")
+        elif np.mean(np.isin(g[:, 5], (0.0, 1.0))) < MIN_FRAC:
+            pr.append(f"{cid}: pacing mode missing in more than 10% of the ticks")
+        if len(g) and np.mean(np.isfinite(g[:, 6])) < MIN_FRAC:
+            pr.append(f"{cid}: sampled power missing in more than 10% of the ticks")
+    if tt is None or tw is None:
+        pr.append(f"{cid}: the 0.5 s sampled-power trace (pw_trace_t / pw_trace_w) is missing")
+    elif len(tw) < MIN_FRAC * n_bins or len(tw) != len(tt):
+        pr.append(f"{cid}: power trace has {len(tw)} bins, expected about {n_bins} (at least {int(MIN_FRAC * n_bins)})")
+    elif np.mean(np.isfinite(tw)) < MIN_FRAC:
+        pr.append(f"{cid}: power trace is empty or mostly missing")
+    return pr
+
+
 def check_trial(out, expected=None):
     """Automatic checks of the supervised evaluation trial: every cell present, no incident, governed cells on the sampled source with 0 energy reads, counter vs sampled power within 15%, full GPU offload,
     and the held-out 8B among the cells. Returns {ok, problems, n}."""
@@ -115,6 +150,7 @@ def check_trial(out, expected=None):
                 problems.append(f"{cid}: governed cell power_source {m.get('power_source')}, expected sampled")
             if (m.get("gov_reads") or 0) > 0:
                 problems.append(f"{cid}: the Governor loop read the energy counter {m['gov_reads']} times")
+            problems += _per_tick_problems(cid, p.parent / "frames.npz")
         w, s_ = m.get("power_w"), m.get("power_sampled_w")
         if w is None or s_ is None or w != w or s_ != s_ or abs(w - s_) / max(s_, 1e-9) > 0.15:
             problems.append(f"{cid}: counter power {w} W and sampled power {s_} W differ by more than 15% (or are missing)")

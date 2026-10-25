@@ -1,6 +1,8 @@
 # STATUS (overwritten at every stop)
 Updated 2026-10-25 - Phase: W4-5. Reviewer decision on c'B implemented (addendum O-7 section 5, journal 0060): TWO c'B comparators, constants RE-FROZEN, trial now 7 cells. NOTHING run on hardware. Waiting for YOU: restart -> helper -> Step A (trial, about 14 min) -> if PASS, Step B (session 1 = blocks 4 and 9, about 2.4 h). Literal commands with the hash: docs/W5B_EVALUATION.md.
 
+Addition 2026-10-25 (journal 0061): check_trial now also fails a governed cell (cB/dB/eB) without the per-tick log (pacing mode + sampled power) or the 0.5 s power trace, or with them empty / under 90% of the 65 s loop (650 ticks, 130 bins). Constants hash unchanged.
+
 ## Frozen constants (data/w5b/constants.json, sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9)
 c0 7 ms; g'B 60 W = 1800_a_g0_d1, 35 W = 1500_a_g0_d1; c'B-T3b (PRIMARY) 0.5 / 0.15; c'B-T3c (secondary) 0.2 / 0.15; d'B margin 0.3; headroom 2.692 W.
 
