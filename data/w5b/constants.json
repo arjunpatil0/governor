@@ -1,0 +1,74 @@
+{
+ "c0": 7,
+ "g_b": {
+  "60": {
+   "sid": "1800_a_g0_d1",
+   "clock": 1800,
+   "mode": "aligned",
+   "guard_ms": 0.0,
+   "duty": 1.0
+  },
+  "35": {
+   "sid": "1500_a_g0_d1",
+   "clock": 1500,
+   "mode": "aligned",
+   "guard_ms": 0.0,
+   "duty": 1.0
+  }
+ },
+ "c_b": {
+  "target": 0.2,
+  "ki": 0.15,
+  "guard0": 0.5,
+  "gmin": 0.3
+ },
+ "c_b_selection": "O-7",
+ "c_b_registered": {
+  "target": 0.2,
+  "ki": 0.15,
+  "guard0": 0.5,
+  "gmin": 0.3,
+  "status": "registered pick, sensitivity only, NOT run in the evaluation"
+ },
+ "d_b": {
+  "margin": 0.3
+ },
+ "power_source": "sampled",
+ "headroom": {
+  "w": 2.6922083559044814,
+  "sensor_p95_w": 1.050441689237807,
+  "spread_p95_w": 1.6417666666666744,
+  "steady_target_w": 58.199999999999996,
+  "margin": 0.3,
+  "formula": "headroom = max(0, p95(counter - sampled)) + max(0, p95(counter power of the d'B cells at the chosen margin - 0.97 x 60 W)); steering target = budget - headroom; the controllers' power-budget parameter = steering target / 0.97 (they aim at 97% of it)",
+  "source": "T3b cells (67 cells), recomputed by freeze.py (the T3c decisions.json carried 2.640 W from a merged set: addendum O-7)",
+  "n_cells_sensor": 67,
+  "n_cells_spread": 6
+ },
+ "rules": {
+  "c_b_rule_met": false,
+  "c_b_at_grid_edge": true,
+  "d_b_rule_met": true,
+  "d_b_headroom_rule_holds": true,
+  "d_b_headroom_mean_miss": 0.008611111111111111,
+  "d_b_headroom_ran_with_w": 2.8405442547176616,
+  "g_b_feasible_cells": {
+   "60": 3,
+   "35": 1
+  }
+ },
+ "sources": {
+  "tuning/decisions.json": "147acf68dba01f0357d04adff4141d8a0ef7edfc6180f6a932c18be35d394858",
+  "t3b/decisions.json": "78aafcffdd379820b2125b2ac913333b304ab4b6dfece90f5fdb792052fda2df",
+  "t3c/decisions.json": "af30127ee43133d9acd9a589c58303d61c8545634876d810ec2e83cd65e313c9",
+  "w5b/o7_tolerance.json": "8e37a933f94c1d4ef84b6358edeca6a707c5b646364b95b3bb4a810030592bd6"
+ },
+ "git_head": "2e1a52c0691300f78512c1c73000b04950017472",
+ "o7": {
+  "d": 0.0008164965809277226,
+  "p95_abs_diff": 0.0019999999999999914,
+  "n_pairs": 7,
+  "n_cells": 6,
+  "formula": "d = percentile95(|miss_a - miss_b| over the replicate pairs) / sqrt(6)  (linear interpolation; the 6-cell mean of the c'B grid)"
+ }
+}

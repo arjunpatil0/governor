@@ -1,16 +1,16 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-24 - Phase: W4-5. READY for the unattended chain (journal 0058, addendum O-6 section 7): power headroom added (2.69 W, steering target 57.31 W at 60 W; c'B and d'B steer on it, feasibility stays on the counter with no tolerance), six d'B cells with the headroom added to T3c, and ONE chain script that runs T3c, the strict morning check, the mechanical freeze and the 6-cell evaluation trial with automatic checks, then STOPS. It cannot start evaluation block 1. Waiting for YOU: restart -> helper -> the one command in docs/W5B_T3C_SITTING.md (about 1.1 h).
+Updated 2026-10-25 - Phase: W4-5. T3c reviewed, constants RE-FROZEN, evaluation commands prepared; NOTHING run on hardware since the chain (journal 0059, addendum O-7). Waiting for YOU: restart -> helper -> Step A (trial re-run, about 15 min) -> if PASS, Step B (blocks 4 and 5, about 2.5 h). Literal commands with the hash: docs/W5B_EVALUATION.md.
 
-## What the chain does (scripts/w5b_t3c_chain.ps1)
-0 no-sleep settings; 1 T3c (31 cells: 1 discarded + 24 c'B grid-extension cells + 6 d'B cells with headroom); 2 strict morning check; 3 freeze (data/w5b/constants.json + sha256); 4 evaluation trial (6 cells incl. the held-out 8B); 5 automatic trial checks; STOP. Each step only if the previous passed. End summary prints c'B constants (rule met? grid edge?), the headroom, whether the d'B margin rule still holds with it, the constants hash and the trial cells.
+## Frozen constants (data/w5b/constants.json, sha256 4aa2541d14271e00a9cfc245e2ad71aecab3ded795ce00a5c92193f1834f5974)
+c0 7 ms; g'B 60 W = 1800_a_g0_d1, 35 W = 1500_a_g0_d1; c'B target 0.2 ki 0.15 (O-7 pick = registered pick; the miss rule is NOT met; grid edge; 0.6 tok/s); d'B margin 0.3; headroom 2.692 W (steering parameter 59.080 W at 60 W).
 
-## Decided / recorded
-- Headroom = max(0, p95(counter - sampled), T3b, 67 cells) 1.05 W + max(0, p95(counter - 58.2 W), d'B cells at margin 0.3) 1.64 W = 2.69 W; controllers' budget parameter = (budget - headroom) / 0.97. The two terms overlap partly (conservative). If the six d'B cells fail the miss rule the headroom is KEPT and reported.
-- Known limitation: tuning cells used scene time from the loop start, evaluation cells from the measured window.
-- Evaluation power tolerance stays NONE (counter <= 60.0 W).
+## Decided / recorded (addendum O-7, docs/W5B_ADDENDUM_O7.md)
+- c'B fallback = fastest combination within d of the lowest mean miss; d = p95|replicate miss diff| / sqrt(6) = 0.0816 points from 7 pairs (1 strict c'B, 6 d'B near replicates) -> NO change of pick: c'B stays the degenerate lowest-miss setting (0.6 tok/s), so d'B-vs-c'B non-inferiority is close to vacuous. The estimate is weak (one c'B pair). YOUR decision: better c'B noise estimate (about 12 replicate cells, 20 min) or an extra c'B comparator (e.g. t0.5 ki0.15, 17.3 tok/s) - not done.
+- BUG fixed: headroom was computed over merged T3c data (dbh cells ran with 2.84 W, first freeze 2.64 W); now T3b cells only = 2.692 W as registered. The d'B confirmation (0.861% mean miss) ran at 2.84 W; reported, not re-run.
+- 1B d'B 47.0 vs 68.9 tok/s = a mode flip (unaligned vs aligned) decided in the first 2 s; not a bug; 1B not in the evaluation; d'B can be bimodal: report the final pacing mode per cell.
 
 ## Risks / not verified
-- All on hardware (T3c with the headroom; 8B governed; eB/c'B/d'B in S2 idle phases); the chain script's run in a live PowerShell (its syntax is parse-checked); the helper log of earlier sittings (Administrators-only). d'B-HGB not built (dropped if not ready when block 4 is scheduled). S3 not built.
+- Everything on hardware with the frozen constants (trial re-run is the first). Helper log: reported clean by you, not seen by me. First-trial observations: g'B 60 W S0 3B = 0 tok/s; d'B 35 W S1 3B drew 37.6 W (>35, infeasible); d'B 8B S5 5.03% miss. d'B-HGB not built (dropped if not ready when block 4 is scheduled); S3 not built.
 
 ## Notes
-- Do not run pytest or rebuild before the chain; exe hash bb875fbc unchanged. Re-freezing after review is allowed (no evaluation block will have run).
+- Exe hash bb875fbc unchanged. Sleep settings may still be at 0 on AC (the chain set them); Step A says how to re-set them if reverted.
