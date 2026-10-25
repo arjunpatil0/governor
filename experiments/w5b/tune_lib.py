@@ -202,6 +202,32 @@ def next_batch_t3b(results, c0):
 
 
 STEADY_TARGET_W = 0.97 * 60.0       # the controllers (ModelController, PIController) aim at 97% of their power-budget parameter
+T3B_PREFIXES = ("db_", "cb2_")      # cell ids of block T3b (plus its discarded cell t3b_discard)
+
+
+def replicate_tolerance(pairs, n_cells=6):
+    """Addendum O-7: the miss tolerance d of the c'B fallback = the 95th percentile of |miss difference| between replicate pairs (pairs: dicts with a, b = the two miss fractions), scaled to the mean of
+    n_cells cells by 1/sqrt(n_cells) (independent per-cell noise: the difference of two n_cells-cell means has 1/sqrt(n_cells) of the per-cell spread of the difference)."""
+    import math
+
+    import numpy as np
+    diffs = [abs(p["a"] - p["b"]) for p in pairs]
+    if not diffs:
+        return dict(d=None, p95_abs_diff=None, n_pairs=0, n_cells=n_cells, formula=_TOL_FORMULA)
+    p95 = float(np.percentile(diffs, 95))
+    return dict(d=p95 / math.sqrt(n_cells), p95_abs_diff=p95, n_pairs=len(diffs), n_cells=n_cells, formula=_TOL_FORMULA)
+
+
+_TOL_FORMULA = "d = percentile95(|miss_a - miss_b| over the replicate pairs) / sqrt(6)  (linear interpolation; the 6-cell mean of the c'B grid)"
+
+
+def pick_cb_o7(grid, d, budget_w=60.0):
+    """Addendum O-7 (the c'B fallback when no combination meets the miss rule): among the combinations with mean power <= budget whose mean miss is within d of the lowest such mean miss, the highest mean
+    tok/s (ties: the lower target, then the lower ki). With d = 0 this is the registered pick (lowest mean miss)."""
+    ok = [c for c in grid if c["power_w"] <= budget_w] or list(grid)
+    lo = min(c["miss"] for c in ok)
+    near = [c for c in ok if c["miss"] <= lo + (d or 0.0) + 1e-12]
+    return max(near, key=lambda c: (c["tok_s"], -c["params"]["target"], -c["params"]["ki"]))
 
 
 def _d_b_margin(results):
@@ -221,6 +247,7 @@ def headroom_from_results(results):
     budget - headroom with headroom = max(0, p95 over the T3b cells of (counter - sampled power)) + max(0, p95 over the d'B cells at the chosen margin of (counter power - the controllers' steady target 58.2 W)).
     Computed ONLY from T3b data (the cells in `results`); None if the data are missing. The two terms overlap partly (the counter spread contains the sensor offset): kept as specified, conservative."""
     import numpy as np
+    results = {k: v for k, v in results.items() if k == "t3b_discard" or k.startswith(T3B_PREFIXES)}           # T3b cells ONLY: the first T3c run leaked its own cells into this number (2.84 W instead of 2.69 W; addendum O-7)
     diffs = [m["power_w"] - m["power_sampled_w"] for m in results.values() if m.get("power_sampled_w") is not None and m.get("power_sampled_w") == m.get("power_sampled_w") and m.get("power_w") is not None]
     margin = _d_b_margin(results)
     if not diffs or margin is None:

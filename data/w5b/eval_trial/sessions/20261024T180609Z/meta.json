@@ -1,0 +1,149 @@
+{
+ "utc": "2026-10-24T18:06:11.867552+00:00",
+ "boot_utc": "2026-10-24T17:11:40.941950+00:00",
+ "uptime_s": 3271,
+ "battery_charge_mode": "Balanced 80%",
+ "armoury_mode": "Performance",
+ "armoury_mode_recorded": true,
+ "chrome_running": false,
+ "git_head": "21b31d6674f1eaea2d46ac033f6de5a404b2b002",
+ "exe_sha256": "bb875fbcaa2cf792f0f015a949b9db6cacf1ac50c4491471c2e1bcd504e78044",
+ "helper_ping": "OK none",
+ "processes": [
+  {
+   "name": "System Idle Process",
+   "count": 1,
+   "cpu_pct": 1566.5
+  },
+  {
+   "name": "python.exe",
+   "count": 2,
+   "cpu_pct": 39.0
+  },
+  {
+   "name": "System",
+   "count": 1,
+   "cpu_pct": 2.0
+  },
+  {
+   "name": "AvastSvc.exe",
+   "count": 1,
+   "cpu_pct": 1.9
+  },
+  {
+   "name": "NVDisplay.Container.exe",
+   "count": 2,
+   "cpu_pct": 1.0
+  },
+  {
+   "name": "aswidsagent.exe",
+   "count": 1,
+   "cpu_pct": 1.0
+  },
+  {
+   "name": "claude.exe",
+   "count": 10,
+   "cpu_pct": 1.0
+  },
+  {
+   "name": "nvcontainer.exe",
+   "count": 3,
+   "cpu_pct": 1.0
+  },
+  {
+   "name": "?",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSServ.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSSrcExt.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ASUSSmartDisplayControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AcPowerNotification.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AdobeCollabSync.exe",
+   "count": 2,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AggregatorHost.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AppActions.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ApplicationFrameHost.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.Service.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.UserSessionHelper.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrateControlInterface.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryHtmlDebugServer.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmourySocketServer.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsHotplugCtrl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsMonitorControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  }
+ ],
+ "blocks": [
+  4
+ ],
+ "as_blocks": [
+  4
+ ],
+ "power_source": "sampled",
+ "constants_sha256": "1a174a815aa432bc55a7542711328779adbacc0c6d5e09a4f1a0f6fd20af5994",
+ "plan_addenda": "O-5, O-6",
+ "session_estimate_s": 4500.0
+}

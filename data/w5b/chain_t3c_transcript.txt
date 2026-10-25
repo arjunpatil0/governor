@@ -1,0 +1,66 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20261024224401
+Username: ARJUNASUS\arjun
+RunAs User: ARJUNASUS\arjun
+Configuration Name: 
+Machine: ARJUNASUS (Microsoft Windows NT 10.0.26200.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\w5b_t3c_chain.ps1
+Process ID: 3432
+PSVersion: 5.1.26100.9711
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.9711
+BuildVersion: 10.0.26100.9711
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+
+
+[76] cb3_llama32_1b_S1_t0.2_k0.15: tok/s 0.8 miss 0.028 power 26.3 W (100 s)
+[77] cb3_llama32_1b_S1_t0.2_k0.05: tok/s 0.9 miss 0.030 power 26.3 W (101 s)
+[78] cb3_phi35_mini_S1_t0.2_k0.05: tok/s 1.1 miss 0.083 power 26.2 W (101 s)
+[79] cb3_llama32_3b_S0_t0.35_k0.05: tok/s 2.0 miss 0.050 power 24.2 W (101 s)
+[80] cb3_phi35_mini_S1_t0.35_k0.05: tok/s 1.8 miss 0.121 power 26.1 W (100 s)
+[81] cb3_llama32_3b_S1_t0.35_k0.05: tok/s 10.1 miss 0.042 power 34.1 W (100 s)
+[82] cb3_phi35_mini_S1_t0.35_k0.15: tok/s 0.8 miss 0.065 power 25.8 W (100 s)
+[83] dbh_llama32_1b_S0_m0.3: tok/s 47.6 miss 0.000 power 58.6 W (100 s)
+[84] cb3_phi35_mini_S0_t0.35_k0.05: tok/s 1.7 miss 0.068 power 24.9 W (100 s)
+[85] dbh_llama32_1b_S1_m0.3: tok/s 68.9 miss 0.000 power 45.2 W (100 s)
+[86] cb3_phi35_mini_S1_t0.2_k0.15: tok/s 0.6 miss 0.062 power 25.4 W (101 s)
+[87] cb3_llama32_3b_S0_t0.2_k0.15: tok/s 0.7 miss 0.018 power 23.4 W (100 s)
+[88] dbh_phi35_mini_S0_m0.3: tok/s 14.6 miss 0.000 power 57.8 W (100 s)
+[89] dbh_phi35_mini_S1_m0.3: tok/s 13.3 miss 0.033 power 57.4 W (100 s)
+[90] cb3_llama32_1b_S1_t0.35_k0.15: tok/s 16.9 miss 0.030 power 33.0 W (100 s)
+[91] cb3_llama32_1b_S0_t0.2_k0.15: tok/s 0.0 miss 0.000 power 23.0 W (100 s)
+[92] cb3_llama32_1b_S0_t0.2_k0.05: tok/s 0.0 miss 0.000 power 23.1 W (100 s)
+[93] cb3_llama32_3b_S0_t0.2_k0.05: tok/s 1.1 miss 0.028 power 23.3 W (100 s)
+[94] cb3_llama32_1b_S0_t0.35_k0.15: tok/s 54.3 miss 0.000 power 59.6 W (100 s)
+[95] cb3_phi35_mini_S0_t0.2_k0.05: tok/s 0.9 miss 0.037 power 23.7 W (100 s)
+[96] cb3_phi35_mini_S0_t0.2_k0.15: tok/s 0.6 miss 0.021 power 23.2 W (102 s)
+[97] cb3_llama32_3b_S1_t0.2_k0.15: tok/s 0.7 miss 0.056 power 25.1 W (100 s)
+[98] dbh_llama32_3b_S0_m0.3: tok/s 19.7 miss 0.000 power 58.6 W (100 s)
+sitting ended: finished=True stop=None cells run in this call=31; manifest of 95 files written
+
+
+
+
+
+================ W5b T3c CHAIN SUMMARY ================
+0 no-sleep settings                set (standby and hibernate timeout 0 on AC)
+1 T3c                              ran (decisions.json written)
+2 morning check (strict)           PASS (0 problems)
+3 freeze constants                 PASS (sha256 1a174a815aa432bc55a7542711328779adbacc0c6d5e09a4f1a0f6fd20af5994)
+4 evaluation trial (6 cells)       ran
+5 trial checks                     PASS
+6 STOP                             evaluation block 1 NOT started
+elapsed: 63 min
+
+RESULT: ALL STEPS PASSED. Evaluation block 1 was NOT started. Next: tell Claude; review; commit the constants; then the evaluation sessions.
+Sleep settings were changed; revert with:  powercfg /change standby-timeout-ac 30   and   powercfg /change hibernate-timeout-ac 0
+Helper window: press Ctrl+C there once (note the prompt time and the message).
+**********************
+Windows PowerShell transcript end
+End time: 20261024234632
+**********************

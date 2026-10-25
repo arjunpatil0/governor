@@ -1,0 +1,66 @@
+{
+ "id": "cb3_llama32_3b_S0_t0.35_k0.15",
+ "spec": {
+  "id": "cb3_llama32_3b_S0_t0.35_k0.15",
+  "kind": "cB",
+  "workload": "llama32_3b",
+  "scene": "S0",
+  "c0": 7,
+  "params": {
+   "target": 0.35,
+   "ki": 0.15
+  },
+  "budget_w": 60.0
+ },
+ "metrics": {
+  "miss": 0.019166666666666665,
+  "miss_completed": 0.019166666666666665,
+  "tok_s": 0.7166666666666667,
+  "power_w": 23.623333333333335,
+  "power_sampled_w": 23.345089969124718,
+  "fg_p50_ms": 9.378449999985605,
+  "fg_p99_ms": 21.574687000007767,
+  "frames": 3600,
+  "abandoned": 0,
+  "bg_tokens": 43,
+  "tok_ms_p50": 30.25380000002542,
+  "sm_mhz_median": 1350.0,
+  "temp_before_c": 54,
+  "temp_after_c": 55,
+  "clock_changes": 1,
+  "clamp_events": 10,
+  "power_source": "sampled",
+  "gov_reads": 0,
+  "gov_reads_per_s": 0.0,
+  "clamp_examples": [
+   [
+    383606.2999,
+    2475.0,
+    2460.0
+   ],
+   [
+    383706.36510000005,
+    2475.0,
+    2460.0
+   ],
+   [
+    383806.4101,
+    2475.0,
+    2460.0
+   ]
+  ],
+  "final_pacing_mode": "unaligned",
+  "clock_ok": true,
+  "ring_dropped": 0,
+  "thermal_reason_bits": 0,
+  "executor": "hw",
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "driver_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=58 t_first=383.137814 t_last=447.942447 ctx_end=570"
+  ]
+ },
+ "executor": "hw",
+ "wall_s": 100.22881627082825,
+ "utc": "2026-10-24T17:19:20.682952+00:00"
+}

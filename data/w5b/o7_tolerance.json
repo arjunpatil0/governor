@@ -1,0 +1,184 @@
+{
+ "d": 0.0008164965809277226,
+ "p95_abs_diff": 0.0019999999999999914,
+ "n_pairs": 7,
+ "n_cells": 6,
+ "formula": "d = percentile95(|miss_a - miss_b| over the replicate pairs) / sqrt(6)  (linear interpolation; the 6-cell mean of the c'B grid)",
+ "pairs": [
+  {
+   "type": "near_replicate_steering_target",
+   "id_a": "db_llama32_1b_S0_m0.3",
+   "id_b": "dbh_llama32_1b_S0_m0.3",
+   "dir_a": "t3b",
+   "dir_b": "t3c",
+   "a": 0.0,
+   "b": 0.0,
+   "steer_budget_w": [
+    null,
+    58.927273964208595
+   ],
+   "spec": [
+    "dB",
+    "llama32_1b",
+    "S0",
+    7,
+    {
+     "margin": 0.3
+    },
+    null,
+    60.0
+   ]
+  },
+  {
+   "type": "near_replicate_steering_target",
+   "id_a": "db_llama32_1b_S1_m0.3",
+   "id_b": "dbh_llama32_1b_S1_m0.3",
+   "dir_a": "t3b",
+   "dir_b": "t3c",
+   "a": 0.0,
+   "b": 0.0,
+   "steer_budget_w": [
+    null,
+    58.927273964208595
+   ],
+   "spec": [
+    "dB",
+    "llama32_1b",
+    "S1",
+    7,
+    {
+     "margin": 0.3
+    },
+    null,
+    60.0
+   ]
+  },
+  {
+   "type": "near_replicate_steering_target",
+   "id_a": "db_llama32_3b_S0_m0.3",
+   "id_b": "dbh_llama32_3b_S0_m0.3",
+   "dir_a": "t3b",
+   "dir_b": "t3c",
+   "a": 0.0,
+   "b": 0.0,
+   "steer_budget_w": [
+    null,
+    58.927273964208595
+   ],
+   "spec": [
+    "dB",
+    "llama32_3b",
+    "S0",
+    7,
+    {
+     "margin": 0.3
+    },
+    null,
+    60.0
+   ]
+  },
+  {
+   "type": "near_replicate_steering_target",
+   "id_a": "db_llama32_3b_S1_m0.3",
+   "id_b": "dbh_llama32_3b_S1_m0.3",
+   "dir_a": "t3b",
+   "dir_b": "t3c",
+   "a": 0.02,
+   "b": 0.019166666666666665,
+   "steer_budget_w": [
+    null,
+    58.927273964208595
+   ],
+   "spec": [
+    "dB",
+    "llama32_3b",
+    "S1",
+    7,
+    {
+     "margin": 0.3
+    },
+    null,
+    60.0
+   ]
+  },
+  {
+   "type": "near_replicate_steering_target",
+   "id_a": "db_phi35_mini_S0_m0.3",
+   "id_b": "dbh_phi35_mini_S0_m0.3",
+   "dir_a": "t3b",
+   "dir_b": "t3c",
+   "a": 0.0,
+   "b": 0.0,
+   "steer_budget_w": [
+    null,
+    58.927273964208595
+   ],
+   "spec": [
+    "dB",
+    "phi35_mini",
+    "S0",
+    7,
+    {
+     "margin": 0.3
+    },
+    null,
+    60.0
+   ]
+  },
+  {
+   "type": "near_replicate_steering_target",
+   "id_a": "db_phi35_mini_S1_m0.3",
+   "id_b": "dbh_phi35_mini_S1_m0.3",
+   "dir_a": "t3b",
+   "dir_b": "t3c",
+   "a": 0.0325,
+   "b": 0.0325,
+   "steer_budget_w": [
+    null,
+    58.927273964208595
+   ],
+   "spec": [
+    "dB",
+    "phi35_mini",
+    "S1",
+    7,
+    {
+     "margin": 0.3
+    },
+    null,
+    60.0
+   ]
+  },
+  {
+   "type": "replicate",
+   "id_a": "diag_cb_sampled",
+   "id_b": "cb2_llama32_3b_S1_t0.5_k0.15",
+   "dir_a": "diag",
+   "dir_b": "t3b",
+   "a": 0.06333333333333334,
+   "b": 0.06583333333333333,
+   "steer_budget_w": [
+    null,
+    null
+   ],
+   "spec": [
+    "cB",
+    "llama32_3b",
+    "S1",
+    7,
+    {
+     "ki": 0.15,
+     "target": 0.5
+    },
+    null,
+    60.0
+   ]
+  }
+ ],
+ "dirs": [
+  "data/w5b/diag",
+  "data/w5b/t3b",
+  "data/w5b/t3c"
+ ],
+ "note": "replicate = identical spec; near_replicate_steering_target = identical except the d'B steering budget (headroom): its difference includes that perturbation, so it can only widen d"
+}

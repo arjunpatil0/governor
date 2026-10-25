@@ -48,7 +48,9 @@ if ($LASTEXITCODE -ne 0) { Stop-Chain "2 morning check (strict)" "problems in th
 $steps["2 morning check (strict)"] = "PASS (0 problems)"
 
 # 3. freeze the constants mechanically from the registered rules (re-freezing after review is allowed: no evaluation block has run)
-python experiments/w5b/freeze.py --tuning data/w5b/tuning/decisions.json --t3b data/w5b/t3b/decisions.json --t3c data/w5b/t3c/decisions.json --out data/w5b/constants.json --write-sha data/w5b/constants.sha256
+python experiments/w5b/o7.py --dirs data/w5b/diag data/w5b/t3b data/w5b/t3c --out data/w5b/o7_tolerance.json
+if ($LASTEXITCODE -ne 0) { Stop-Chain "3 O-7 tolerance" "o7.py failed" }
+python experiments/w5b/freeze.py --tuning data/w5b/tuning/decisions.json --t3b data/w5b/t3b/decisions.json --t3c data/w5b/t3c/decisions.json --o7 data/w5b/o7_tolerance.json --out data/w5b/constants.json --write-sha data/w5b/constants.sha256
 if ($LASTEXITCODE -ne 0) { Stop-Chain "3 freeze constants" "freeze.py refused (the T3c decisions are incomplete)" }
 $sha = (Get-Content data/w5b/constants.sha256 -Raw).Trim()
 $steps["3 freeze constants"] = "PASS (sha256 $sha)"

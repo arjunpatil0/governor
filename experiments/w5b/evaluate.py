@@ -195,7 +195,7 @@ def main():
         sd.mkdir(parents=True, exist_ok=True)
         smoke.write_meta(sd, a.armoury_mode)
         m = json.loads((sd / "meta.json").read_text(encoding="utf-8"))
-        m.update(blocks=a.blocks, as_blocks=as_blocks, power_source="sampled", constants_sha256=a.constants_sha256, plan_addenda="O-5, O-6", session_estimate_s=el.session_estimate_s(as_blocks, const))
+        m.update(blocks=a.blocks, as_blocks=as_blocks, power_source="sampled", constants_sha256=a.constants_sha256, plan_addenda="O-5, O-6, O-7", session_estimate_s=el.session_estimate_s(as_blocks, const))
         (sd / "meta.json").write_text(json.dumps(m, indent=1), encoding="utf-8")
         ex = HwExecutor(power_source="sampled")
     else:

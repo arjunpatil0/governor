@@ -1,0 +1,130 @@
+{
+ "c0": 7,
+ "headroom": {
+  "w": 2.64049418260979,
+  "sensor_p95_w": 0.9987275159431155,
+  "spread_p95_w": 1.6417666666666744,
+  "steady_target_w": 58.199999999999996,
+  "margin": 0.3,
+  "n_cells_sensor": 98,
+  "n_cells_spread": 6,
+  "formula": "headroom = max(0, p95(counter - sampled)) + max(0, p95(counter power of the d'B cells at the chosen margin - 0.97 x 60 W)); steering target = budget - headroom; the controllers' power-budget parameter = steering target / 0.97 (they aim at 97% of it)"
+ },
+ "c_b": {
+  "pacing": "auto (non-learned, token-aware switch: period - clean token, +- 0.3 ms, dwell 5 s; plan addendum O-3)",
+  "params": {
+   "target": 0.2,
+   "ki": 0.15,
+   "guard0": 0.5,
+   "gmin": 0.3
+  },
+  "rule_met": false,
+  "mean_miss": 0.030833333333333334,
+  "mean_tok_s": 0.5583333333333333,
+  "mean_power_w": 24.402427777777778,
+  "grid": [
+   {
+    "params": {
+     "target": 0.35,
+     "ki": 0.05
+    },
+    "miss": 0.048240740740740744,
+    "power_w": 33.94614722222222,
+    "tok_s": 14.816666666666665
+   },
+   {
+    "params": {
+     "target": 0.35,
+     "ki": 0.15
+    },
+    "miss": 0.03217592592592593,
+    "power_w": 33.24508888888889,
+    "tok_s": 13.577777777777778
+   },
+   {
+    "params": {
+     "target": 0.2,
+     "ki": 0.05
+    },
+    "miss": 0.043750000000000004,
+    "power_w": 24.744755555555557,
+    "tok_s": 0.9249999999999999
+   },
+   {
+    "params": {
+     "target": 0.2,
+     "ki": 0.15
+    },
+    "miss": 0.030833333333333334,
+    "power_w": 24.402427777777778,
+    "tok_s": 0.5583333333333333
+   },
+   {
+    "params": {
+     "target": 0.5,
+     "ki": 0.05
+    },
+    "miss": 0.050555555555555555,
+    "power_w": 40.54644166666667,
+    "tok_s": 17.663888888888888
+   },
+   {
+    "params": {
+     "target": 0.5,
+     "ki": 0.15
+    },
+    "miss": 0.032962962962962965,
+    "power_w": 40.33315833333334,
+    "tok_s": 17.305555555555554
+   },
+   {
+    "params": {
+     "target": 0.65,
+     "ki": 0.05
+    },
+    "miss": 0.05249999999999999,
+    "power_w": 43.74881111111111,
+    "tok_s": 26.66111111111111
+   },
+   {
+    "params": {
+     "target": 0.65,
+     "ki": 0.15
+    },
+    "miss": 0.04476851851851852,
+    "power_w": 43.740380555555554,
+    "tok_s": 27.03611111111111
+   },
+   {
+    "params": {
+     "target": 0.8,
+     "ki": 0.05
+    },
+    "miss": 0.05800925925925926,
+    "power_w": 43.808619444444446,
+    "tok_s": 27.26111111111111
+   },
+   {
+    "params": {
+     "target": 0.8,
+     "ki": 0.15
+    },
+    "miss": 0.05435185185185185,
+    "power_w": 44.42989722222222,
+    "tok_s": 27.369444444444444
+   }
+  ],
+  "at_grid_edge": true
+ },
+ "d_b_headroom": {
+  "margin": 0.3,
+  "mean_miss": 0.008611111111111111,
+  "mean_tok_s": 30.486111111111114,
+  "mean_power_w": 55.61310833333334,
+  "rule_holds": true,
+  "note": "the headroom is kept either way (addendum O-6 amendment: no further tuning)"
+ },
+ "stop": null,
+ "executor": "hw",
+ "utc": "2026-10-24T18:06:05.985047+00:00"
+}

@@ -85,12 +85,12 @@ def test_eb_is_the_g_b_action_with_the_idle_drop_to_the_knee():
 def test_constants_are_frozen_from_the_decisions_and_the_runner_refuses_a_wrong_hash(tmp_path):
     t = tmp_path / "tuning.json"; t.write_text(json.dumps(dict(c0=7, g_b={"60": dict(setting=G60, feasible_cells=3), "35": dict(setting=G35, feasible_cells=1)})))
     b = tmp_path / "t3b.json"; b.write_text(json.dumps(dict(d_b=dict(margin=0.3, rule_met=True))))
-    c = tmp_path / "t3c.json"; c.write_text(json.dumps(dict(c_b=dict(params=dict(target=0.35, ki=0.15, guard0=0.5, gmin=0.3), rule_met=False, at_grid_edge=False), headroom=dict(w=2.692), d_b_headroom=dict(rule_holds=True, mean_miss=0.004))))
+    c = tmp_path / "t3c.json"; c.write_text(json.dumps(dict(c_b=dict(params=dict(target=0.35, ki=0.15, guard0=0.5, gmin=0.3), rule_met=True, at_grid_edge=False), headroom=dict(w=2.692), d_b_headroom=dict(rule_holds=True, mean_miss=0.004))))
     out = tmp_path / "constants.json"
     const = freeze.build_constants(t, b, c, out)
     assert const["c0"] == 7 and const["g_b"]["60"] == G60 and const["g_b"]["35"] == G35 and const["d_b"]["margin"] == 0.3 and const["c_b"]["target"] == 0.35
     assert len(const["sources"]) == 3 and all(k.endswith("/" + n) for k, n in zip(sorted(const["sources"]), ("t3b.json", "t3c.json", "tuning.json")))
-    assert const["power_source"] == "sampled" and const["rules"]["c_b_rule_met"] is False and json.loads(out.read_text())["c0"] == 7
+    assert const["power_source"] == "sampled" and const["rules"]["c_b_rule_met"] is True and const["c_b_selection"] == "registered (rule met)" and json.loads(out.read_text())["c0"] == 7
     sha = freeze.sha256_file(out)
     assert evaluate.load_constants(out, sha)["c0"] == 7
     with pytest.raises(SystemExit):

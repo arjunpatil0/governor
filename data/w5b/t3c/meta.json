@@ -1,0 +1,146 @@
+{
+ "utc": "2026-10-24T17:14:09.778196+00:00",
+ "boot_utc": "2026-10-24T17:11:40.714814+00:00",
+ "uptime_s": 149,
+ "battery_charge_mode": "Balanced 80%",
+ "armoury_mode": "Performance",
+ "armoury_mode_recorded": true,
+ "chrome_running": false,
+ "git_head": "21b31d6674f1eaea2d46ac033f6de5a404b2b002",
+ "exe_sha256": "bb875fbcaa2cf792f0f015a949b9db6cacf1ac50c4491471c2e1bcd504e78044",
+ "helper_ping": "OK none",
+ "processes": [
+  {
+   "name": "System Idle Process",
+   "count": 1,
+   "cpu_pct": 1250.0
+  },
+  {
+   "name": "System",
+   "count": 1,
+   "cpu_pct": 75.6
+  },
+  {
+   "name": "python.exe",
+   "count": 2,
+   "cpu_pct": 46.9
+  },
+  {
+   "name": "svchost.exe",
+   "count": 91,
+   "cpu_pct": 20.5
+  },
+  {
+   "name": "WmiPrvSE.exe",
+   "count": 2,
+   "cpu_pct": 11.2
+  },
+  {
+   "name": "mc-fw-host.exe",
+   "count": 2,
+   "cpu_pct": 10.6
+  },
+  {
+   "name": "WindowsTerminal.exe",
+   "count": 1,
+   "cpu_pct": 5.0
+  },
+  {
+   "name": "aswEngSrv.exe",
+   "count": 1,
+   "cpu_pct": 4.1
+  },
+  {
+   "name": "AvastSvc.exe",
+   "count": 1,
+   "cpu_pct": 3.3
+  },
+  {
+   "name": "csrss.exe",
+   "count": 2,
+   "cpu_pct": 3.0
+  },
+  {
+   "name": "aswidsagent.exe",
+   "count": 1,
+   "cpu_pct": 2.5
+  },
+  {
+   "name": "NVDisplay.Container.exe",
+   "count": 2,
+   "cpu_pct": 2.4
+  },
+  {
+   "name": "services.exe",
+   "count": 1,
+   "cpu_pct": 2.3
+  },
+  {
+   "name": "AdobeCollabSync.exe",
+   "count": 2,
+   "cpu_pct": 1.7
+  },
+  {
+   "name": "SearchIndexer.exe",
+   "count": 1,
+   "cpu_pct": 1.7
+  },
+  {
+   "name": "AcPowerNotification.exe",
+   "count": 1,
+   "cpu_pct": 1.6
+  },
+  {
+   "name": "taskhostw.exe",
+   "count": 2,
+   "cpu_pct": 1.6
+  },
+  {
+   "name": "dwm.exe",
+   "count": 1,
+   "cpu_pct": 1.5
+  },
+  {
+   "name": "lsass.exe",
+   "count": 1,
+   "cpu_pct": 1.5
+  },
+  {
+   "name": "copilotapp.exe",
+   "count": 9,
+   "cpu_pct": 0.9
+  },
+  {
+   "name": "SpotifyLauncher.exe",
+   "count": 1,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "?",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSServ.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ASUSSmartDisplayControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AggregatorHost.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  }
+ ],
+ "sitting_start_utc": "2026-10-24T17:14:09.795213+00:00",
+ "relaxation": "T1-T3 chained in one unattended sitting (plan addendum O section 4): the yaml 3 h session cap is relaxed for the tuning blocks only; evaluation blocks keep it. Tuning blocks are in no confirmatory test.",
+ "plan_addendum": "docs/W5B_ADDENDUM_O.md",
+ "addendum_o_sha256": "d544d01084fd8bc8564ebe21d7c126b0359d6a5988fb53556574d8a9aa3ae40f",
+ "yaml_sha256": "47fab0c817e9a5509d56fc01fcd34e1afd109859ec6093f6641822be1b43a4e9",
+ "power_source": "sampled",
+ "plan": "t3c"
+}
