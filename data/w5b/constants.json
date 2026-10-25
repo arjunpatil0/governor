@@ -16,19 +16,30 @@
    "duty": 1.0
   }
  },
- "c_b": {
+ "c_b_t3b": {
+  "target": 0.5,
+  "ki": 0.15,
+  "guard0": 0.5,
+  "gmin": 0.3
+ },
+ "c_b_t3b_rule_met": false,
+ "c_b_t3c": {
   "target": 0.2,
   "ki": 0.15,
   "guard0": 0.5,
   "gmin": 0.3
  },
- "c_b_selection": "O-7",
- "c_b_registered": {
+ "c_b_t3c_selection": "O-7",
+ "c_b_t3c_registered": {
   "target": 0.2,
   "ki": 0.15,
   "guard0": 0.5,
   "gmin": 0.3,
-  "status": "registered pick, sensitivity only, NOT run in the evaluation"
+  "status": "registered pick of the T3c grid (the same as c_b_t3c when the selection is 'registered (rule met)' or the O-7 tolerance moves nothing)"
+ },
+ "comparators": {
+  "primary": "c'B-T3b",
+  "secondary": "c'B-T3c"
  },
  "d_b": {
   "margin": 0.3
@@ -46,7 +57,7 @@
   "n_cells_spread": 6
  },
  "rules": {
-  "c_b_rule_met": false,
+  "c_b_t3c_rule_met": false,
   "c_b_at_grid_edge": true,
   "d_b_rule_met": true,
   "d_b_headroom_rule_holds": true,
@@ -63,7 +74,7 @@
   "t3c/decisions.json": "af30127ee43133d9acd9a589c58303d61c8545634876d810ec2e83cd65e313c9",
   "w5b/o7_tolerance.json": "8e37a933f94c1d4ef84b6358edeca6a707c5b646364b95b3bb4a810030592bd6"
  },
- "git_head": "2e1a52c0691300f78512c1c73000b04950017472",
+ "git_head": "90de376e3cbf0d632fbbb1c2459c6a2587033a29",
  "o7": {
   "d": 0.0008164965809277226,
   "p95_abs_diff": 0.0019999999999999914,

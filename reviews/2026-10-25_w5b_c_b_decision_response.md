@@ -1,0 +1,6 @@
+# Response to the reviewer decision on c'B (pasted into chat 2026-10-25; no review file was saved, so none is edited)
+1. Second comparator: done and tested; c'B-T3b (0.5 / 0.15) PRIMARY, c'B-T3c (0.2 / 0.15) SECONDARY, both in every block at both budgets; eval_lib cell lists, seeded order, analysis tables updated. Blocks 4 and 5 no longer fit one session (110 cells = 3.06 h); proposed and implemented split: (4 9) (5 10) (6 11) (7 12) (8 13), 85 cells = 2.4 h each.
+2. Tuning-data result recorded (PAPER_MAP rows 30-31, addendum O-7 section 5.5): no c'B combination dominates d'B at margin 0.3; stated as not held out.
+3. ev04_S1_dB_35: a controller limit, not a plant floor or clock floor, and no bug found (addendum O-7 section 5.6, PAPER_MAP row 32); the cell had no per-tick mode or power, so the explanation is reconstructed from the clock log and reference cells and says so; per-tick mode and a sampled-power trace are now logged for every governed cell.
+4. final_pacing_mode is a column of results.csv for every cell (governed: final mode; static: its setting's mode; arm a: unaligned).
+5. Re-frozen, sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9; Step A (7-cell trial incl. a c'B-T3b cell) and Step B (blocks 4 and 9) written in docs/W5B_EVALUATION.md; nothing run.
