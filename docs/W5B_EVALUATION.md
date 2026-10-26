@@ -38,3 +38,18 @@ cd C:\Users\arjun\governor
 python experiments/w5b/evaluate.py --blocks 4 9 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9 --out data/w5b/eval --armoury-mode Performance
 ```
 Each block is whole or discarded; an incident stops the session with exit code 2, the incomplete block is discarded at the next call and rerun under the next free number with `--as-block` (I give the literal command then). Do not use the laptop during the session. At the end: Ctrl+C in the helper window once, then paste the last 20 lines of the session output and the helper-log lines (docs/W5B_T3C_SITTING.md section 3). Later sessions use the same command with the block numbers `5 10`, `6 11`, `7 12`, `8 13`.
+
+## After every session: integrity check (no outcome analysis until all 10 blocks are done)
+```powershell
+cd C:\Users\arjun\governor
+python experiments/w5b/eval_integrity.py --out data/w5b/eval --blocks 4 9 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9
+```
+(constants hash incl. every session meta, block completeness, incidents, gov_reads = 0, counter vs sampled within 15%, full offload, per-tick log and power trace; it reads no miss or throughput). Session 1 (blocks 4 and 9): INTEGRITY PASS, 85 cells, 0 problems, 0 flags; Step A trial (eval_trial2): TRIAL CHECK PASS (7 cells).
+
+## Session 2 = blocks 5 and 10 (85 cells, about 2.4 h)
+Restart, helper (Step A, items 1 and 2), then the command below; the Step A trial need not be repeated (same code and constants). The working tree must be clean: this commit holds the session 1 data and the integrity tool.
+```powershell
+cd C:\Users\arjun\governor
+python experiments/w5b/evaluate.py --blocks 5 10 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9 --out data/w5b/eval --armoury-mode Performance
+```
+Afterwards run the integrity command above with `--blocks 5 10`.

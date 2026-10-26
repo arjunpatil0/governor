@@ -1,0 +1,149 @@
+{
+ "utc": "2026-10-25T19:56:53.033844+00:00",
+ "boot_utc": "2026-10-25T19:52:32.555995+00:00",
+ "uptime_s": 260,
+ "battery_charge_mode": "Balanced 80%",
+ "armoury_mode": "Performance",
+ "armoury_mode_recorded": true,
+ "chrome_running": false,
+ "git_head": "c96ad2e2a7d46e978942d1107155364ff7545e09",
+ "exe_sha256": "bb875fbcaa2cf792f0f015a949b9db6cacf1ac50c4491471c2e1bcd504e78044",
+ "helper_ping": "OK none",
+ "processes": [
+  {
+   "name": "System Idle Process",
+   "count": 1,
+   "cpu_pct": 1429.8
+  },
+  {
+   "name": "System",
+   "count": 1,
+   "cpu_pct": 69.8
+  },
+  {
+   "name": "python.exe",
+   "count": 2,
+   "cpu_pct": 49.6
+  },
+  {
+   "name": "claude.exe",
+   "count": 11,
+   "cpu_pct": 33.1
+  },
+  {
+   "name": "WWAHost.exe",
+   "count": 1,
+   "cpu_pct": 5.5
+  },
+  {
+   "name": "dwm.exe",
+   "count": 1,
+   "cpu_pct": 5.3
+  },
+  {
+   "name": "NVDisplay.Container.exe",
+   "count": 2,
+   "cpu_pct": 4.4
+  },
+  {
+   "name": "explorer.exe",
+   "count": 1,
+   "cpu_pct": 2.5
+  },
+  {
+   "name": "AvastSvc.exe",
+   "count": 1,
+   "cpu_pct": 1.7
+  },
+  {
+   "name": "ctfmon.exe",
+   "count": 1,
+   "cpu_pct": 1.7
+  },
+  {
+   "name": "GameInputRedistService.exe",
+   "count": 2,
+   "cpu_pct": 1.6
+  },
+  {
+   "name": "csrss.exe",
+   "count": 2,
+   "cpu_pct": 0.9
+  },
+  {
+   "name": "services.exe",
+   "count": 1,
+   "cpu_pct": 0.9
+  },
+  {
+   "name": "svchost.exe",
+   "count": 95,
+   "cpu_pct": 0.9
+  },
+  {
+   "name": "ApplicationFrameHost.exe",
+   "count": 1,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "AvastUI.exe",
+   "count": 1,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "RadeonSoftware.exe",
+   "count": 1,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "aswidsagent.exe",
+   "count": 1,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "copilotapp.exe",
+   "count": 9,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "mc-fw-host.exe",
+   "count": 2,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "msedgewebview2.exe",
+   "count": 6,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "?",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSServ.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ASUSSmartDisplayControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AcPowerNotification.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  }
+ ],
+ "blocks": [
+  4
+ ],
+ "as_blocks": [
+  4
+ ],
+ "power_source": "sampled",
+ "constants_sha256": "f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9",
+ "plan_addenda": "O-5, O-6, O-7",
+ "session_estimate_s": 5500.0
+}
