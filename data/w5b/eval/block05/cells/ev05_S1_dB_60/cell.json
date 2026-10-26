@@ -1,0 +1,71 @@
+{
+ "id": "ev05_S1_dB_60",
+ "spec": {
+  "id": "ev05_S1_dB_60",
+  "block": 5,
+  "scene": "S1",
+  "controller": "d'B",
+  "budget_w": 60.0,
+  "exploratory": false,
+  "workload": "llama32_3b",
+  "c0": 7,
+  "origin_ms": 5000.0,
+  "kind": "dB",
+  "params": {
+   "margin": 0.3
+  },
+  "steer_budget_w": 59.080197571232496,
+  "headroom_w": 2.6922083559044814
+ },
+ "metrics": {
+  "miss": 0.015833333333333335,
+  "miss_completed": 0.015833333333333335,
+  "tok_s": 20.166666666666668,
+  "power_w": 55.34303333333333,
+  "power_sampled_w": 55.355960238568585,
+  "fg_p50_ms": 6.710000000111904,
+  "fg_p99_ms": 17.078013666593957,
+  "frames": 3600,
+  "abandoned": 0,
+  "bg_tokens": 1210,
+  "tok_ms_p50": 16.484800000057476,
+  "sm_mhz_median": 2460.0,
+  "temp_before_c": 52,
+  "temp_after_c": 69,
+  "clock_changes": 4,
+  "clamp_events": 20,
+  "power_source": "sampled",
+  "gov_reads": 0,
+  "gov_reads_per_s": 0.0,
+  "clamp_examples": [
+   [
+    1637713.3177999998,
+    2475.0,
+    2460.0
+   ],
+   [
+    1637813.668,
+    2475.0,
+    2460.0
+   ],
+   [
+    1637913.4443,
+    2475.0,
+    2460.0
+   ]
+  ],
+  "final_pacing_mode": "unaligned",
+  "clock_ok": true,
+  "ring_dropped": 0,
+  "thermal_reason_bits": 0,
+  "executor": "hw",
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "driver_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=1318 t_first=1637.247607 t_last=1702.429261 ctx_end=1830"
+  ]
+ },
+ "executor": "hw",
+ "wall_s": 104.91784381866455,
+ "utc": "2026-10-26T14:30:15.776268+00:00"
+}
