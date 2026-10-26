@@ -50,16 +50,18 @@ def block_cells(block, const, seed=SEED, hgb=False, seed_block=None):
     return sorted(cells, key=lambda c: random.Random(f"{seed}:{sb}:{c['scene']}:{c['controller']}:{int(c['budget_w'])}").random())
 
 
-def session_estimate_s(blocks, const):
-    return sum(len(block_cells(b, const)) for b in blocks) * CELL_S
+def session_estimate_s(blocks, const, seed_blocks=None):
+    """100 s per cell. seed_blocks: for a block rerun under a new number (--as-block) the number whose seed list (and so whose cells, including the 35 W family) it runs."""
+    sb = list(seed_blocks) if seed_blocks else [None] * len(blocks)
+    return sum(len(block_cells(b, const, seed_block=s)) for b, s in zip(blocks, sb)) * CELL_S
 
 
-def check_session(blocks, const, allow_rerun_numbers=True):
+def check_session(blocks, const, allow_rerun_numbers=True, seed_blocks=None):
     """Reason a session request is refused, or None: only evaluation blocks (a rerun of a discarded block may take the next number, 14+), at most 3 h at CELL_S per cell, blocks never split."""
     ok = set(EVAL_BLOCKS) | (set(range(14, 40)) if allow_rerun_numbers else set())
     if any(b not in ok for b in blocks):
         return f"refused: {blocks} are not evaluation blocks (evaluation blocks are 4-13)"
-    est = session_estimate_s(blocks, const)
+    est = session_estimate_s(blocks, const, seed_blocks)
     if est > SESSION_MAX_S:
         return f"refused: the session would take about {est / 3600:.1f} h at {CELL_S:.0f} s per cell, above the 3 h rule (blocks are never split: take fewer blocks)"
     return None

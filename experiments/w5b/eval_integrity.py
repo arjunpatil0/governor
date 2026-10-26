@@ -1,7 +1,7 @@
 """Integrity check of finished evaluation blocks (addenda O-5, O-6, O-7). It reads NO outcome (no miss fraction, no throughput): only completeness and measurement integrity.
    python experiments/w5b/eval_integrity.py --out data/w5b/eval --blocks 4 9 --constants data/w5b/constants.json --constants-sha256 <hash>
-Checks (a failing cell is named): the constants file hash (and the hash in every session meta); every block complete (block.json) with exactly the cells eval_lib composes and a cell.json each; no incident files and
-no discarded block; governed cells (c'B, d'B, eB) on the sampled power source with gov_reads = 0; counter vs sampled power within 15% in every cell; full GPU offload in every cell; the per-tick log and the 0.5 s power
+A block rerun under a new number (evaluate.py --as-block) is checked against the cells of the seed list recorded in its block.json. A discarded block is reported as a flag with its count of measured cells.
+Checks (a failing cell is named): the constants file hash (and the hash in every session meta); every block complete (block.json) with exactly the cells eval_lib composes and a cell.json each; no incident files; governed cells (c'B, d'B, eB) on the sampled power source with gov_reads = 0; counter vs sampled power within 15% in every cell; full GPU offload in every cell; the per-tick log and the 0.5 s power
 trace of every governed cell present and long enough (evaluate._per_tick_problems); results.csv row count. Flags (not failures): thermal event reasons, clock not confirmed, ring drops, abandoned frames."""
 import argparse
 import csv
@@ -29,13 +29,16 @@ def check_session(out, blocks, constants_path, expected_sha):
         h = json.loads(mp.read_text(encoding="utf-8")).get("constants_sha256")
         if h != expected_sha:
             problems.append(f"session meta {mp.parent.name}: constants hash {h} differs from the frozen one")
-    if (out / "discarded").exists() and any((out / "discarded").iterdir()):
-        problems.append("a discarded (incomplete) block exists in discarded/: handle it before counting this session")
+    for dd in sorted((out / "discarded").glob("*")) if (out / "discarded").exists() else []:
+        flags.append(f"discarded block {dd.name}: {len(list(dd.glob('cells/*/cell.json')))} measured cells (kept, not counted; the block is rerun under a new number)")
     for b in blocks:
         bdir = out / f"block{b:02d}"
         if not (bdir / "block.json").exists():
             problems.append(f"block {b} is not complete (no block.json)")
-        want = {c["id"] for c in el.block_cells(b, const)}
+        seed = b
+        if (bdir / "block.json").exists():                       # a block rerun under a new number runs the seed list (and cells) of the block it replaces
+            seed = json.loads((bdir / "block.json").read_text(encoding="utf-8")).get("seed_block", b)
+        want = {c["id"] for c in el.block_cells(b, const, seed_block=seed)}
         have = {p.name for p in (bdir / "cells").glob("*")} if (bdir / "cells").exists() else set()
         for cid in sorted(want - have):
             problems.append(f"cell {cid}: missing in block {b}")

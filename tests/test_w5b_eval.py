@@ -275,3 +275,39 @@ def test_the_trial_check_fails_a_governed_cell_without_the_per_tick_logging_or_t
 def test_the_executor_logs_the_fixed_pacing_of_the_idle_drop_controller_as_its_mode():
     src = (ROOT / "experiments" / "w5b" / "executors.py").read_text(encoding="utf-8")
     assert 'getattr(getattr(obj, "a", None), "pacing", None)' in src
+
+
+# ---------------------------------------------------------------- a discarded block rerun under the next free number (addendum O-6 section 5): block 6 as 14 with the seed list of block 6
+def test_a_rerun_block_keeps_the_seed_list_the_cells_and_the_session_estimate_of_the_original_number(tmp_path):
+    import pandas as pd
+    from analysis.w5_analysis import hw1_table
+    assert el.session_estimate_s([14, 11], CONST) == 60 * 100.0                                                    # by number alone 14 looks primary-only: the old estimate was too low
+    assert el.session_estimate_s([14, 11], CONST, seed_blocks=[6, 11]) == 85 * 100.0 and el.check_session([14, 11], CONST, seed_blocks=[6, 11]) is None
+    assert "3 h" in el.check_session([14, 5], CONST, seed_blocks=[6, 5])                                           # two exploratory blocks still do not fit
+    a = [c["id"].split("_", 1)[1] for c in el.block_cells(14, CONST, seed_block=6)]
+    b = [c["id"].split("_", 1)[1] for c in el.block_cells(6, CONST)]
+    assert a == b and len(a) == 55 and all(c["id"].startswith("ev14_") for c in el.block_cells(14, CONST, seed_block=6))
+    src = (ROOT / "experiments" / "w5b" / "evaluate.py").read_text(encoding="utf-8")
+    assert "seed_blocks=a.blocks" in src
+    s = evaluate.run_blocks(tmp_path, [6, 11], CONST, ex.SimExecutor(), log=lambda *a: None, as_blocks=[14, 11])
+    assert s["blocks_done"] == [14, 11] and json.loads((tmp_path / "block14" / "block.json").read_text())["seed_block"] == 6
+    df = pd.read_csv(tmp_path / "results.csv")
+    assert sorted(df.block.unique()) == [11, 14] and len(df) == 55 + 30 and (df[df.block == 14].budget_w == 35.0).sum() == 25
+    assert len(hw1_table(df, 60.0)) == 30 and len(hw1_table(df, 35.0)) == 25                                       # the renumbered block is just another block label for the analysis
+
+
+def test_an_abort_that_is_not_an_exception_still_leaves_its_reason_on_disk_and_propagates(tmp_path):
+    """Session 3 attempt 2 (2026-10-26) ended within seconds with an empty cell folder and no record: AbortSitting / sys.exit are SystemExit and Ctrl+C is KeyboardInterrupt, which the incident writer (except Exception) did not see."""
+    class Aborting(ex.SimExecutor):
+        def __init__(self, exc):
+            super().__init__(); self.exc = exc
+
+        def between_cells(self):
+            raise self.exc
+    for exc in (ex.AbortSitting("ABORT: clock lock not released (helper PING OK 1800)"), KeyboardInterrupt()):
+        out = tmp_path / type(exc).__name__
+        with pytest.raises(BaseException) as info:
+            evaluate.run_blocks(out, [9], CONST, Aborting(exc), log=lambda *a: None)
+        assert info.value is exc
+        inc = list((out / "block09" / "cells").glob("*/incident.json"))
+        assert len(inc) == 1 and type(exc).__name__ in inc[0].read_text() and "aborted" in inc[0].read_text()

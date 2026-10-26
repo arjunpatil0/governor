@@ -191,6 +191,10 @@ def run_blocks(out, blocks, const, executor, log=print, as_blocks=None):
                 (cdir / "incident.json").write_text(json.dumps(dict(spec=spec, error=f"{type(ex).__name__}: {ex}", utc=datetime.now(timezone.utc).isoformat())), encoding="utf-8")
                 log("INCIDENT", spec["id"], ex)
                 return dict(blocks_done=done, stop=f"incident in block {n} at {spec['id']}: {ex}; the block is incomplete and will be discarded whole by the next call")
+            except BaseException as ex:                                              # noqa: BLE001  AbortSitting / sys.exit (SystemExit) and Ctrl+C: leave the reason on disk, then let it propagate
+                (cdir / "incident.json").write_text(json.dumps(dict(spec=spec, error=f"{type(ex).__name__}: {ex}", aborted=True, utc=datetime.now(timezone.utc).isoformat())), encoding="utf-8")
+                log("ABORTED", spec["id"], f"{type(ex).__name__}: {ex}")
+                raise
             (cdir / "cell.json").write_text(json.dumps(dict(id=spec["id"], spec=spec, metrics=m, executor=executor.name, wall_s=time.time() - t0, utc=datetime.now(timezone.utc).isoformat()), indent=1, default=str), encoding="utf-8")
             log(f"[block {n}: {k + 1}/{len(cells)}] {spec['id']}: tok/s {m.get('tok_s', float('nan')):.1f} miss {m.get('miss', float('nan')):.3f} power {m.get('power_w', float('nan')):.1f} W ({time.time() - t0:.0f} s)")
         (bdir / "block.json").write_text(json.dumps(dict(block=n, seed_block=block, cells=[c["id"] for c in cells], seed=el.SEED, constants=const, power_source=const.get("power_source"),
@@ -219,7 +223,7 @@ def main():
         sys.exit("--blocks, --constants and --constants-sha256 are required")
     const = load_constants(a.constants, a.constants_sha256)
     as_blocks = a.as_block or a.blocks
-    why = el.check_session(as_blocks, const)
+    why = el.check_session(as_blocks, const, seed_blocks=a.blocks)
     if why:
         sys.exit(why)
     out = Path(a.out)
@@ -240,7 +244,7 @@ def main():
         sd.mkdir(parents=True, exist_ok=True)
         smoke.write_meta(sd, a.armoury_mode)
         m = json.loads((sd / "meta.json").read_text(encoding="utf-8"))
-        m.update(blocks=a.blocks, as_blocks=as_blocks, power_source="sampled", constants_sha256=a.constants_sha256, plan_addenda="O-5, O-6, O-7", session_estimate_s=el.session_estimate_s(as_blocks, const))
+        m.update(blocks=a.blocks, as_blocks=as_blocks, power_source="sampled", constants_sha256=a.constants_sha256, plan_addenda="O-5, O-6, O-7", session_estimate_s=el.session_estimate_s(as_blocks, const, a.blocks))
         (sd / "meta.json").write_text(json.dumps(m, indent=1), encoding="utf-8")
         ex = HwExecutor(power_source="sampled")
     else:

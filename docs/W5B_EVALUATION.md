@@ -46,6 +46,14 @@ python experiments/w5b/eval_integrity.py --out data/w5b/eval --blocks 4 9 --cons
 ```
 (constants hash incl. every session meta, block completeness, incidents, gov_reads = 0, counter vs sampled within 15%, full offload, per-tick log and power trace; it reads no miss or throughput). Session 1 (blocks 4 and 9): INTEGRITY PASS, 85 cells, 0 problems, 0 flags; Step A trial (eval_trial2): TRIAL CHECK PASS (7 cells).
 
+## Session 3 = block 6 rerun as block 14, and block 11 (85 cells, about 2.4 h) - written 2026-10-27
+Block 6 was never measured (session attempts of 2026-10-26 20:53-20:55 UTC: no cell ran; the empty folder was discarded whole to data/w5b/eval/discarded/). It is rerun under the next free number, 14, with the seed list of block 6 (so its 55 cells, ids ev14_..., incl. the 35 W family); block 11 runs under its own number. The integrity check reads the seed list from block.json, so it expects the right cells for block 14. After this session the complete blocks are 4 5 9 10 11 14 (=6) and then 7 12 / 8 13: 10 blocks. Restart first (uptime limit 2 h at the start; a restart is recommended after the unexplained abort), start the helper as in Step A, then in a normal PowerShell:
+```powershell
+cd C:\Users\arjun\governor
+python experiments/w5b/evaluate.py --blocks 6 11 --as-block 14 11 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9 --out data/w5b/eval --armoury-mode Performance; if ($LASTEXITCODE -eq 0) { python experiments/w5b/eval_integrity.py --out data/w5b/eval --blocks 14 11 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9; if ($LASTEXITCODE -eq 0) { git add data/w5b; git commit -m "Session 3 data (block 6 rerun as block 14, block 11), integrity PASS" } }
+```
+If the session stops (exit code 2 or an abort), nothing is committed; paste the console output and the file `incident.json` it names (an abort now writes one).
+
 ## Session 2 = blocks 5 and 10 (85 cells, about 2.4 h)
 Restart, helper (Step A, items 1 and 2), then the command below; the Step A trial need not be repeated (same code and constants). The working tree must be clean: this commit holds the session 1 data and the integrity tool.
 ```powershell

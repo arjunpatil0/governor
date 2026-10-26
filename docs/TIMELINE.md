@@ -84,3 +84,4 @@
 2026-10-25 · decision · check_trial also fails governed cells without per-tick mode/power log or 0.5 s power trace (or under 90% of the 65 s loop); constants unchanged · [journal](../journal/0061_2026-10-25_check-trial-per-tick-logging.md)
 2026-10-26 · result · evaluation session 1 (blocks 4 and 9, 85 cells) integrity PASS, trial 2 PASS; no outcome analysis · [journal](../journal/0062_2026-10-26_session1-integrity.md)
 2026-10-27 · result · evaluation session 2 (blocks 5 and 10, 85 cells) integrity PASS; no outcome analysis · [journal](../journal/0063_2026-10-27_session2-integrity.md)
+2026-10-27 · incident · evaluation session 3 did not run (three failed start attempts, block 6 discarded with zero measured cells); rerun as block 14 (--blocks 6 11 --as-block 14 11); estimate, integrity check and abort record fixed · [journal](../journal/0064_2026-10-27_session3-failed-start-and-block6-rerun.md)

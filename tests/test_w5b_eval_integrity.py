@@ -18,7 +18,7 @@ G35 = dict(sid="1500_a_g0_d1", clock=1500, mode="aligned", guard_ms=0.0, duty=1.
 CONST = dict(c0=7, g_b={"60": G60, "35": G35}, c_b_t3b=dict(target=0.5, ki=0.15), c_b_t3c=dict(target=0.2, ki=0.15), d_b=dict(margin=0.3), power_source="sampled")
 
 
-def make_world(tmp_path, blocks=(9,), **bad):
+def make_world(tmp_path, blocks=(9,), seeds=None, **bad):
     """Constants file + session meta + complete blocks of good cells (the faults in `bad` are applied to the cell ids they name)."""
     tmp_path.mkdir(parents=True, exist_ok=True)
     cp = tmp_path / "constants.json"; cp.write_text(json.dumps(CONST))
@@ -27,7 +27,8 @@ def make_world(tmp_path, blocks=(9,), **bad):
     sd = out / "sessions" / "20261025T201221Z"; sd.mkdir(parents=True)
     (sd / "meta.json").write_text(json.dumps(dict(blocks=list(blocks), as_blocks=list(blocks), constants_sha256=sha, power_source="sampled")))
     for b in blocks:
-        for spec in el.block_cells(b, CONST):
+        seed = (seeds or {}).get(b, b)
+        for spec in el.block_cells(b, CONST, seed_block=seed):
             d = out / f"block{b:02d}" / "cells" / spec["id"]
             d.mkdir(parents=True)
             governed = spec["kind"] in ("cB", "dB", "eB")
@@ -42,7 +43,7 @@ def make_world(tmp_path, blocks=(9,), **bad):
                 np.savez_compressed(d / "frames.npz", gov_log=np.zeros((0, 7)))
             if bad.get(spec["id"], {}).get("incident"):
                 (d / "incident.json").write_text("{}")
-        (out / f"block{b:02d}" / "block.json").write_text("{}")
+        (out / f"block{b:02d}" / "block.json").write_text(json.dumps(dict(block=b, seed_block=seed)))
     evaluate.export_results(out)
     return out, cp, sha
 
@@ -79,7 +80,17 @@ def test_a_wrong_constants_hash_a_missing_cell_an_unfinished_block_a_session_met
     meta.write_text(json.dumps(dict(blocks=[9], constants_sha256="f" * 64)))
     assert any("session meta" in x for x in ei.check_session(out2, [9], cp2, sha2)["problems"])
     (out2 / "discarded" / "block09_x").mkdir(parents=True)
-    assert any("discarded" in x for x in ei.check_session(out2, [9], cp2, sha2)["problems"])
+    assert ei.check_session(out2, [9], cp2, sha2)["ok"] is False                                         # (the meta mismatch above is still there)
+
+
+def test_a_discarded_block_is_a_flag_with_its_measured_cell_count_not_a_failure_and_a_renumbered_block_is_checked_against_its_seed_list(tmp_path):
+    out, cp, sha = make_world(tmp_path, blocks=(14, 11), seeds={14: 6})
+    d = out / "discarded" / "block06_x" / "cells" / "ev06_S1_cBb_35"; d.mkdir(parents=True)
+    r = ei.check_session(out, [14, 11], cp, sha)
+    assert r["ok"] is True and r["n_cells"] == 55 + 30
+    assert any("block06_x" in f and "0 measured cells" in f for f in r["flags"])
+    (d / "cell.json").write_text("{}")
+    assert any("block06_x" in f and "1 measured cells" in f for f in ei.check_session(out, [14, 11], cp, sha)["flags"])
 
 
 def test_the_check_reads_no_outcome():
