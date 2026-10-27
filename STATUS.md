@@ -1,7 +1,7 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-27 - Phase: W4-5, evaluation. Blocks 4, 5, 9, 10 complete (integrity PASS, 170 cells). Session 3 did NOT run (three failed starts 2026-10-26 20:53-20:55 UTC): block 6 was discarded with ZERO measured cells and is rerun as block 14 (same seed list). Cause of the attempt-2 exit unknown (no record was written; fixed for next time) - paste the console output / helper log if you still have them. Waiting for YOU: restart, helper, then the one command in docs/W5B_EVALUATION.md section 'Session 3' (--blocks 6 11 --as-block 14 11, then eval_integrity --blocks 14 11, then git add data/w5b + commit if both pass).
+Updated 2026-10-28 - Phase: W4-5, evaluation. Complete blocks: 4, 5, 9, 10, 11, 14 (=6 rerun); integrity PASS (sessions 1-3). Session 4 was stopped by Arjun (Ctrl+C) in block 7 (31 measured cells, no block.json): block 7 discarded whole (data/w5b/eval/discarded/block07_20261027T195815Z, journal 0065), to rerun as block 15. Waiting for YOU: restart, helper, then the command in docs/W5B_EVALUATION.md section 'Session 4' (--blocks 7 12 --as-block 15 12, eval_integrity --blocks 15 12, git add data/w5b + commit). No outcomes looked at.
 
-## Plan to completion: session 3 = 14(=6) + 11; session 4 = 7 + 12; session 5 = 8 + 13. Then 10 complete blocks: 4 5 9 10 11 14 7 12 8 13.
+## Plan to completion: session 4 = 15(=7) + 12; session 5 = 8 + 13. Then 10 complete blocks: 4 5 9 10 11 14 15 12 8 13.
 
 ## Risks / not verified
-- Cause of the attempt-2 abort; helper logs of all sessions not seen by me. Outcomes deliberately not looked at.
+- Cause of the session 3 attempt-2 abort still unknown (no console/helper log seen); the new abort record worked on hardware in session 4 (KeyboardInterrupt recorded). Helper logs not seen by me. Outcomes deliberately not looked at.

@@ -1,0 +1,151 @@
+{
+ "utc": "2026-10-27T11:30:27.086740+00:00",
+ "boot_utc": "2026-10-27T11:26:10.805214+00:00",
+ "uptime_s": 256,
+ "battery_charge_mode": "Balanced 80%",
+ "armoury_mode": "Performance",
+ "armoury_mode_recorded": true,
+ "chrome_running": false,
+ "git_head": "291c0aa3331055306e27d9fe5de2a65536c179e8",
+ "exe_sha256": "bb875fbcaa2cf792f0f015a949b9db6cacf1ac50c4491471c2e1bcd504e78044",
+ "helper_ping": "OK none",
+ "processes": [
+  {
+   "name": "System Idle Process",
+   "count": 1,
+   "cpu_pct": 1532.0
+  },
+  {
+   "name": "python.exe",
+   "count": 2,
+   "cpu_pct": 38.5
+  },
+  {
+   "name": "WindowsTerminal.exe",
+   "count": 1,
+   "cpu_pct": 5.8
+  },
+  {
+   "name": "claude.exe",
+   "count": 11,
+   "cpu_pct": 2.9
+  },
+  {
+   "name": "System",
+   "count": 1,
+   "cpu_pct": 1.9
+  },
+  {
+   "name": "lsass.exe",
+   "count": 1,
+   "cpu_pct": 1.0
+  },
+  {
+   "name": "?",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AMDRSServ.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ASUSSmartDisplayControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AcPowerNotification.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AdobeCollabSync.exe",
+   "count": 2,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AggregatorHost.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.Service.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.UserSessionHelper.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrate.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryCrateControlInterface.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmouryHtmlDebugServer.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "ArmourySocketServer.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsHotplugCtrl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsMonitorControl.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsusAppService.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsusCertService.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsusOSD.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsusOptimization.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  },
+  {
+   "name": "AsusOptimizationStartupTask.exe",
+   "count": 1,
+   "cpu_pct": 0.0
+  }
+ ],
+ "blocks": [
+  7,
+  12
+ ],
+ "as_blocks": [
+  7,
+  12
+ ],
+ "power_source": "sampled",
+ "constants_sha256": "f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9",
+ "plan_addenda": "O-5, O-6, O-7",
+ "session_estimate_s": 8500.0
+}

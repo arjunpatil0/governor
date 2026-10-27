@@ -61,3 +61,11 @@ cd C:\Users\arjun\governor
 python experiments/w5b/evaluate.py --blocks 5 10 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9 --out data/w5b/eval --armoury-mode Performance
 ```
 Afterwards run the integrity command above with `--blocks 5 10`.
+
+## Session 4 = block 7 rerun as block 15, and block 12 (85 cells, about 2.4 h) - written 2026-10-28
+The first attempt (session 20261027T113024Z) was stopped with Ctrl+C after 31 measured cells of block 7 (incident.json of the cell in progress: KeyboardInterrupt); block 7 was discarded whole to data/w5b/eval/discarded/block07_20261027T195815Z (journal 0065). It is rerun under the next free number, 15, with the seed list of block 7 (55 cells, ids ev15_...); block 12 runs under its own number. Estimate 2.36 h (limit 3 h). Restart first (uptime limit 2 h at the start), helper as in Step A, then:
+```powershell
+cd C:\Users\arjun\governor
+python experiments/w5b/evaluate.py --blocks 7 12 --as-block 15 12 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9 --out data/w5b/eval --armoury-mode Performance; if ($LASTEXITCODE -eq 0) { python experiments/w5b/eval_integrity.py --out data/w5b/eval --blocks 15 12 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9; if ($LASTEXITCODE -eq 0) { git add data/w5b; git commit -m "Session 4 data (block 7 rerun as block 15, block 12), integrity PASS" } }
+```
+After this: session 5 = blocks 8 13. Complete blocks then: 4 5 9 10 11 14 15 12 8 13.
