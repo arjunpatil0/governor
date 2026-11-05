@@ -1,0 +1,151 @@
+{
+ "utc": "2026-11-05T07:33:31.145511+00:00",
+ "boot_utc": "2026-11-05T07:31:16.251358+00:00",
+ "uptime_s": 135,
+ "battery_charge_mode": "Balanced 80%",
+ "armoury_mode": "Performance",
+ "armoury_mode_recorded": true,
+ "chrome_running": false,
+ "git_head": "f5f2e14bc2c195ca2a8c5764557dde7f9d66c18b",
+ "exe_sha256": "bb875fbcaa2cf792f0f015a949b9db6cacf1ac50c4491471c2e1bcd504e78044",
+ "helper_ping": "OK none",
+ "processes": [
+  {
+   "name": "System Idle Process",
+   "count": 1,
+   "cpu_pct": 1279.7
+  },
+  {
+   "name": "System",
+   "count": 1,
+   "cpu_pct": 88.6
+  },
+  {
+   "name": "python.exe",
+   "count": 2,
+   "cpu_pct": 56.7
+  },
+  {
+   "name": "svchost.exe",
+   "count": 94,
+   "cpu_pct": 48.4
+  },
+  {
+   "name": "SystemSettings.exe",
+   "count": 1,
+   "cpu_pct": 37.3
+  },
+  {
+   "name": "aswToolsSvc.exe",
+   "count": 1,
+   "cpu_pct": 12.7
+  },
+  {
+   "name": "dwm.exe",
+   "count": 1,
+   "cpu_pct": 9.7
+  },
+  {
+   "name": "aswidsagent.exe",
+   "count": 1,
+   "cpu_pct": 6.0
+  },
+  {
+   "name": "AvastSvc.exe",
+   "count": 1,
+   "cpu_pct": 5.2
+  },
+  {
+   "name": "explorer.exe",
+   "count": 1,
+   "cpu_pct": 5.2
+  },
+  {
+   "name": "ArmouryCrate.UserSessionHelper.exe",
+   "count": 1,
+   "cpu_pct": 3.7
+  },
+  {
+   "name": "RuntimeBroker.exe",
+   "count": 7,
+   "cpu_pct": 2.2
+  },
+  {
+   "name": "mc-fw-host.exe",
+   "count": 2,
+   "cpu_pct": 2.2
+  },
+  {
+   "name": "AdobeCollabSync.exe",
+   "count": 2,
+   "cpu_pct": 2.0
+  },
+  {
+   "name": "copilotapp.exe",
+   "count": 9,
+   "cpu_pct": 2.0
+  },
+  {
+   "name": "ASUSSmartDisplayControl.exe",
+   "count": 1,
+   "cpu_pct": 1.5
+  },
+  {
+   "name": "AcPowerNotification.exe",
+   "count": 1,
+   "cpu_pct": 1.5
+  },
+  {
+   "name": "afwServ.exe",
+   "count": 1,
+   "cpu_pct": 1.5
+  },
+  {
+   "name": "nvcontainer.exe",
+   "count": 3,
+   "cpu_pct": 1.5
+  },
+  {
+   "name": "sihost.exe",
+   "count": 1,
+   "cpu_pct": 1.5
+  },
+  {
+   "name": "WindowsTerminal.exe",
+   "count": 1,
+   "cpu_pct": 1.4
+  },
+  {
+   "name": "msedgewebview2.exe",
+   "count": 6,
+   "cpu_pct": 1.4
+  },
+  {
+   "name": "AvastUI.exe",
+   "count": 1,
+   "cpu_pct": 1.3
+  },
+  {
+   "name": "lsass.exe",
+   "count": 1,
+   "cpu_pct": 0.8
+  },
+  {
+   "name": "AsHotplugCtrl.exe",
+   "count": 1,
+   "cpu_pct": 0.7
+  }
+ ],
+ "blocks": [
+  7,
+  12
+ ],
+ "as_blocks": [
+  15,
+  12
+ ],
+ "power_source": "sampled",
+ "constants_sha256": "f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9",
+ "plan_addenda": "O-5, O-6, O-7",
+ "session_estimate_s": 8500.0
+}
