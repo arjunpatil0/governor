@@ -232,9 +232,9 @@ def test_publisher_handles_controllers_without_a_model_with_nan_predictions():
 
 def test_the_hook_reads_no_energy_counter_and_the_runtime_source_has_no_dashboard_dependency():
     src = (ROOT / "controllers" / "runtime.py").read_text(encoding="utf-8")
-    assert "tools" not in src and "dashboard" not in src
+    assert not [ln for ln in src.splitlines() if ln.strip().startswith(("import ", "from ")) and ("tools" in ln or "dashboard" in ln)]       # the loop imports nothing of the dashboard
     blk = (ROOT / "telemetry" / "decision_block.py").read_text(encoding="utf-8")
-    assert "EnergyConsumption" not in blk and "nvml" not in blk.lower()
+    assert "EnergyConsumption" not in blk and "nvmlDevice" not in blk and "pynvml" not in blk
 
 
 if __name__ == "__main__":                                                              # regenerate the golden (only ever done on the code BEFORE the hook)

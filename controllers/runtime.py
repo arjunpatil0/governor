@@ -5,9 +5,15 @@ import dataclasses
 
 
 class Governor:
-    def __init__(self, controller, obs_builder, actuator, frame_ring, token_ring, period_ms, deadline_ms, params=None):
+    default_telemetry = None                                         # class-level default sink (None = telemetry off). Only tools/dashboard/demo.py ever sets it; the evaluation never does.
+
+    def __init__(self, controller, obs_builder, actuator, frame_ring, token_ring, period_ms, deadline_ms, params=None, telemetry=None):
+        """telemetry: optional sink with publish(ctl, action, t_s), called after every step with the action just applied (telemetry/decision_block.py DecisionPublisher). It only READS controller state; a sink that
+        raises is switched off (telemetry_error) and never touches the loop. Default off: with no sink the behaviour is exactly the loop without this hook (tests/test_dashboard_governor_hook.py)."""
         self.ctl, self.ob, self.act_, self.frames, self.tokens = controller, obs_builder, actuator, frame_ring, token_ring
         self.period_ms, self.deadline_ms, self.params = period_ms, deadline_ms, params
+        self.telemetry = telemetry if telemetry is not None else Governor.default_telemetry
+        self.telemetry_error = None
         self.last_obs = None
         self.clamped = []                                           # (t_ms, raw MHz, clamped MHz): every live clock reading mapped into the measured model range
         self._t = self._e = None
@@ -41,4 +47,9 @@ class Governor:
             self.last_obs = dataclasses.replace(self.last_obs, power_w=float(power_w))
         a = self.ctl.act(self.last_obs)
         self.act_.apply(a)
+        if self.telemetry is not None:
+            try:
+                self.telemetry.publish(self.ctl, a, t_ms / 1000.0)
+            except Exception as ex:                                  # noqa: BLE001  telemetry must never break the control loop
+                self.telemetry_error, self.telemetry = f"{type(ex).__name__}: {ex}", None
         return a
