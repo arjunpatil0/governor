@@ -1,0 +1,50 @@
+{
+ "id": "ev13_S0_a_60",
+ "spec": {
+  "id": "ev13_S0_a_60",
+  "block": 13,
+  "scene": "S0",
+  "controller": "a",
+  "budget_w": 60.0,
+  "exploratory": false,
+  "workload": "llama32_3b",
+  "c0": 7,
+  "origin_ms": 5000.0,
+  "kind": "arm_a"
+ },
+ "metrics": {
+  "miss": 0.0,
+  "miss_completed": 0.0,
+  "tok_s": 47.916666666666664,
+  "power_w": 91.08539999999999,
+  "power_sampled_w": 89.98537958175785,
+  "fg_p50_ms": 13.120783333306463,
+  "fg_p99_ms": 13.523836999902414,
+  "frames": 3600,
+  "abandoned": 0,
+  "bg_tokens": 2875,
+  "tok_ms_p50": 20.83299999958399,
+  "sm_mhz_median": 2460.0,
+  "temp_before_c": 53,
+  "temp_after_c": 86,
+  "clock_changes": 0,
+  "clamp_events": 0,
+  "power_source": null,
+  "gov_reads": 0,
+  "gov_reads_per_s": 0.0,
+  "clamp_examples": [],
+  "final_pacing_mode": null,
+  "clock_ok": true,
+  "ring_dropped": 0,
+  "thermal_reason_bits": 0,
+  "executor": "hw",
+  "exec_mode": "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+  "driver_tail": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 model_size=2011539712 governed=1",
+   "DONE tokens=3145 t_first=7097.334590 t_last=7162.501450 ctx_end=3657"
+  ]
+ },
+ "executor": "hw",
+ "wall_s": 100.15781211853027,
+ "utc": "2026-11-05T16:38:17.373875+00:00"
+}
