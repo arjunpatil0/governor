@@ -25,6 +25,12 @@ def test_feasibility_split_and_modes():
     assert t.loc["g'B", "power_ok"] == 0 and t.loc["g'B", "feasible"] == 0
 
 
+def test_scatter_writes_a_png(tmp_path):
+    png = tmp_path / "s.png"
+    wd.scatter(frame(), str(png))
+    assert png.exists() and png.stat().st_size > 1000
+
+
 def test_dbp_modes_groups_by_final_mode():
     g = wd.dbp_modes(frame())
     assert set(g.index.get_level_values("final_pacing_mode")) == {"aligned", "unaligned"}

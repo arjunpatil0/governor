@@ -33,8 +33,32 @@ def dbp_modes(df):
     return d.groupby(["budget_w", "scene", "final_pacing_mode"]).agg(n=("bg_tok_s", "size"), med_tok_s=("bg_tok_s", "median"), min_tok_s=("bg_tok_s", "min"), max_tok_s=("bg_tok_s", "max"), med_miss=("miss_frac", "median")).round(3)
 
 
+def scatter(df, png):
+    """Miss fraction (%) against background tok/s, one point per cell, one panel per scene; colour = arm, filled = 60 W, hollow = 35 W; the dashed line is the 1% miss limit. Descriptive only."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    scenes = sorted(df.scene.unique())
+    colors = dict(zip(ORDER, ["#7f7f7f", "#1f77b4", "#2ca02c", "#ff7f0e", "#d62728", "#9467bd"]))
+    fig, axes = plt.subplots(1, len(scenes), figsize=(4 * len(scenes), 3.6), squeeze=False)
+    for ax, scene in zip(axes[0], scenes):
+        for c in ORDER:
+            for b, filled in ((60.0, True), (35.0, False)):
+                g = df[(df.scene == scene) & (df.controller == c) & (df.budget_w == b)]
+                if len(g):
+                    ax.scatter(g.bg_tok_s, 100 * g.miss_frac, s=22, facecolors=colors[c] if filled else "none", edgecolors=colors[c], label=f"{c} {b:.0f} W")
+        ax.axhline(1.0, ls="--", c="k", lw=0.8)
+        ax.set_title(scene); ax.set_xlabel("background tok/s"); ax.set_ylabel("foreground miss (%)")
+    h, l = axes[0][0].get_legend_handles_labels()
+    fig.legend(h, l, loc="lower center", ncol=6, fontsize=7)
+    fig.tight_layout(rect=(0, 0.12, 1, 1))
+    fig.savefig(png, dpi=130)
+    plt.close(fig)
+
+
 def main(path, out):
     df = pd.read_csv(path)
+    scatter(df, str(Path(out).with_suffix(".png").with_name("eval_miss_vs_toks.png")))
     L = ["# W5b evaluation: DESCRIPTIVE tables (POST HOC, not registered tests)", "",
          f"Source: {Path(path).name}, {len(df)} cells. Feasible = miss <= 1% and counter power <= budget (the registered cell definition). tok/s is the background rate in the measured window; a feasible cell scores its tok/s, an infeasible one 0. final_pacing_mode: governed = the controller's final mode, static = its setting's mode, arm a = unaligned.", ""]
     for b in sorted(df.budget_w.unique(), reverse=True):
