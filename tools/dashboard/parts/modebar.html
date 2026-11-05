@@ -1,0 +1,20 @@
+      <div class="banner" id="banner" data-mode="sim" role="status">SIMULATOR: simulated chip, not real hardware</div>
+      <div class="modebar" role="group" aria-label="Data mode">
+        <button class="mbtn" id="mb-live" type="button" aria-pressed="false" disabled title="Start python tools/dashboard/server.py and open the page from it">Live</button>
+        <button class="mbtn" id="mb-replay" type="button" aria-pressed="false" disabled title="Start python tools/dashboard/server.py and open the page from it">Replay</button>
+        <button class="mbtn" id="mb-sim" type="button" aria-pressed="true">Simulator</button>
+        <span class="modeline" id="modeline"></span>
+      </div>
+      <p class="modenote" id="modenote" role="status" hidden></p>
+      <div class="replaybar" id="replaybar" hidden>
+        <div class="row">
+          <label>Group <select id="pk-group"></select></label>
+          <label>Scene <select id="pk-scene"></select></label>
+          <label>Model <select id="pk-model"></select></label>
+          <label>Manager <select id="pk-mgr"></select></label>
+          <label>Block <select id="pk-block"></select></label>
+          <label class="wide">Recorded run <select id="pk-cell"></select></label>
+          <span id="pk-count"></span>
+        </div>
+        <div class="seekrow"><input type="range" id="seek" min="0" max="65" step="0.1" value="0" aria-label="Position in the recording"><output id="seekout"></output></div>
+      </div>

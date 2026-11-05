@@ -64,6 +64,28 @@ python -m pytest tests/test_slackhint_py.py tests/test_slackhint_c.py
 **Library use:** C/C++: `#include "slackhint.h"` (`/I include`), producer `slackhint_producer_create`, `slackhint_frame_started` / `slackhint_frame_done`; consumer `slackhint_consumer_open`, `slackhint_get`, `slackhint_may_start`. Python: `PYTHONPATH=python`, `import slackhint as sh`; `sh.Producer(name)`, `sh.Consumer(name)`, `sh.may_start(...)`.
 **Governed experiments with the GPU (not a demo):** need the pinned llama.cpp build, model files, the admin clock helper, a fresh restart and the other conditions of [docs/W5B_EVALUATION.md](docs/W5B_EVALUATION.md); current state in [STATUS.md](STATUS.md).
 
+## Dashboard (Co-Scheduler Lab, live)
+A local web page (design, tour text and simulator from `docs/dashboard_reference.html`, reused) that shows the system in three data modes. **The page always labels its mode** (a pill in the top bar, a banner and a line in the stage): **SIMULATOR** (the in-page simulator; the guided tour; used when nothing is connected), **REPLAY** (any recorded cell of `data/`, played back from its `frames.npz`: evaluation, tuning, trials and demos, with a cell picker by group, scene, model, manager and block, play/pause, speed and a seek bar; the 12-second panel shows that run's recorded result), **LIVE** (a running demo: real frames, tokens, clock, sampled power and the governor's decisions, drawn about 0.12 s behind so that frames and tokens in progress are known). The tour keeps working in every mode: in REPLAY and LIVE its sliders are switched off (they drive the simulator) and each step offers "Try this step in the simulator".
+
+![REPLAY of the recorded cell ev04_S1_dB_60](docs/img/dashboard_replay.png)
+
+**Commands** (Windows, from the repository root; the server needs no admin rights and no new packages):
+```
+python tools/dashboard/server.py                    # serves http://127.0.0.1:8765/ (loopback only, read-only, low priority)
+start msedge http://127.0.0.1:8765/                 # open the page (Edge or Firefox; Chrome must be closed for a demo, see below)
+start msedge "http://127.0.0.1:8765/?mode=replay&cell=w5b/eval/block04/cells/ev04_S2_dB_60"       # replay one recorded cell directly
+python tools/dashboard/fake_session.py --seconds 60                                                 # GPU-free SYNTHETIC live feed to try LIVE (labelled synthetic)
+```
+**A live demo on the real GPU** (needs the admin clock helper running in its own Administrator window, exactly as for a registered cell; AC power, Armoury mode stated, clean committed tree, fresh restart, Chrome closed):
+```
+python tools/dashboard/demo.py --scene S1 --model 3b --manager dB --armoury-mode Performance
+```
+then pick LIVE in the page. Managers: `a`, `gB`, `eB`, `cBb`, `dB`; scenes S0 S1 S1d S2 S5; models 1b 3b phi 8b. A demo runs the evaluation's own cell for that scene and manager (frozen constants, same executor; only the model may differ), takes about 100 s, writes `data/dashboard_demos/<utc>_<id>/` (cell, frames, driver log, per-tick governor reasoning, `meta.json` with `"demo": true`) and never touches `data/w5b/eval`. Demos are not registered data. They appear under "Demos" in the REPLAY picker, with the governor's full reasoning.
+
+**Safety.** The server binds 127.0.0.1 only (any other `--host` is refused), checks Host and Origin, never writes a ring, a control block or the clock helper, and reads NVML only for the sampled power and the SM clock, never the energy counter (phantom-energy finding, addenda O-4 and O-5); NVML samples above 250 W are dropped as glitches (the laptop returned 590 W samples). **Do not run it during registered experiments** (it adds CPU load and NVML polling): it refuses to start while `evaluate.py`, `tune.py` or the w5a runner is running. The Governor's decision telemetry is an optional hook, default off (`controllers/runtime.py`, `telemetry/decision_block.py`); only `demo.py` switches it on, in its own process. A test replays a seeded scenario through the real d'B, c'B and eB controllers and checks the action sequences equal a golden file recorded before the hook existed.
+
+**Server overhead** (measured 2026-11-06 on this laptop, one SSE client at 20 messages/s): REPLAY 1.0 to 1.3% of one core; LIVE on a synthetic 60 Hz feed with real NVML polling 2.5 to 3.4% of one core (one run with the page open in Chrome 2.5%). Not yet measured: the overhead during a demo on the real GPU (`demo.py` records the server's CPU during the run in the demo's `meta.json` when the server is up) and the cost of the decision hook on the Governor thread.
+
 ## Repository map
 `docs/` plans, addenda, results, concepts (docs/CONCEPTS.md), paper map (docs/PAPER_MAP.md), timeline; `journal/` append-only session journal; `decisions/` ADRs; `experiments/` registered protocols and runners; `analysis/` registered and post hoc analysis; `reviews/` reviewer notes and responses; `data/` measured data (every cell has its record).
 

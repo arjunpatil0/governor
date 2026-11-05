@@ -1,0 +1,646 @@
+<title>Co-Scheduler Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: website with a guided tour (story card left, live chip stage right), then results and notes. */
+:root {
+  --bg: #F3F5F7; --band: #E8EEF2; --panel: #FFFFFF; --ink: #142029; --muted: #586874; --line: #D6DEE4; --grid: #E6EBEF;
+  --accent: #0E7469; --accent-soft: #DCEFEB;
+  --frame: #2A63D8; --token: #BD7008; --miss: #BE3A2B; --ok: #1D7F48; --idle: #8A98A3;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0C1318; --band: #111C23; --panel: #142029; --ink: #E2E9EE; --muted: #93A2AE; --line: #24323C; --grid: #1C2831;
+  --accent: #3CC8B5; --accent-soft: #123833;
+  --frame: #6D9EFF; --token: #F0A63A; --miss: #F07160; --ok: #4CC27E; --idle: #6B7A85; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0C1318; --band: #111C23; --panel: #142029; --ink: #E2E9EE; --muted: #93A2AE; --line: #24323C; --grid: #1C2831;
+  --accent: #3CC8B5; --accent-soft: #123833;
+  --frame: #6D9EFF; --token: #F0A63A; --miss: #F07160; --ok: #4CC27E; --idle: #6B7A85; color-scheme: dark }
+* { box-sizing: border-box }
+html { scroll-behavior: smooth }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto } }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.55 }
+.in { max-width: 1220px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel) }
+nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line) }
+nav .in { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 10px; flex-wrap: wrap }
+.brand { font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: -0.01em }
+.brand span { color: var(--accent) }
+nav ul { list-style: none; display: flex; gap: 4px 18px; margin: 0; padding: 0; flex-wrap: wrap; font-size: 14px }
+nav a { color: var(--muted); text-decoration: none } nav a:hover { color: var(--ink) }
+.hero { background: var(--band); border-bottom: 1px solid var(--line) }
+.hero .in { padding-block: 36px 28px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: end }
+@media (max-width: 860px) { .hero .in { grid-template-columns: minmax(0, 1fr) } }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 4.6vw, 48px); line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 12px; text-wrap: balance }
+.hero p { margin: 0; color: var(--muted); max-width: 60ch; font-size: 16.5px }
+.keys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px }
+.key { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; min-width: 0 }
+.key b { display: block; font-size: 13.5px; margin-bottom: 2px }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px }
+section.sec { padding-block: 36px 8px }
+h2 { font-family: var(--display); font-weight: 600; font-size: 26px; letter-spacing: -0.01em; margin: 0 0 6px; text-wrap: balance }
+.sec > .in > p.lede { color: var(--muted); max-width: 70ch; margin: 0 0 18px }
+.tour { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 18px; align-items: start }
+@media (max-width: 980px) { .tour { grid-template-columns: minmax(0, 1fr) } }
+.story { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0 }
+.stepno { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: .04em }
+.story h3 { font-family: var(--display); font-weight: 600; font-size: 22px; margin: 2px 0 0; line-height: 1.15; text-wrap: balance }
+.story p { margin: 0 }
+#steptext p + p { margin-top: 8px }
+.watch { background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; font-size: 14px }
+.watch b { color: var(--accent) }
+.dots { display: flex; gap: 6px; flex-wrap: wrap }
+.dots button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--muted); font: 600 12px var(--mono); cursor: pointer }
+.dots button[aria-current="step"] { background: var(--accent); border-color: var(--accent); color: var(--panel) }
+.navbtns { display: flex; gap: 8px }
+.btn { font: 600 14px var(--body); padding: 9px 14px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel) }
+.btn:disabled { opacity: .4; cursor: default }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.ctls { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px }
+.ctl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; font-size: 14px }
+.ctl output { font-family: var(--mono); font-size: 12.5px; color: var(--accent) }
+.ctl input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent) }
+.ctl .hint { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted) }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; grid-column: 1 / -1 }
+.chips button { font: 13px var(--body); padding: 5px 10px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer }
+.chips button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent) }
+.stage { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0 }
+.status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 44px }
+.light { width: 14px; height: 14px; border-radius: 50%; flex: none; background: var(--idle); box-shadow: 0 0 0 4px color-mix(in srgb, var(--idle) 20%, transparent) }
+.status .t1 { font-weight: 600; font-size: 15.5px }
+.status .t2 { color: var(--muted); font-size: 13.5px; width: 100% }
+canvas { display: block; width: 100% }
+.meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px }
+@media (max-width: 560px) { .meters { grid-template-columns: minmax(0, 1fr) } }
+.meter { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0 }
+.meter .k { font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+.meter .v { font: 600 22px var(--mono); font-variant-numeric: tabular-nums; margin-top: 2px }
+.meter .v small { font: 400 12.5px var(--body); color: var(--muted) }
+.bar { position: relative; height: 8px; border-radius: 4px; background: var(--grid); margin-top: 8px; overflow: visible }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--accent) }
+.bar em { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--miss) }
+.think { border: 1px dashed var(--accent); border-radius: 10px; padding: 10px 12px; font-size: 14px; background: color-mix(in srgb, var(--accent-soft) 55%, transparent) }
+.think b { color: var(--accent) }
+.think ol { margin: 6px 0 0; padding-left: 20px } .think li { margin-bottom: 3px }
+.play { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted) }
+.play select { font: 13px var(--body); padding: 5px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink) }
+.outcome { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)); gap: 8px 14px; align-items: center; border-top: 1px solid var(--line); padding-top: 12px; font-size: 13.5px }
+@media (max-width: 560px) { .outcome { grid-template-columns: repeat(3, minmax(0, 1fr)) } .outcome .lbl { grid-column: 1 / -1 } }
+.outcome .lbl { color: var(--muted); max-width: 22ch }
+.outcome .num { font: 600 17px var(--mono); font-variant-numeric: tabular-nums }
+.outcome .num small { font: 400 12px var(--body); color: var(--muted); display: block }
+.good-t { color: var(--ok) } .bad-t { color: var(--miss) }
+.res { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px }
+.rcard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0 }
+.rcard h3 { font-family: var(--display); font-weight: 600; font-size: 17px; margin: 0 0 2px }
+.rcard .sub { color: var(--muted); font-size: 13px; margin: 0 0 10px }
+.rrow { display: grid; grid-template-columns: 128px minmax(0, 1fr) 62px 52px; gap: 8px; align-items: center; font-size: 13px; padding: 4px 0 }
+.rrow .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.rrow .track { height: 14px; background: var(--grid); border-radius: 3px; position: relative }
+.rrow .track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--token) }
+.rrow .track span { position: absolute; top: -1px; font: 600 11px var(--mono); color: var(--ink); padding-left: 5px; white-space: nowrap }
+.rrow .late { font: 600 12px var(--mono); text-align: right }
+.rrow .pw { font: 12px var(--mono); color: var(--muted); text-align: right }
+.rrow .pw.bad-t { color: var(--miss) }
+.rhead { display: grid; grid-template-columns: 128px minmax(0, 1fr) 62px 52px; gap: 8px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+.rhead span:nth-child(3), .rhead span:nth-child(4) { text-align: right }
+.verdict { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 14px 16px; margin-top: 16px; max-width: 90ch }
+.verdict p { margin: 0 0 8px } .verdict p:last-child { margin: 0 }
+.notes { max-width: 88ch; color: var(--muted); font-size: 14px } .notes li { margin-bottom: 6px }
+footer { padding-block: 28px 40px; color: var(--muted); font-size: 13px }
+</style>
+<nav aria-label="Sections"><div class="in">
+  <div class="brand">Co-Scheduler <span>Lab</span></div>
+  <ul><li><a href="#tour">Guided tour</a></li><li><a href="#results">Real results</a></li><li><a href="#how">How it works</a></li></ul>
+</div></nav>
+
+<header class="hero"><div class="in">
+  <div>
+    <h1>One graphics chip, two jobs</h1>
+    <p>A game-like app has to draw a new picture every 16.7 ms. An AI chatbot running on the same laptop wants the chip too. This tour shows, step by step, what happens when they share it, and how a manager program decides who gets the chip.</p>
+  </div>
+  <div class="keys" aria-label="What the colours mean">
+    <div class="key"><b><span class="sw" style="background:var(--frame)"></span>Picture</b>One frame the app draws. Must finish before the next one is due.</div>
+    <div class="key"><b><span class="sw" style="background:var(--token)"></span>Word piece</b>One token the chatbot writes. About 10 ms each for the 3B model.</div>
+    <div class="key"><b><span class="sw" style="background:var(--miss)"></span>Late picture</b>Finished after its deadline. On screen, that is a stutter.</div>
+  </div>
+</div></header>
+
+<section class="sec" id="tour"><div class="in">
+  <h2>Guided tour</h2>
+  <p class="lede">The chip on the right is running live, slowed down so you can follow each picture and word piece. Every step changes one thing. Read the card, watch the chip, then move on.</p>
+  <div class="tour">
+    <div class="story" aria-live="polite">
+      <div>
+        <div class="stepno" id="stepno"></div>
+        <h3 id="steptitle"></h3>
+      </div>
+      <div id="steptext"></div>
+      <div class="watch" id="stepwatch"></div>
+      <div class="ctls" id="stepctls"></div>
+      <div class="navbtns"><button class="btn" id="prev" type="button">Back</button><button class="btn primary" id="next" type="button">Next step</button></div>
+      <div class="dots" id="dots" aria-label="Jump to a step"></div>
+    </div>
+
+    <div class="stage">
+      <div class="status"><span class="light" id="light"></span><span class="t1" id="st1"></span><span class="t2" id="st2"></span></div>
+      <canvas id="strip" height="196" aria-label="Live view of the chip: pictures and word pieces over the last 90 ms and the next 30 ms"></canvas>
+      <div class="meters">
+        <div class="meter"><div class="k">Pictures drawn</div><div class="v" id="m-frames"></div><div class="bar"><i id="b-late" style="background:var(--miss)"></i></div></div>
+        <div class="meter"><div class="k">Word pieces written</div><div class="v" id="m-tokens"></div><div class="bar"><i id="b-tok" style="background:var(--token)"></i></div></div>
+        <div class="meter"><div class="k">Chip power right now</div><div class="v" id="m-power"></div><div class="bar"><i id="b-pow"></i><em id="b-budget"></em></div></div>
+      </div>
+      <div class="think" id="think" hidden></div>
+      <div class="play">
+        <button class="btn" id="pause" type="button">Pause</button>
+        <button class="btn" id="restart" type="button">Restart</button>
+        <label for="speed">Speed</label>
+        <select id="speed">
+          <option value="0.01">1 s here = 10 ms on the chip</option>
+          <option value="0.02">1 s here = 20 ms on the chip</option>
+          <option value="0.04" selected>1 s here = 40 ms on the chip</option>
+          <option value="0.1">1 s here = 100 ms on the chip</option>
+          <option value="0.3">1 s here = 300 ms on the chip</option>
+        </select>
+      </div>
+      <div class="outcome" aria-label="Result of a 12-second run with these settings">
+        <div class="lbl">If these settings ran for 12 seconds:</div>
+        <div class="num" id="o-late"></div><div class="num" id="o-tok"></div><div class="num" id="o-pow"></div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<section class="sec" id="results"><div class="in">
+  <h2>What the real laptop measured</h2>
+  <p class="lede">The same managers, run on the real RTX 4070 laptop GPU in a fair test: 10 rounds in shuffled order, 100 seconds per run, with a 60 W power limit and a target of at most 1 late picture in 100. Bars show chatbot output; the number beside each bar is the share of late pictures.</p>
+  <div class="res" id="res"></div>
+  <div class="verdict">
+    <p><b>What it adds up to.</b> Letting both run freely makes about a third of pictures late at around 90 W. The best fixed setting never makes pictures late, but gives the chatbot nothing whenever a word piece doesn't fit between pictures.</p>
+    <p>The governor gives the chatbot real output in every scene, and wins clearly when the app goes idle (41 vs 32 pieces per second, same lateness). Where pieces don't fit, it has to squeeze them in, which costs some late pictures: 1.7% with load jumps, 4.7% with the large model. By the target set in advance, it did not pass.</p>
+  </div>
+</div></section>
+
+<section class="sec" id="how"><div class="in">
+  <h2>How this page works</h2>
+  <ul class="notes">
+    <li>The live chip is a simulation, built from measurements made on the real laptop: how picture time and power change with chip speed, how fast the chatbot writes at each speed, how much both slow down when they share the chip (about 2.5×), and 5 W idle power.</li>
+    <li>The Small, Medium and Phi speeds were measured; the Large (8B) speed is estimated from how fast it ran while sharing. All models use the Medium model's power numbers.</li>
+    <li>The governor here is a simplified copy of the real one: the same search over chip speeds and chatbot rules, the same safety margin and power limit, and the same live corrections. It is told the true picture size instead of estimating it.</li>
+    <li>It matches the real results closely for running freely, for the fixed setting, and for the governor's output with the Medium model. It shows fewer late pictures and lower power than the real governor, and it is too pessimistic for the long word pieces of Phi and the Large model.</li>
+  </ul>
+</div></section>
+<footer><div class="in">Built from the GPU governor project's measurements and its pre-registered evaluation (10 blocks, 425 hardware runs).</div></footer>
+<script>
+/* ===== simulation core (no DOM) ===== */
+const P = 1000 / 60;
+const FG = { x: [600, 900, 1200, 1500, 1800, 2460], rel: [0.244, 0.366, 0.488, 0.609, 0.732, 1.0], p: [19.3, 22.5, 26.2, 33.1, 44.5, 79.9] };
+const BG = { x: [600, 750, 900, 1050, 1200, 1350, 1500, 1800, 2460],
+  tok: [62.125, 74.25, 83.5, 89.375, 93.125, 95.5, 97.25, 99.375, 101.125],
+  p: [40.25, 43.24, 45.60, 47.06, 49.87, 52.62, 56.30, 65.62, 91.97] };
+const IDLE_W = 5, UNLOCKED = 2460;
+const CLOCKS = [900, 1050, 1200, 1350, 1500, 1800, 2460];
+const MD = [[0, 1], [0.25, 1.442], [0.5, 1.820], [0.75, 2.478], [1, 3.991]];
+const MODELS = {
+  '1b': { name: 'Llama-3.2 1B', short: 'Small (1B)', alone: 233.97 },
+  '3b': { name: 'Llama-3.2 3B', short: 'Medium (3B)', alone: 96.53 },
+  'phi': { name: 'Phi-3.5-mini', short: 'Phi-3.5 (3.8B)', alone: 72.23 },
+  '8b': { name: 'Llama-3.1 8B', short: 'Large (8B)', alone: 46.4 }
+};
+function interp(x, xs, ys) {
+  if (x <= xs[0]) return ys[0];
+  for (let i = 1; i < xs.length; i++) if (x <= xs[i]) { const a = (x - xs[i - 1]) / (xs[i] - xs[i - 1]); return ys[i - 1] + a * (ys[i] - ys[i - 1]); }
+  return ys[ys.length - 1];
+}
+const fgRatio = f => interp(1800, FG.x, FG.rel) / interp(f, FG.x, FG.rel);
+const fgPow = f => interp(f, FG.x, FG.p);
+const bgPow = f => interp(f, BG.x, BG.p);
+const tokRate = (m, f) => MODELS[m].alone * interp(f, BG.x, BG.tok) / BG.tok[BG.tok.length - 1];
+const tokMs = (m, f) => 1000 / tokRate(m, f);
+const Mint = d => { for (let i = 1; i < MD.length; i++) if (d <= MD[i][0]) { const a = (d - MD[i - 1][0]) / (MD[i][0] - MD[i - 1][0]); return MD[i - 1][1] + a * (MD[i][1] - MD[i - 1][1]); } return MD[MD.length - 1][1]; };
+const SCENES = {
+  S0: { name: 'Steady', f: () => 1 },
+  J: { name: 'Load jumps', f: s => [1, 0.7, 1.3, 0.7, 1, 1.3][Math.floor((s % 3) / 0.5)] },
+  S1: { name: 'Load jumps (slow)', f: s => [1, 0.7, 1.3, 0.7, 1, 1.3][Math.floor((s % 12) / 2)] },
+  S1d: { name: 'Slow drift', f: s => 0.7 + 0.6 * ((s % 12) / 12) },
+  S2: { name: 'Idle phases', f: s => (s % 6) < 4 ? 1 : null }
+};
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+function planGovernor(o, c, clocks, gamma, extra, pbias) {
+  let bestA = null, bestU = null, safe = 0, total = 0;
+  const lim = (1 - o.margin) * P - extra, pmax = o.budget - 2.7 - pbias;
+  for (const f of clocks) {
+    const F = c * fgRatio(f), tau = tokMs(o.model, f), pf = fgPow(f), pb = bgPow(f), u = Math.min(1, F / P);
+    for (const d of [0.25, 0.5, 0.75, 1]) {
+      const W = P - F - 0.5;
+      const n = W >= tau ? Math.floor((W - tau) * d / tau) + 1 : 0;
+      const tk = Math.min(60 * n, 1000 * d / tau), b = Math.min(1, tk * tau / 1000);
+      const pw = IDLE_W + u * (pf - IDLE_W) + b * (pb - IDLE_W);
+      total++;
+      if (F * 1.05 <= lim && pw <= pmax) {
+        safe++;
+        if (!bestA || tk > bestA.tk + 1e-9 || (Math.abs(tk - bestA.tk) < 1e-9 && pw < bestA.pw)) bestA = { mode: 'aligned', clock: f, duty: d, guard: 0.5, tk, pw, q: F * 1.05 };
+      }
+    }
+    for (let k = 1; k <= 20; k++) {
+      const d = k * 0.05, q = F * 1.05 * Mint(d) * gamma;
+      const tk = d * tokRate(o.model, f) * Math.max(0, 1 - u), b = Math.min(1, tk * tau / 1000), ov = u * b;
+      const pw = IDLE_W + (u - ov) * (pf - IDLE_W) + (b - ov) * (pb - IDLE_W) + ov * ((pf + pb) / 2 - IDLE_W);
+      total++;
+      if (q <= lim && pw <= pmax) { safe++; if (!bestU || tk > bestU.tk + 1e-9) bestU = { mode: 'unaligned', clock: f, duty: d, guard: 0, tk, pw, q }; }
+    }
+  }
+  return { bestA, bestU, safe, total, lim, pmax };
+}
+
+class Sim {
+  constructor(o) {
+    this.o = o; this.dt = 0.05; this.t = 0; this.nextArr = 0; this.lastArr = -1e9;
+    this.rng = mulberry32(o.seed || 7); this.scene = SCENES[o.scene];
+    this.queue = []; this.frames = []; this.tokens = []; this.tok = null; this.nextAllowed = 0;
+    this.keep = o.keep || 0;
+    this.warm = o.warm ?? 1000;
+    this.c = { frames: 0, miss: 0, tokens: 0, energy: 0, time: 0 };
+    if (o.ctrl === 'uncontrolled') this.cmd = { clock: UNLOCKED, mode: 'unaligned', duty: 1, guard: 0 };
+    else if (o.ctrl === 'fixed') this.cmd = { clock: 1800, mode: 'aligned', duty: 1, guard: 0 };
+    else if (o.ctrl === 'manual') this.cmd = { clock: o.clock, mode: o.mode, duty: o.duty, guard: o.guard };
+    else this.cmd = { clock: 1800, mode: 'unaligned', duty: 0.2, guard: 0 };
+    this.clock = this.cmd.clock; this.pending = null;
+    this.g = { nextTick: 0, lastClockCheck: -1e9, votes: 0, lastModeCheck: 0, gamma: 1, extra: 0, predQ: null, missSince: false, recent: [], pbias: 0, predPw: null, tE: 0, tT: 0 };
+    this.decision = null; this.powerNow = IDLE_W; this.status = 'idle';
+  }
+  requestClock(f) { if (f !== (this.pending ? this.pending.clock : this.clock)) this.pending = { clock: f, at: this.t + this.o.latency }; }
+  governorTick() {
+    const o = this.o, g = this.g, t = this.t;
+    g.nextTick += 100;
+    g.recent = g.recent.filter(x => x[0] > t - 500);
+    g.extra = g.missSince ? Math.min(g.extra + 1, 6) : Math.max(g.extra - 0.1, 0);
+    g.missSince = false;
+    if (this.cmd.mode === 'unaligned' && g.predQ && g.recent.length >= 3) {
+      const ls = g.recent.map(x => x[1]).sort((a, b) => a - b);
+      const q95 = ls[Math.min(ls.length - 1, Math.floor(0.95 * ls.length))];
+      g.gamma = Math.min(6, Math.max(0.3, g.gamma * Math.pow(q95 / g.predQ, 0.1)));
+    }
+    if (g.predPw !== null && g.tT > 0) g.pbias = Math.max(-20, Math.min(40, g.pbias + 0.3 * ((g.tE / g.tT - g.predPw) - g.pbias)));
+    g.tE = 0; g.tT = 0;
+    const fct = this.scene.f(t / 1000);
+    if (fct === null) {
+      g.predPw = null; this.cmd = { ...this.cmd, mode: 'aligned', duty: 1, guard: 0 }; this.requestClock(1500);
+      this.decision = { idle: true };
+      return;
+    }
+    const c = o.c0 * fct, searchAll = t - g.lastClockCheck >= 1000;
+    if (searchAll) g.lastClockCheck = t;
+    const cur = this.pending ? this.pending.clock : this.clock;
+    const r = planGovernor(o, c, searchAll ? CLOCKS : [cur], g.gamma, g.extra, g.pbias);
+    const curPlan = this.cmd.mode === 'aligned' ? r.bestA : r.bestU, oth = this.cmd.mode === 'aligned' ? r.bestU : r.bestA;
+    if (t - g.lastModeCheck >= 1000) {
+      g.lastModeCheck = t;
+      if (oth && oth.tk >= 1.2 * Math.max(0, curPlan ? curPlan.tk : -1) + 2) g.votes++; else g.votes = 0;
+    }
+    let pick = curPlan, switched = false;
+    if (g.votes >= 2 || !curPlan) { pick = oth || curPlan; switched = !!oth && oth !== curPlan; if (g.votes >= 2) g.votes = 0; }
+    if (pick) {
+      g.predQ = pick.mode === 'unaligned' ? pick.q : null; g.predPw = pick.pw;
+      this.cmd = { clock: pick.clock, mode: pick.mode, duty: pick.duty, guard: pick.guard };
+      this.requestClock(pick.clock);
+    } else { g.predQ = null; g.predPw = null; this.cmd = { clock: 1800, mode: 'aligned', duty: 0, guard: 0.5 }; this.requestClock(1800); }
+    this.decision = { c, fct, searched: searchAll ? CLOCKS.length : 1, safe: r.safe, total: r.total, lim: r.lim, pmax: r.pmax, pick, switched, extra: g.extra, gamma: g.gamma };
+  }
+  tick() {
+    const o = this.o, dt = this.dt, t = this.t;
+    while (this.nextArr <= t) {
+      const fct = this.scene.f(this.nextArr / 1000);
+      if (fct !== null) { this.queue.push({ arr: this.nextArr, rem: o.c0 * fct * fgRatio(this.clock), work: o.c0 * fct * fgRatio(this.clock), start: null, fct }); this.lastArr = this.nextArr; }
+      this.nextArr += P;
+    }
+    if (this.pending && t >= this.pending.at) { this.clock = this.pending.clock; this.pending = null; }
+    if (o.ctrl === 'governor' && t >= this.g.nextTick) this.governorTick();
+    const appIdle = this.queue.length === 0 && t - this.lastArr > 100;
+    this.waiting = null;
+    if (!this.tok && this.cmd.duty > 0 && t >= this.nextAllowed) {
+      const base = tokMs(o.model, this.clock);
+      let ok = true;
+      if (this.cmd.mode === 'aligned' && !appIdle) {
+        const busy = this.queue.length > 0 || t >= this.nextArr - 1;
+        ok = !busy && t + base * (1 + o.estErr) + this.cmd.guard <= this.nextArr;
+        if (!ok) this.waiting = busy ? 'app' : 'nofit';
+      }
+      if (ok) { const tau = base * (0.95 + 0.1 * this.rng()); this.tok = { start: t, rem: tau, tau, duty: this.cmd.duty }; }
+    } else if (!this.tok && this.cmd.duty > 0) this.waiting = 'rest';
+    const fgA = this.queue.length > 0, bgA = !!this.tok;
+    const r = fgA && bgA ? dt / o.S : dt;
+    if (fgA) {
+      const f = this.queue[0];
+      if (f.start === null) f.start = t;
+      f.rem -= r;
+      if (f.rem <= 0) {
+        f.end = t + dt; f.lat = f.end - f.arr; f.miss = f.lat > P; this.queue.shift();
+        if (this.keep) this.frames.push(f);
+        this.g.recent.push([t, f.lat]); if (f.miss) this.g.missSince = true;
+        if (f.arr >= this.warm) { this.c.frames++; if (f.miss) this.c.miss++; }
+      }
+    }
+    if (bgA) {
+      this.tok.rem -= r;
+      if (this.tok.rem <= 0) {
+        this.tok.end = t + dt;
+        if (this.tok.end > this.warm) this.c.tokens++;
+        if (this.keep) this.tokens.push({ start: this.tok.start, end: this.tok.end });
+        this.nextAllowed = this.tok.end + this.tok.tau * (1 / this.tok.duty - 1);
+        this.tok = null;
+      }
+    }
+    const pf = fgPow(this.clock), pb = bgPow(this.clock);
+    const pnow = fgA && bgA ? (pf + pb) / 2 : fgA ? pf : bgA ? pb : IDLE_W;
+    this.powerNow = pnow; this.status = fgA && bgA ? 'both' : fgA ? 'app' : bgA ? 'llm' : 'idle';
+    this.g.tE += pnow * dt; this.g.tT += dt;
+    if (t >= this.warm) { this.c.energy += pnow * dt; this.c.time += dt; }
+    this.t += dt;
+  }
+  step(ms) {
+    const end = this.t + ms;
+    while (this.t < end) this.tick();
+    if (this.keep) {
+      const cut = this.t - this.keep;
+      if (this.frames.length > 400) this.frames = this.frames.filter(f => f.end > cut);
+      if (this.tokens.length > 400) this.tokens = this.tokens.filter(k => k.end > cut);
+    }
+  }
+  stats() {
+    const lateNow = this.queue.filter(f => this.t - f.arr > P && f.arr >= this.warm).length;
+    const n = this.c.frames + lateNow;
+    return { missPct: n ? 100 * (this.c.miss + lateNow) / n : 0, tokS: this.c.time ? this.c.tokens / (this.c.time / 1000) : 0, powerW: this.c.time ? this.c.energy / this.c.time : IDLE_W, frames: n, late: this.c.miss + lateNow, tokens: this.c.tokens };
+  }
+}
+function simulate(o) { const s = new Sim({ ...o, keep: 0 }); s.step(o.T * 1000); return s.stats(); }
+function gapTokS(m, f, c0, guard) {
+  const W = P - c0 * fgRatio(f) - 1 - guard, tau = tokMs(m, f);
+  return W >= tau ? 60 * Math.floor(W / tau) : 0;
+}
+/* ===== end core ===== */
+/* ===== website UI ===== */
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const BASE = { model: '3b', scene: 'S0', ctrl: 'manual', clock: 1800, mode: 'aligned', duty: 1, guard: 0, c0: 7, margin: 0.3, budget: 60, S: 2.5, estErr: 0, latency: 443 };
+const CLK = v => v >= 2460 ? 'Full speed' : v + ' MHz';
+const f1 = v => (+v).toFixed(1), f2 = v => (+v).toFixed(2);
+
+const C = {
+  model: { type: 'chips', label: 'Chatbot model', opts: () => Object.entries(MODELS).map(([k, m]) => [k, m.short]) },
+  scene: { type: 'chips', label: 'What the app is doing', opts: () => [['S0', 'Steady'], ['J', 'Load jumps'], ['S1d', 'Slow drift'], ['S2', 'Idle phases']] },
+  ctrl: { type: 'chips', label: 'Who manages the chip', opts: () => [['uncontrolled', 'Nobody'], ['fixed', 'Best fixed setting'], ['governor', 'Governor'], ['manual', 'You']] },
+  clock: { type: 'chips', label: 'Chip speed', opts: () => [[2460, 'Full speed'], [1800, '1800 MHz'], [1500, '1500 MHz'], [1200, '1200 MHz'], [900, '900 MHz']] },
+  mode: { type: 'chips', label: 'Chatbot rule', opts: () => [['aligned', 'Only in the gaps'], ['unaligned', 'Bursts and rests']] },
+  duty: { type: 'range', label: 'Share of time the chatbot may work', min: 0, max: 1, step: 0.05, fmt: v => Math.round(v * 100) + '%' },
+  guard: { type: 'range', label: 'Safety gap before the next picture', min: 0, max: 3, step: 0.25, fmt: v => f2(v) + ' ms' },
+  c0: { type: 'range', label: 'Picture size (work per picture)', min: 3, max: 10, step: 0.1, fmt: v => f1(v) + ' ms', hint: 'Time to draw one picture at 1800 MHz with the chip to itself.' },
+  margin: { type: 'range', label: 'Governor safety margin', min: 0, max: 0.5, step: 0.05, fmt: v => Math.round(v * 100) + '%', hint: 'Rejects any option whose predicted worst picture uses more than (100% − margin) of the 16.7 ms.' },
+  budget: { type: 'range', label: 'Power limit', min: 30, max: 95, step: 1, fmt: v => v + ' W' },
+  S: { type: 'range', label: 'How much sharing slows both jobs', min: 2, max: 3, step: 0.05, fmt: v => f2(v) + '×', hint: 'Measured between 2.5× and 2.8× on the real laptop.' }
+};
+
+const STEPS = [
+  { title: 'Meet the app', cfg: { ctrl: 'manual', duty: 0, scene: 'S0', c0: 7 }, ctls: ['c0'],
+    text: '<p>The app draws a new picture every 16.7 ms, which is 60 pictures a second. Each blue bar is one picture being drawn. The small triangle marks when it was due to start, and the dashed line is its deadline.</p><p>Here the app has the chip to itself, so every picture finishes early.</p>',
+    watch: () => '<b>Watch:</b> the empty space after each blue bar. That is the <b>gap</b>, the time the chip has nothing to do. Make the pictures bigger and the gap shrinks.' },
+  { title: 'Add a chatbot, with no rules', cfg: { ctrl: 'uncontrolled', scene: 'J' }, ctls: [],
+    text: '<p>Now a chatbot runs on the same chip. Each amber bar is one word piece it writes. Nobody is in charge, so both grab the chip whenever they want, and the chip runs at full speed.</p><p>When they overlap they take turns, and both slow down about 2.5×. In this scene the pictures keep changing size, and the heavy ones get stretched past their deadline.</p>',
+    watch: () => '<b>Watch:</b> blue bars that overlap amber ones get longer and turn red when they miss the deadline. Power sits near 90 W.' },
+  { title: 'Turn the chip down', cfg: { ctrl: 'manual', mode: 'unaligned', duty: 1, clock: 1500, scene: 'S0', c0: 7 }, ctls: ['clock'],
+    text: '<p>The obvious way to save power is to slow the chip. Try the speeds below.</p><p>The chatbot hardly notices, because it spends most of its time waiting for memory, not calculating. The pictures are pure calculation, so they slow down exactly as much as the chip does. With the chatbot still in the way, they start piling up.</p>',
+    watch: c => { const m = c.model, fs = 2460, f = c.clock; return '<b>At ' + CLK(f) + ':</b> chatbot speed ' + Math.round(100 * tokRate(m, f) / tokRate(m, fs)) + '% of full, each picture takes ' + f1(c.c0 * fgRatio(f)) + ' ms alone (vs ' + f1(c.c0 * fgRatio(fs)) + ' ms at full speed). On the real laptop, 1500 MHz kept 96% of the chatbot\'s speed and used 39% less power.'; } },
+  { title: 'Only work in the gaps', cfg: { ctrl: 'manual', mode: 'aligned', duty: 1, clock: 1800, scene: 'S0', c0: 4.9 }, ctls: [],
+    text: '<p>A new rule: the chatbot may only start a word piece if it will finish before the next picture is due. The app tells it when that is.</p><p>Now nothing collides. Pictures are never late, and the chatbot still writes one piece in every gap.</p>',
+    watch: () => '<b>Watch:</b> the bracket marked <b>gap</b> after each picture, and the dashed amber box showing how long one word piece needs. If the box ends before the next triangle, the piece fits.' },
+  { title: 'When a piece does not fit', cfg: { ctrl: 'manual', mode: 'aligned', duty: 1, clock: 1800, scene: 'S0', c0: 7 }, ctls: ['c0'],
+    text: '<p>Same rule, bigger pictures. The gap is now shorter than one word piece, so the chatbot is never allowed to start. Pictures are perfect, and the chatbot gets nothing.</p><p>Drag the picture size down until pieces fit again. The switch is sudden: this is the <b>slack cliff</b>, and it explained most of the real results.</p>',
+    watch: c => { const gap = P - c.c0 * fgRatio(c.clock) - 1, need = tokMs(c.model, c.clock); return '<b>Now:</b> gap about ' + f1(Math.max(0, gap)) + ' ms, one piece needs ' + f1(need) + ' ms → ' + (gap >= need ? '<b>it fits</b>' : '<b>it does not fit</b>') + '. Pieces fit while a picture takes ' + f1(P - 1 - need) + ' ms or less at this speed.'; } },
+  { title: 'Squeeze it in anyway', cfg: { ctrl: 'manual', mode: 'unaligned', duty: 0.35, clock: 1800, scene: 'S0', c0: 7 }, ctls: ['duty'],
+    text: '<p>Another rule: let the chatbot work in short bursts with rests in between, even if that overlaps a picture.</p><p>The chatbot writes again, but some pictures get stretched past their deadline. More work time means more output and more late pictures. There is no setting that gives both for free.</p>',
+    watch: () => '<b>Try:</b> move the slider and compare the 12-second result under the chip. The real governor faced exactly this trade-off.' },
+  { title: 'Let the governor decide', cfg: { ctrl: 'governor', scene: 'J', model: '3b' }, ctls: ['margin', 'budget'],
+    text: '<p>The governor is a small program that runs ten times a second. Each time it predicts what every combination of chip speed and chatbot rule would do, throws out the ones it expects to make a picture late or break the power limit, and picks the one that lets the chatbot write the most.</p><p>It also corrects itself: if pictures come out slower than it predicted, or the power is higher, it adjusts its numbers.</p>',
+    watch: () => '<b>Watch:</b> its reasoning in the dashed box under the chip, and how its choice changes when the pictures get heavier or lighter.' },
+  { title: 'A much bigger chatbot', cfg: { ctrl: 'governor', scene: 'J', model: '8b' }, ctls: ['model'],
+    text: '<p>The large model\'s word pieces take about 22 ms, longer than the whole time between two pictures. They can never fit in a gap.</p><p>So the governor can only squeeze in tiny bursts or give the chatbot nothing. On the real laptop it managed 7.8 pieces per second with 4.7% late pictures. Try the other models to compare.</p>',
+    watch: c => '<b>' + MODELS[c.model].short + ':</b> one word piece takes about ' + f1(tokMs(c.model, 1800)) + ' ms at 1800 MHz.' },
+  { title: 'Your turn', cfg: null, ctls: ['model', 'scene', 'ctrl', 'c0', '*'],
+    text: '<p>Everything is unlocked. Pick a model, a scene and who manages the chip. When you manage it yourself, choose the chip speed and the chatbot\'s rule.</p>',
+    watch: () => '<b>Ideas:</b> find the biggest picture size where the Medium model still fits in the gaps; set a 40 W limit for the governor; compare "Nobody" and "Governor" in the idle-phases scene.' }
+];
+
+let step = 0, cfg = { ...BASE, ...STEPS[0].cfg }, sim = null, playing = true, speed = 0.04, lastTs = null;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function ctlsFor(s) {
+  const out = [];
+  for (const k of s.ctls) {
+    if (k !== '*') { out.push(k); continue; }
+    if (cfg.ctrl === 'manual') out.push('clock', 'mode', 'duty', 'guard');
+    if (cfg.ctrl === 'governor') out.push('margin', 'budget');
+    out.push('S');
+  }
+  return out;
+}
+function renderCtls() {
+  const box = $('stepctls'); box.innerHTML = '';
+  const list = ctlsFor(STEPS[step]);
+  box.hidden = !list.length;
+  for (const k of list) {
+    const d = C[k], wrap = document.createElement('div'); wrap.className = 'ctl';
+    if (d.type === 'range') {
+      wrap.innerHTML = '<label for="c-' + k + '">' + d.label + '</label><output id="co-' + k + '">' + d.fmt(cfg[k]) + '</output><input type="range" id="c-' + k + '" min="' + d.min + '" max="' + d.max + '" step="' + d.step + '" value="' + cfg[k] + '">' + (d.hint ? '<span class="hint">' + d.hint + '</span>' : '');
+      box.appendChild(wrap);
+      wrap.querySelector('input').addEventListener('input', e => { cfg[k] = parseFloat(e.target.value); $('co-' + k).textContent = d.fmt(cfg[k]); changed(false); });
+    } else {
+      wrap.innerHTML = '<span>' + d.label + '</span><span></span><div class="chips" role="group" aria-label="' + d.label + '"></div>';
+      const g = wrap.querySelector('.chips');
+      for (const [v, lab] of d.opts()) {
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = lab; b.setAttribute('aria-pressed', String(cfg[k] == v));
+        b.addEventListener('click', () => { cfg[k] = typeof cfg[k] === 'number' ? +v : v; changed(k === 'ctrl'); });
+        g.appendChild(b);
+      }
+      box.appendChild(wrap);
+    }
+  }
+}
+function renderStep() {
+  const s = STEPS[step];
+  if (s.cfg) cfg = { ...BASE, ...s.cfg };
+  $('stepno').textContent = 'Step ' + (step + 1) + ' of ' + STEPS.length;
+  $('steptitle').textContent = s.title;
+  $('steptext').innerHTML = s.text;
+  $('prev').disabled = step === 0;
+  $('next').textContent = step === STEPS.length - 1 ? 'Start again' : 'Next step';
+  for (const [i, b] of [...$('dots').children].entries()) b.setAttribute('aria-current', i === step ? 'step' : 'false');
+  renderCtls(); restart();
+}
+function changed(rebuild) {
+  if (rebuild) renderCtls(); else renderChipsState();
+  restart();
+}
+function renderChipsState() {
+  for (const g of $('stepctls').querySelectorAll('.chips')) {
+    const label = g.getAttribute('aria-label'); const k = Object.keys(C).find(x => C[x].label === label);
+    const opts = C[k].opts();
+    [...g.children].forEach((b, i) => b.setAttribute('aria-pressed', String(cfg[k] == opts[i][0])));
+  }
+}
+function restart() {
+  sim = new Sim({ ...cfg, keep: 400, warm: 0, seed: 11 });
+  sim.step(60);
+  $('stepwatch').innerHTML = STEPS[step].watch(cfg);
+  const r = simulate({ ...cfg, T: 12, seed: 7 });
+  $('o-late').innerHTML = '<span class="' + (r.missPct <= 1 ? 'good-t' : 'bad-t') + '">' + f1(r.missPct) + '%</span><small>late pictures</small>';
+  $('o-tok').innerHTML = f1(r.tokS) + '<small>word pieces per second</small>';
+  $('o-pow').innerHTML = f1(r.powerW) + ' W<small>average power' + (cfg.ctrl === 'governor' ? ' (limit ' + cfg.budget + ' W)' : '') + '</small>';
+}
+
+const STATUS = {
+  app: ['The app is drawing a picture', '--frame'],
+  llm: ['The chatbot is writing a word piece', '--token'],
+  both: ['Both want the chip, so they take turns and each runs about ' + '2.5× slower', '--miss'],
+  idle: ['The chip has nothing to do', '--idle']
+};
+const WAIT = { nofit: 'The chatbot is waiting: its next piece would not finish before the next picture is due.', app: 'The chatbot is waiting for the picture to finish.', rest: 'The chatbot is resting, as its share-of-time rule says.' };
+
+function setupCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = +cv.getAttribute('height');
+  cv.style.height = h + 'px';
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); return { ctx, w, h };
+}
+function drawStrip() {
+  const { ctx, w, h } = setupCanvas($('strip'));
+  const now = sim.t, t0 = now - 90, t1 = now + 30, L = 70, R = w - 8;
+  const X = t => L + (t - t0) / (t1 - t0) * (R - L);
+  const ink = css('--ink'), muted = css('--muted'), grid = css('--grid'), line = css('--line'), tokc = css('--token'), frc = css('--frame'), miss = css('--miss');
+  const F = [52, 88], K = [126, 162];
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = grid; ctx.fillRect(X(now), 26, R - X(now), 146);
+  ctx.font = '11px ' + css('--mono'); ctx.fillStyle = muted; ctx.textAlign = 'center';
+  for (let k = -90; k <= 30; k += 15) { const x = X(now + k); ctx.strokeStyle = grid; ctx.beginPath(); ctx.moveTo(x, 26); ctx.lineTo(x, 172); ctx.stroke(); ctx.textAlign = k === 30 ? 'right' : 'center'; ctx.fillText(k === 0 ? 'now' : (k > 0 ? '+' : '') + k + ' ms', x, 188); }
+  ctx.textAlign = 'center'; ctx.fillText('coming up', (X(now) + R) / 2, 38);
+  ctx.textAlign = 'left'; ctx.fillStyle = ink; ctx.font = '600 13px ' + css('--body');
+  ctx.fillText('App', 8, 74); ctx.fillText('Chatbot', 8, 148);
+  ctx.save(); ctx.beginPath(); ctx.rect(L, 22, R - L, 152); ctx.clip();
+  const frames = sim.frames.filter(f => f.end > t0).concat(sim.queue.filter(f => f.arr < now));
+  const toks = sim.tokens.filter(k => k.end > t0).concat(sim.tok ? [{ start: sim.tok.start, end: now }] : []);
+  ctx.fillStyle = tokc + '24';
+  for (const f of frames) if (f.start !== null) for (const k of toks) {
+    const a = Math.max(f.start, k.start), b = Math.min(f.end ?? now, k.end);
+    if (b > a) ctx.fillRect(X(a), F[0] - 4, X(b) - X(a), K[1] - F[0] + 8);
+  }
+  for (const f of frames) {
+    const s = f.start ?? now, e = f.end ?? now, late = (e - f.arr) > P;
+    if (f.start === null) { ctx.strokeStyle = muted; ctx.setLineDash([2, 3]); ctx.strokeRect(X(f.arr), F[0] + 6, X(now) - X(f.arr), F[1] - F[0] - 12); ctx.setLineDash([]); }
+    else { ctx.fillStyle = late ? miss : frc; ctx.fillRect(X(s), F[0], Math.max(1.5, X(e) - X(s)), F[1] - F[0]); }
+    ctx.fillStyle = muted; ctx.beginPath(); const xa = X(f.arr); ctx.moveTo(xa - 5, F[0] - 12); ctx.lineTo(xa + 5, F[0] - 12); ctx.lineTo(xa, F[0] - 4); ctx.fill();
+    ctx.strokeStyle = late ? miss : muted; ctx.setLineDash([4, 3]); ctx.beginPath(); const xd = X(f.arr + P); ctx.moveTo(xd, F[0] - 4); ctx.lineTo(xd, F[1] + 4); ctx.stroke(); ctx.setLineDash([]);
+  }
+  const active = a => SCENES[cfg.scene].f(a / 1000) !== null;
+  const ups = [sim.nextArr, sim.nextArr + P].filter(a => a < t1 && active(a));
+  ctx.fillStyle = ink;
+  for (const a of ups) { const xa = X(a); ctx.beginPath(); ctx.moveTo(xa - 5, F[0] - 12); ctx.lineTo(xa + 5, F[0] - 12); ctx.lineTo(xa, F[0] - 4); ctx.fill(); }
+  ctx.fillStyle = tokc;
+  for (const k of toks) ctx.fillRect(X(k.start), K[0], Math.max(1.5, X(k.end) - X(k.start)), K[1] - K[0]);
+  const last = sim.frames.length ? sim.frames[sim.frames.length - 1] : null;
+  if ((sim.cmd.mode === 'aligned' || sim.cmd.duty <= 0) && last && sim.queue.length === 0 && active(sim.nextArr)) {
+    const e = last.end, a = sim.nextArr, need = tokMs(cfg.model, sim.clock) * (1 + cfg.estErr) + sim.cmd.guard;
+    ctx.strokeStyle = ink; ctx.fillStyle = ink; ctx.lineWidth = 1.2;
+    const y = F[1] + 12;
+    ctx.beginPath(); ctx.moveTo(X(e), y - 4); ctx.lineTo(X(e), y); ctx.lineTo(X(a), y); ctx.lineTo(X(a), y - 4); ctx.stroke();
+    ctx.font = '600 11px ' + css('--mono'); ctx.textAlign = 'center'; ctx.fillText('gap ' + f1(a - e) + ' ms', (X(e) + X(a)) / 2, y + 12);
+    const fits = e + need <= a;
+    if (sim.cmd.duty > 0) {
+    ctx.strokeStyle = fits ? css('--ok') : miss; ctx.setLineDash([5, 3]); ctx.lineWidth = 1.5;
+    ctx.strokeRect(X(e), K[0] - 3, X(e + need) - X(e), K[1] - K[0] + 6); ctx.setLineDash([]); ctx.lineWidth = 1;
+    ctx.fillStyle = fits ? css('--ok') : miss; ctx.textAlign = 'left';
+    ctx.fillText('one piece needs ' + f1(need) + ' ms' + (fits ? ': fits' : ': does not fit'), X(e) + 4, K[1] + 16);
+    }
+  }
+  ctx.restore();
+  ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(now), 22); ctx.lineTo(X(now), 174); ctx.stroke(); ctx.lineWidth = 1;
+  ctx.strokeStyle = line; ctx.strokeRect(L + 0.5, 22.5, R - L - 1, 151);
+}
+
+let lastDom = 0;
+function drawDom(force) {
+  const ts = performance.now(); if (!force && ts - lastDom < 120) return; lastDom = ts;
+  const [t1, col] = STATUS[sim.status];
+  $('light').style.background = css(col); $('light').style.boxShadow = '0 0 0 4px ' + css(col) + '33';
+  $('st1').textContent = t1;
+  $('st2').textContent = 'Chip speed ' + CLK(sim.clock) + (sim.pending ? ' (changing to ' + CLK(sim.pending.clock) + ')' : '') + ' · chatbot rule: ' + (sim.cmd.duty <= 0 ? 'off' : sim.cmd.mode === 'aligned' ? 'only in the gaps' : 'bursts and rests, ' + Math.round(sim.cmd.duty * 100) + '% of the time') + (sim.waiting && WAIT[sim.waiting] && sim.status !== 'llm' && sim.status !== 'both' ? ' · ' + WAIT[sim.waiting] : '');
+  const s = sim.stats();
+  $('m-frames').innerHTML = s.frames + ' <small>' + s.late + ' late</small>';
+  $('b-late').style.width = (s.frames ? 100 * s.late / s.frames : 0) + '%';
+  $('m-tokens').innerHTML = s.tokens + ' <small>' + f1(s.tokS) + ' per second of chip time</small>';
+  $('b-tok').style.width = Math.min(100, 100 * s.tokS / tokRate(cfg.model, 2460)) + '%';
+  $('m-power').innerHTML = Math.round(sim.powerNow) + ' W <small>average ' + f1(s.powerW) + ' W</small>';
+  $('b-pow').style.width = Math.min(100, sim.powerNow) + '%';
+  const bud = cfg.ctrl === 'governor' ? cfg.budget : 60; $('b-budget').style.left = bud + '%'; $('b-budget').title = 'Power limit ' + bud + ' W';
+  const th = $('think');
+  if (cfg.ctrl !== 'governor' || !sim.decision) { th.hidden = true; return; }
+  th.hidden = false;
+  const d = sim.decision;
+  if (d.idle) { th.innerHTML = '<b>Governor:</b> the app has gone idle, so the chatbot can have the whole chip. Setting the efficient speed of 1500 MHz.'; return; }
+  const pick = d.pick;
+  th.innerHTML = '<b>Governor, thinking ten times a second</b><ol>' +
+    '<li>The next picture needs about ' + f1(d.c) + ' ms of work at 1800 MHz' + (d.fct !== 1 ? ' (the scene is ' + Math.round(d.fct * 100) + '% of normal right now)' : '') + '.</li>' +
+    '<li>I checked ' + d.total + ' options' + (d.searched > 1 ? ' across ' + d.searched + ' chip speeds' : ' at the current speed') + '. ' + d.safe + ' of them keep the worst picture under ' + f1(d.lim) + ' ms and power under ' + f1(d.pmax) + ' W.</li>' +
+    (pick ? '<li>I picked ' + CLK(pick.clock) + ', ' + (pick.mode === 'aligned' ? 'chatbot only in the gaps' : 'chatbot in bursts, ' + Math.round(pick.duty * 100) + '% of the time') + '. I expect about ' + f1(pick.tk) + ' word pieces per second, the worst picture around ' + f1(pick.q) + ' ms, and ' + f1(pick.pw) + ' W.</li>'
+      : '<li>None of them is safe, so I run the chip at 1800 MHz and pause the chatbot. Pictures always come first.</li>') +
+    (d.extra > 0.05 ? '<li>A picture was late recently, so I am keeping ' + f1(d.extra) + ' ms of extra margin for a while.</li>' : '') + '</ol>';
+}
+
+function loop(ts) {
+  if (lastTs === null) lastTs = ts;
+  const dReal = Math.min(100, ts - lastTs); lastTs = ts;
+  if (playing && sim) sim.step(dReal * speed);
+  if (sim) { drawStrip(); drawDom(false); }
+  requestAnimationFrame(loop);
+}
+
+const HW = [
+  ['Steady scene', 'Pieces never fit between pictures', { a: [48.1, 0, 90.5], fixed: [0, 0, 30.2], idle: [0, 0, 30.5], pi: [18.1, 0, 58.4], gov: [17.5, 0, 58.8] }],
+  ['Load jumps', 'Pictures switch between light and heavy', { a: [47.7, 34.1, 89.9], fixed: [20.0, 0, 40.9], idle: [20.0, 0, 40.8], pi: [13.8, 6.28, 38.9], gov: [19.4, 1.72, 55.8] }],
+  ['Slow drift', 'Pictures slowly get heavier', { a: [48.3, 5.42, 90.1], fixed: [16.6, 0, 38.9], idle: [16.7, 0, 39.9], pi: [12.8, 2.54, 33.8], gov: [17.9, 0.25, 59.0] }],
+  ['Idle phases', 'The app pauses now and then', { a: [64.2, 0, 91.6], fixed: [32.0, 0.04, 42.7], idle: [31.4, 0.04, 39.5], pi: [31.5, 1.88, 45.3], gov: [41.3, 0.04, 58.2] }],
+  ['Large model (8B), load jumps', 'Pieces are longer than the time between pictures', { a: [23.0, 34.65, 90.5], fixed: [0, 0, 30.3], idle: [0, 0, 30.5], pi: [0.8, 11.07, 25.6], gov: [7.8, 4.72, 58.1] }]
+];
+const HWN = { a: 'Nobody', fixed: 'Best fixed setting', idle: 'Fixed + idle rule', pi: 'Simple reacting', gov: 'Governor' };
+function renderResults() {
+  const box = $('res'); box.innerHTML = '';
+  for (const [title, sub, rows] of HW) {
+    const c = document.createElement('div'); c.className = 'rcard';
+    let html = '<h3>' + title + '</h3><p class="sub">' + sub + '</p><div class="rhead"><span>Manager</span><span>Word pieces / s</span><span>Late</span><span>Power</span></div>';
+    for (const [k, v] of Object.entries(rows)) {
+      const okp = v[2] <= 60, okl = v[1] <= 1;
+      html += '<div class="rrow"><span class="nm">' + HWN[k] + '</span><span class="track"><i style="width:' + Math.min(100, v[0] / 70 * 100) + '%"></i><span style="left:' + Math.min(78, v[0] / 70 * 100) + '%">' + v[0].toFixed(1) + '</span></span>' +
+        '<span class="late ' + (okl ? 'good-t' : 'bad-t') + '">' + v[1].toFixed(v[1] < 10 ? 2 : 1) + '%</span><span class="pw ' + (okp ? '' : 'bad-t') + '">' + Math.round(v[2]) + ' W</span></div>';
+    }
+    c.innerHTML = html; box.appendChild(c);
+  }
+}
+
+function init() {
+  const dots = $('dots');
+  STEPS.forEach((s, i) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = i + 1; b.title = s.title; b.setAttribute('aria-label', 'Step ' + (i + 1) + ': ' + s.title); b.addEventListener('click', () => { step = i; renderStep(); }); dots.appendChild(b); });
+  $('prev').addEventListener('click', () => { if (step > 0) { step--; renderStep(); } });
+  $('next').addEventListener('click', () => { step = step === STEPS.length - 1 ? 0 : step + 1; renderStep(); });
+  $('pause').addEventListener('click', () => { playing = !playing; $('pause').textContent = playing ? 'Pause' : 'Play'; });
+  $('restart').addEventListener('click', restart);
+  $('speed').addEventListener('change', e => { speed = parseFloat(e.target.value); });
+  if (reduce) { speed = 0.02; $('speed').value = '0.02'; }
+  renderResults(); renderStep();
+  requestAnimationFrame(loop);
+}
+init();
+</script>
