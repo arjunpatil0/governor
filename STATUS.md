@@ -1,7 +1,7 @@
 # STATUS (overwritten at every stop)
-Updated 2026-10-28 - Phase: W4-5, evaluation. Complete blocks: 4, 5, 9, 10, 11, 14 (=6 rerun); integrity PASS (sessions 1-3). Session 4 was stopped by Arjun (Ctrl+C) in block 7 (31 measured cells, no block.json): block 7 discarded whole (data/w5b/eval/discarded/block07_20261027T195815Z, journal 0065), to rerun as block 15. Waiting for YOU: restart, helper, then the command in docs/W5B_EVALUATION.md section 'Session 4' (--blocks 7 12 --as-block 15 12, eval_integrity --blocks 15 12, git add data/w5b + commit). No outcomes looked at.
+Updated 2026-11-06 - Phase: W4-5, evaluation COMPLETE (10 blocks, 425 cells, integrity PASS) and the registered analysis has been run. Registered verdict: d'B does NOT earn its place (HW1 fails in S1 and S5; S0 non-inferiority vs c'B-T3b fails: ratio 0.973, CI [0.943, 0.980]; S5 superiority inconclusive, all blocks tie at 0). Full results: docs/W5B_RESULTS.md, data/w5_results.md (registered output), data/w5b/eval_descriptive.md (post hoc). Journal 0066.
 
-## Plan to completion: session 4 = 15(=7) + 12; session 5 = 8 + 13. Then 10 complete blocks: 4 5 9 10 11 14 15 12 8 13.
+## Waiting for YOU: decide what the write-up does with this (no follow-up experiment was started). Open questions, not investigated: why evaluation d'B S1 misses 1.72% at 19.4 tok/s vs tuning 0.86% at 30.5 tok/s; g'B/eB score 0 tokens in S0 and S5 (comparisons against a baseline that does no background work).
 
 ## Risks / not verified
-- Cause of the session 3 attempt-2 abort still unknown (no console/helper log seen); the new abort record worked on hardware in session 4 (KeyboardInterrupt recorded). Helper logs not seen by me. Outcomes deliberately not looked at.
+- Cause of the session 3 attempt-2 abort still unknown; helper logs not seen by me. d'B-HGB and S3 were never built.

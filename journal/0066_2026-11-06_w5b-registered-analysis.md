@@ -1,0 +1,10 @@
+# 0066 - 2026-11-06 - W5b evaluation complete: integrity PASS, registered analysis run
+
+Facts of the run (all in docs/W5B_RESULTS.md and data/w5_results.md):
+- Integrity over all 10 blocks (4 5 9 10 11 12 14 15 8 13), constants sha256 f7b99650...: PASS, 425 cells, 0 problems, 2 flags (discarded blocks 6 and 7, kept, not counted). Tree clean at 231c865 before the analysis.
+- Registered analysis, run once, unchanged code (analysis/w5_analysis.py), input data/w5b/eval/results.csv: **d'B does NOT earn its place.** HW1 fails for d'B in S1 (median miss 1.72%) and S5 (4.72%), 0/10 feasible in each. S5 superiority vs c'B-T3b, g'B, eB: all inconclusive (all blocks tie at 0). Non-inferiority S0 vs c'B-T3b (primary): median 0.973, 90% CI [0.943, 0.980], FAIL (needs lower bound >= 0.95). Other non-inferiority tests pass, four of them vacuously (comparator scored 0 everywhere). Secondary c'B-T3c: inconclusive / vacuous, not part of the reading. HW3: d'B beats g'B and eB in S0, S1d, S2 (+17.5, +1.6 / +0.9, +9.3 / +9.7 tok/s), loses S1 (-20: d'B infeasible), ties S5.
+- 35 W exploratory (HW1 only): holds for g'B and eB only; d'B feasible in 0 of 25 cells.
+- Final pacing mode: d'B unaligned in all 75 cells (no bimodality observed).
+- Post hoc, labelled as such in the results file: g'B and eB produce 0 tokens in the window in S0 and S5 (known from tuning, journal 0053 for the 3B S0), so those comparisons are against a baseline that does no background work while counting as "feasible"; d'B's evaluation S1 miss (1.72%, 19.4 tok/s) does not match the tuning-data figure (0.86%, 30.5 tok/s), cause not investigated.
+- New (post hoc, not registered): analysis/w5b_descriptive.py -> data/w5b/eval_descriptive.md, tests/test_w5b_descriptive.py (2 tests). No registered code, constants or addendum changed. Tests: test_w5b_descriptive + test_w5_analysis 18 passed.
+- Not done: no explanation of the S1/S5 miss, no change to the registered reading, no follow-up experiment. Those are Arjun's decisions.
