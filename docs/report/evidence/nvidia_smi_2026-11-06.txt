@@ -1,0 +1,10 @@
+# nvidia-smi checks for the technical report, run 2026-11-06 (read-only queries)
+$ nvidia-smi --query-gpu=name,driver_model.current,mig.mode.current --format=csv
+name, driver_model.current, mig.mode.current
+NVIDIA GeForce RTX 4070 Laptop GPU, WDDM, [N/A]
+$ nvidia-smi -q | grep -A2 "MIG Mode"
+    MIG Mode
+        Current                                        : N/A
+        Pending                                        : N/A
+$ nvidia-smi --query-gpu=driver_version --format=csv,noheader
+616.92
