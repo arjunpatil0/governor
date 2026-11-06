@@ -9,3 +9,5 @@ Facts established for the report that were not in a file before: nvidia-smi on 2
 Open and stated in the report as open: the audit of the 590 W NVML samples in the registered cells (raw samples were never stored; counter and sampled means agree within 15% in all 425 cells, and the effect of one such sample on a 60 s mean is 0.04 W by arithmetic); the work-unit chunking experiment; real-app frame capture; other GPUs and operating systems.
 Not sourced: nothing in the prose. Outside this repository only the finer barrier-model R-squared (0.968-0.979, variance_gpu_project/ARCHIVE_NOTE.md); the report uses CLAUDE.md's 0.97-0.98.
 Caveats about the PDF: I could not render the PDF to images here (no poppler), so layout was checked on the same HTML in a browser and by the page count (5); open the PDF once to confirm the page breaks. The security review cited in the report was a model agent, and so was the reviewer of section 8; the report says so.
+
+Correction (appended): the report body is about 3,700 words by docs/report/style_check.py (including table text), not the 3,300 written above.
