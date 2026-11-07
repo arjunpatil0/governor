@@ -16,3 +16,14 @@ Benchmark numbers
 
 Next step
 - Install ultralytics (not installed yet), run the bench commands, read the first table, then decide the 8B question from the "does not fit" check and the VRAM columns.
+
+## Pause-cost study (brief called it "v2 sprint 1"; 2026-11-07 and 08)
+
+What changed
+- Measured what it costs to split one token's decode into G layer groups with a pause point between groups: a patched copy of the pinned llama.cpp (`workloads/background/pause_patch/`, built by `build_llama_v2.bat`), a pause-aware driver (`llama_pause_bench.cpp`), the sweep and analysis scripts (`tools/pause_bench.py`, `tools/pause_analyze.py`) and a pausable copy of the plant simulator (`sim/plant_pausable.py`, `tools/pause_payoff.py`). Results and limits: `docs/V2_SPRINT1_PAUSE_COST.md`.
+
+Benchmark numbers
+- 3B at a 1500 MHz lock, 3 x 300 tokens per configuration: token time 10.14 ms whole; overhead 0.3% (G = 2), 0.5% (4), 0.9% (7), 2.2% (14), 4.3% (28); longest group 5.57, 3.47, 2.58, 1.95, 1.63 ms. Graphs off: +14.2%. A forced 2 ms pause per boundary raised the token time by 6.07 ms at G = 4 and 12.17 ms at G = 7 (expected 6 and 12), so the boundaries are real pause points. Verdict by the pre-stated rule: GO.
+
+Next step
+- Sprint 2 (owner's decision): build the real pausable decode against a live frame hint and measure what the other process gains at a pause, which this study did not measure. The output projection (about 1.3 ms) is the floor under the longest group at layer granularity.
