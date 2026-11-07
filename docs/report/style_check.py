@@ -15,6 +15,9 @@ VOCAB = ["delve", "nuance", "tapestry", "multifaceted", "encompass", "realm", "l
          "in today's", "functions as", "operates as", "acts as", "paradigm", "profound", "far-reaching", "seamless", "crucial", "key ", "cutting-edge", "state-of-the-art", "novel"]
 ATTRIB = ["many scholars", "experts believe", "critics", "some have suggested", "it is widely", "widely regarded", "has received"]
 KEPT_SUB = [  # (substring of the match, reason it stays)
+    ("- S0 non-inferiority vs c'B-T3", "enumerates the three registered outputs that move in the sensitivity analysis: genuinely enumerative content, text supplied by the author"),
+    ("- HW1 for c'B-T3b in S0", "second of the three enumerated outputs"),
+    ("- HW1 for eB in S1", "third of the three enumerated outputs"),
     ("1.999, 1.500 and 1.203", "three measured clock levels (900, 1200, 1500 MHz) with three measured values: the data have exactly three entries"),
     ("2.000, 1.500 and 1.202", "the three predictions that go with the three measured values"),
     ("pacing mode, duty and guard time", "the control block has exactly three fields"),
@@ -48,7 +51,7 @@ def hits():
         for m in re.finditer(r"\b([\w'.-]+(?: [\w'.-]+){0,2}), ([\w'.-]+(?: [\w'.-]+){0,2}),? and ([\w'.-]+(?: [\w'.-]+){0,2})\b", ln):
             out.append(("list of exactly three", m.group(0)[:80], i, ln.strip()[:140]))
     n_dash = TEXT.count("—") + TEXT.count("–") + TEXT.count(" -- ")
-    out.append(("em-dashes", f"{n_dash} in the whole report (limit 1-2 per page, 5 pages)", 0, ""))
+    out.append(("em-dashes", f"{n_dash} in the whole report (limit 1-2 per page, 6 pages)", 0, ""))
     for i, ln in PROSE:
         if "**" in ln or "<b>" in ln or "<strong>" in ln:
             out.append(("bold in body prose", "**", i, ln.strip()[:100]))
