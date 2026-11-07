@@ -1,0 +1,130 @@
+{
+ "stamp": "20261107T213459Z",
+ "clock_mhz": 1500,
+ "reps": 3,
+ "n_tokens": 300,
+ "n_warm": 20,
+ "model": "C:\\Users\\arjun\\governor\\data\\llama\\Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+ "exe": "C:\\Users\\arjun\\governor\\workloads\\background\\llama_pause_bench.exe",
+ "configs": [
+  "G1",
+  "G2",
+  "G4",
+  "G7",
+  "G14",
+  "G28",
+  "graphs_off",
+  "G4_pause2ms",
+  "G7_pause2ms"
+ ],
+ "exec_lines": {
+  "G1_rep1": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=0",
+   "DONE tokens=320 group_records=0"
+  ],
+  "G2_rep1": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=2 graphs_disabled=0",
+   "DONE tokens=320 group_records=642"
+  ],
+  "G4_rep1": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+   "DONE tokens=320 group_records=1284"
+  ],
+  "G7_rep1": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+   "DONE tokens=320 group_records=2247"
+  ],
+  "G14_rep1": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=14 graphs_disabled=0",
+   "DONE tokens=320 group_records=4494"
+  ],
+  "G28_rep1": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=28 graphs_disabled=0",
+   "DONE tokens=320 group_records=8988"
+  ],
+  "graphs_off_rep1": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=1",
+   "DONE tokens=320 group_records=0"
+  ],
+  "G4_pause2ms_rep1": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+   "DONE tokens=320 group_records=1284"
+  ],
+  "G7_pause2ms_rep1": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+   "DONE tokens=320 group_records=2247"
+  ],
+  "G1_rep2": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=0",
+   "DONE tokens=320 group_records=0"
+  ],
+  "G2_rep2": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=2 graphs_disabled=0",
+   "DONE tokens=320 group_records=642"
+  ],
+  "G4_rep2": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+   "DONE tokens=320 group_records=1284"
+  ],
+  "G7_rep2": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+   "DONE tokens=320 group_records=2247"
+  ],
+  "G14_rep2": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=14 graphs_disabled=0",
+   "DONE tokens=320 group_records=4494"
+  ],
+  "G28_rep2": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=28 graphs_disabled=0",
+   "DONE tokens=320 group_records=8988"
+  ],
+  "graphs_off_rep2": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=1",
+   "DONE tokens=320 group_records=0"
+  ],
+  "G4_pause2ms_rep2": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+   "DONE tokens=320 group_records=1284"
+  ],
+  "G7_pause2ms_rep2": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+   "DONE tokens=320 group_records=2247"
+  ],
+  "G1_rep3": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=0",
+   "DONE tokens=320 group_records=0"
+  ],
+  "G2_rep3": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=2 graphs_disabled=0",
+   "DONE tokens=320 group_records=642"
+  ],
+  "G4_rep3": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+   "DONE tokens=320 group_records=1284"
+  ],
+  "G7_rep3": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+   "DONE tokens=320 group_records=2247"
+  ],
+  "G14_rep3": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=14 graphs_disabled=0",
+   "DONE tokens=320 group_records=4494"
+  ],
+  "G28_rep3": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=28 graphs_disabled=0",
+   "DONE tokens=320 group_records=8988"
+  ],
+  "graphs_off_rep3": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=1",
+   "DONE tokens=320 group_records=0"
+  ],
+  "G4_pause2ms_rep3": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+   "DONE tokens=320 group_records=1284"
+  ],
+  "G7_pause2ms_rep3": [
+   "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+   "DONE tokens=320 group_records=2247"
+  ]
+ }
+}
