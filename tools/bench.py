@@ -6,7 +6,7 @@ Setups: yolo-alone | yolo-3b-free | yolo-3b-paced | yolo-8b-free | yolo-8b-paced
   paced  = the same driver in v1 aligned slack-filling mode, duty 1, guard --guard-ms: tokens start only where they fit before the next frame is due (v1 gap-filling).
 One run: the YOLO child loads and warms up (READY), the llama driver loads and decodes, both are resident, then GO: the YOLO loop starts at a common QPC time t0 and runs --duration seconds. All
 metrics use the window [t0 + trim, t0 + duration] (trim = 2 s, the v1 convention). late % and p99 come from the YOLO frame records (p99 of schedule-to-completion latency, ms); tok/s = tokens whose end
-falls in the window / window length (driver token ring); power = mean of NVML SAMPLED power (nvmlDeviceGetPowerUsage, 20 Hz, readings above 250 W dropped as the known glitch and counted; never the
+falls in the window / window length (driver token ring); power = mean of NVML SAMPLED power (nvmlDeviceGetPowerUsage, 20 Hz, readings above 1.5x the max power limit (210 W here) dropped as the known glitch and counted; never the
 energy counter); VRAM = peak per-process MiB in the window (telemetry/vram.py). A setup whose models leave less than --min-free-mib free before GO is skipped ("does not fit"); a run whose peak system
 VRAM comes within --min-free-mib of the total is marked with * (WDDM may page). Table cells are means over the runs; per-run values are in bench.json (and with --per-run).
 Output: data/v2/bench/<UTC stamp>/ (bench.json, table.txt, one folder per run with frames.npz, result.json, logs). Clocks, power limit and the Armoury Crate mode are NOT touched; give --armoury-mode to record it."""
@@ -32,7 +32,7 @@ MODELS = {"3b": ROOT / "data" / "llama" / "Llama-3.2-3B-Instruct-Q4_K_M.gguf", "
 REGISTRY = Path.home() / "AppData" / "Local" / "governor" / "warmed_exes.json"
 SETUPS = {"yolo-alone": (None, None), "yolo-3b-free": ("3b", "free"), "yolo-3b-paced": ("3b", "paced"), "yolo-8b-free": ("8b", "free"), "yolo-8b-paced": ("8b", "paced")}
 TRIM_S = 2.0
-POWER_PLAUSIBLE_MAX_W = 250.0
+POWER_PLAUSIBLE_MAX_W = 250.0                                           # default of power_mean; run_once passes the guard limit (1.5x max power limit)
 RING_CAPACITY = 65536
 INSTALL_HINT = "pip install --use-feature=truststore ultralytics   (a dry run adds httpx, polars, ultralytics, ultralytics-thop, ultralytics-platform and changes no numpy/scipy/torch)"
 
@@ -102,8 +102,10 @@ class PowerSampler(threading.Thread):
     def __init__(self, period_s=0.05):
         super().__init__(daemon=True)
         import pynvml as nv
+        from telemetry.power_guard import PowerGuard
         nv.nvmlInit()
         self.nv, self.h, self.period_s, self.samples, self.ev = nv, nv.nvmlDeviceGetHandleByIndex(0), period_s, [], threading.Event()
+        self.guard = PowerGuard.from_nvml(nv, self.h)                        # the same guard as the experiment sampler: window means drop readings above 1.5x the max power limit
 
     def run(self):
         while not self.ev.is_set():
@@ -206,7 +208,7 @@ def run_once(setup, a, run_dir):
             raise RuntimeError(f"llama driver exited during the window (code {drv.returncode}); log {dlog}")
         power.stop()
         res = json.loads((run_dir / "result.json").read_text())
-        pw, n_ok, n_bad = power_mean(power.samples, t_lo, t_hi)
+        pw, n_ok, n_bad = power_mean(power.samples, t_lo, t_hi, max_w=power.guard.limit_w)
         tok_s, dropped = None, None
         if llama:
             tk, dropped = tokens.read_new()
@@ -285,7 +287,7 @@ def main(argv=None):
         results[s] = dict(aggregate=aggregate(runs), runs=runs)
         time.sleep(a.gap_s)
     table = format_table(rows, per_run=a.per_run)
-    note = "late %: frames finished after the next frame was due; p99: schedule-to-completion ms; power: sampled NVML (readings >250 W dropped); VRAM: peak per process; * = VRAM nearly full (WDDM may page)"
+    note = "late %: frames finished after the next frame was due; p99: schedule-to-completion ms; power: sampled NVML (readings above 1.5x the max power limit dropped); VRAM: peak per process; * = VRAM nearly full (WDDM may page)"
     (out / "table.txt").write_text(table + "\n" + note + "\n", encoding="utf-8")
     (out / "bench.json").write_text(json.dumps(dict(meta=meta, results=results), indent=1, default=str), encoding="utf-8")
     print("\n" + table + "\n" + note + f"\nsaved in {out}")

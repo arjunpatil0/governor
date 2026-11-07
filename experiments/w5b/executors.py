@@ -44,11 +44,12 @@ def window_mean(t, v, t_a, t_b):
     return float(np.mean(v[m])) if m.any() else float("nan")
 
 
-def recent_mean(t, v, now, span):
-    """Mean of the samples v taken in (now - span, now]; nan if none (the sampled power source of the Governor loop; the sampler appends from another thread, so only a copy of the tail is read)."""
+def recent_mean(t, v, now, span, max_w=None):
+    """Mean of the samples v taken in (now - span, now]; nan if none (the sampled power source of the Governor loop; the sampler appends from another thread, so only a copy of the tail is read).
+    max_w (v2 guard, docs/AUDIT_590W.md): samples below 0 or above max_w are left out before the mean, so one glitch reading cannot steer a decision even if a sampler without the guard fed it."""
     tt, vv = list(t[-200:]), list(v[-200:])
     n = min(len(tt), len(vv))
-    sel = [vv[i] for i in range(n) if now - span < tt[i] <= now]
+    sel = [vv[i] for i in range(n) if now - span < tt[i] <= now and (max_w is None or 0.0 <= vv[i] <= max_w)]
     return float(np.mean(sel)) if sel else float("nan")
 
 
@@ -65,6 +66,14 @@ def trace_bins(t, v, t_a, t_b, step_s=0.5):
     centres = step_s * (np.arange(n) + 0.5)
     means = np.array([float(np.mean(v[(t >= edges[i]) & (t < edges[i + 1])])) if ((t >= edges[i]) & (t < edges[i + 1])).any() else float("nan") for i in range(n)])
     return centres, means
+
+
+def trace_bins_max(t, v, t_a, t_b, step_s=0.5):
+    """Maximum of v in the same bins as trace_bins (nan in an empty bin): stored next to the bin mean (v2, docs/AUDIT_590W.md) so a single bad sample stays visible in a later audit."""
+    t, v = np.asarray(t, float), np.asarray(v, float)
+    n = int(round((t_b - t_a) / step_s))
+    edges = t_a + step_s * np.arange(n + 1)
+    return np.array([float(np.max(v[(t >= edges[i]) & (t < edges[i + 1])])) if ((t >= edges[i]) & (t < edges[i + 1])).any() else float("nan") for i in range(n)])
 
 
 def fg_spec(scene, c0, origin_ms=0.0):
@@ -361,7 +370,7 @@ class HwExecutor:
                             if spec.get("gov_no_energy"):
                                 e = 0.0
                             elif source == "sampled":
-                                e, pw = 0.0, recent_mean(smp.t, smp.pw, time.perf_counter(), 0.1)
+                                e, pw = 0.0, recent_mean(smp.t, smp.pw, time.perf_counter(), 0.1, max_w=smp.guard.limit_w)
                                 pw = lastpw[0] if pw != pw else pw                            # no sample in the span (rare): keep the last good value
                                 lastpw[0] = pw
                             else:
@@ -389,16 +398,17 @@ class HwExecutor:
             t_sm, sm = np.array(smp.t), np.array(smp.sm)
             win = (t_sm >= t0 + WARM_S) & (t_sm < t0 + WARM_S + MEASURE_S)
             pw_t, pw_w = trace_bins(smp.t, smp.pw, t0, t0 + WARM_S + MEASURE_S, step_s=0.5)
+            pw_max = trace_bins_max(smp.t, smp.pw, t0, t0 + WARM_S + MEASURE_S, step_s=0.5)
             res = summarise_cell(recs, tk[:, 0] if len(tk) else np.array([]), tk[:, 1] if len(tk) else np.array([]), t0, WARM_S, MEASURE_S, e.get("start", 0.0), e.get("end", 0.0), PERIOD)
             n_ab = int(loop.abandoned)
             miss = (res["miss_frac"] * res["frames"] + n_ab) / (res["frames"] + n_ab) if res["frames"] else float("nan")
             np.savez_compressed(cdir / "frames.npz", t_sched=[r["t_sched"] for r in recs], lat_ms=[r["lat_ms"] for r in recs], tok_end=tk[:, 0] if len(tk) else [], tok_ms=tk[:, 1] if len(tk) else [], t0=t0,
-                                gov_log=np.array(glog, float).reshape(-1, 7), pw_trace_t=pw_t, pw_trace_w=pw_w)
+                                gov_log=np.array(glog, float).reshape(-1, 7), pw_trace_t=pw_t, pw_trace_w=pw_w, pw_trace_max=pw_max, pw_rejected_t=np.array(smp.rej_t, float), pw_rejected_w=np.array(smp.rej_w, float))
             changes = int(sum(1 for a, b in zip(glog, glog[1:]) if a[1] != b[1]))
             reads_n = int(reads[0])
             if (spec.get("power_source") or self.power_source) == "sampled" and reads_n:
                 raise RuntimeError(f"cell {spec['id']}: the sampled-source Governor loop read the energy counter {reads_n} times (plan addendum O-5: governed cells never read the energy counter)")
-            out = dict(miss=float(miss), miss_completed=res["miss_frac"], tok_s=res["bg_tok_s"], power_w=res["power_w"], power_sampled_w=window_mean(np.array(smp.t), np.array(smp.pw), t0 + WARM_S, t0 + WARM_S + MEASURE_S), fg_p50_ms=res["fg_p50_ms"], fg_p99_ms=res["fg_p99_ms"], frames=res["frames"], abandoned=n_ab,
+            out = dict(power_rejected=int(smp.guard.rejected), power_guard_limit_w=smp.guard.limit_w, miss=float(miss), miss_completed=res["miss_frac"], tok_s=res["bg_tok_s"], power_w=res["power_w"], power_sampled_w=window_mean(np.array(smp.t), np.array(smp.pw), t0 + WARM_S, t0 + WARM_S + MEASURE_S), fg_p50_ms=res["fg_p50_ms"], fg_p99_ms=res["fg_p99_ms"], frames=res["frames"], abandoned=n_ab,
                        bg_tokens=res["bg_tokens"], tok_ms_p50=res["tok_ms_p50"], sm_mhz_median=float(np.median(sm[win])) if win.any() else float("nan"), temp_before_c=temp_before, temp_after_c=self.temp(),
                        clock_changes=changes, clamp_events=0 if gov is None else len(gov.clamped), power_source=None if gov is None else ('none' if spec.get('gov_no_energy') else (spec.get('power_source') or self.power_source)), gov_reads=reads_n, gov_reads_per_s=reads_n / (WARM_S + MEASURE_S), clamp_examples=[] if gov is None else gov.clamped[:3], final_pacing_mode=getattr(obj, 'mode', None) if gov is not None else None, clock_ok=bool(ok_clock), ring_dropped=int(dropped), thermal_reason_bits=int(acc[0]), executor="hw")
         finally:
