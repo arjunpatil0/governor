@@ -83,7 +83,7 @@ static double gate_wait(double est_s) {
         bool busy; double next;
         get_hint(now, &busy, &next);
         if (!busy && now + est_s + g_guard_s <= next + 1e-12) { g_next_at_start = next; return (now - t0) * 1e3; }
-        if (next - now > 0.004) Sleep(1); else YieldProcessor();
+        YieldProcessor();                                              // spin, as the v1 driver does while it waits (a Sleep(1) wakes in 1.5 to 2 ms steps and sleeps through a window about 1 ms wide)
     }
 }
 

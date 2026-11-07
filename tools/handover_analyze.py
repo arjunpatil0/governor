@@ -83,6 +83,46 @@ def rule(a, b):
     return v, dict(late_a=la, late_b=lb, tok_a=ta, tok_b=tb, noise_late_pct=noise_l, noise_tok_s=noise_t)
 
 
+def per_frame(cell):
+    """Per frame of the measured window: frame duration (t_end - t_start, ms), the decode time overlapping the frame (ms, from the decode group intervals, a host-side proxy for GPU activity that
+    includes launch and sync latency), and the slowdown against the solo duration. The solo duration per unit of nominal frame cost is the median of duration / cost over the frames of the same cell
+    that no decode interval touched; if no frame is overlap-free the slowdown is None. Returns dict of arrays."""
+    cell = Path(cell)
+    f = np.load(cell / "frames.npz")
+    t0 = json.loads((cell / "result.json").read_text())["t0"]
+    keep = f["t_sched"] >= t0 + 5.0
+    ts, te, cost = f["t_start"][keep], f["t_end"][keep], f["cost_ms"][keep]
+    dur = (te - ts) * 1e3
+    iv = intervals(cell)
+    ov = np.zeros(len(ts))
+    j = 0
+    for i in range(len(ts)):
+        lo = np.searchsorted(iv[:, 1], ts[i], side="left")        # first interval that ends after the frame starts
+        k = lo
+        while k < len(iv) and iv[k, 0] < te[i]:
+            ov[i] += max(0.0, min(te[i], iv[k, 1]) - max(ts[i], iv[k, 0]))
+            k += 1
+    ov *= 1e3
+    free = ov <= 1e-6
+    solo = float(np.median(dur[free] / cost[free])) if free.sum() >= 5 else None
+    slow = dur / (solo * cost) if solo else None
+    return dict(dur_ms=dur, overlap_ms=ov, cost_ms=cost, solo_ratio=solo, slowdown=slow, late=(f["lat_ms"][keep] > 1000.0 / 60.0))
+
+
+def frame_summary(cells):
+    """Pool the frames of the reps of one arm: fraction of frames touched by decode, mean overlap per frame, slowdown of overlapped frames (median, p99), late share of overlapped / untouched frames."""
+    pf = [per_frame(c) for c in cells]
+    ov = np.concatenate([p["overlap_ms"] for p in pf])
+    late = np.concatenate([p["late"] for p in pf])
+    slow = np.concatenate([p["slowdown"] for p in pf if p["slowdown"] is not None]) if any(p["slowdown"] is not None for p in pf) else np.array([])
+    touched = ov > 1e-6
+    sl_t = np.concatenate([p["slowdown"][p["overlap_ms"] > 1e-6] for p in pf if p["slowdown"] is not None]) if len(slow) else np.array([])
+    return dict(frames=int(len(ov)), frac_touched=float(touched.mean()), overlap_ms_mean_all=float(ov.mean()), overlap_ms_mean_touched=float(ov[touched].mean()) if touched.any() else 0.0,
+                overlap_ms_max=float(ov.max()), slowdown_touched_p50=pct(sl_t, 50), slowdown_touched_p99=pct(sl_t, 99), solo_ratio_median=st.median([p["solo_ratio"] for p in pf if p["solo_ratio"]]) if any(p["solo_ratio"] for p in pf) else None,
+                late_share_touched=float(late[touched].mean()) if touched.any() else None, late_share_untouched=float(late[~touched].mean()) if (~touched).any() else None, late_frames=int(late.sum()),
+                late_frames_touched=int((late & touched).sum()))
+
+
 def exp3(d):
     d = Path(d)
     out, verdicts = {}, {}
@@ -93,6 +133,8 @@ def exp3(d):
             arms[name] = dict(tok=[r["bg_tok_s"] for r in rows], late=[100 * r["miss_frac"] for r in rows], power=[r["power_w"] for r in rows], jpt=[r["j_per_token"] for r in rows],
                               rejected=[r["power_rejected"] for r in rows], sm=[r["sm_mhz_median"] for r in rows], p99=[r["fg_p99_ms"] for r in rows], wait=[st.median(
                                   [float(x["gate_wait_ms"]) for x in csv.DictReader(open(c / "decode_tokens.csv"))]) for c in sorted(d.glob(f"{scene}_{name}_rep*"))])
+        for name in ("whole", "g14"):
+            arms[name]["frames"] = frame_summary(sorted(d.glob(f"{scene}_{name}_rep*")))
         out[scene] = arms
         verdicts[scene] = rule(arms["whole"], arms["g14"])
     return out, verdicts
@@ -129,6 +171,8 @@ def plot(e1, e3, out):
         a.set_xticks([0, 1]); a.set_xticklabels(["S1 (3B)", "S5 (8B)"]); a.set_ylabel(lab); a.set_title(lab + ", median and reps", fontsize=9)
         if j == 0:
             a.legend(fontsize=8)
+        else:
+            a.set_ylim(0, 1.0)                                       # late frames: every cell is 0.00%, so a 0 to 1% axis (the 1% limit of the evaluation) rather than an auto-scaled hairline
     fig.tight_layout()
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=140)
@@ -157,6 +201,11 @@ def main():
             r = e3[scene][arm]
             print(f"{scene} {arm:<6} tok/s {st.median(r['tok']):6.1f} {[round(x, 1) for x in r['tok']]}  late {st.median(r['late']):6.2f}% {[round(x, 2) for x in r['late']]}  power {st.median(r['power']):5.1f} W  J/tok {st.median(r['jpt']):5.2f}  "
                   f"rejected {sum(r['rejected'])}  sm {st.median(r['sm']):.0f} MHz  p99 {st.median(r['p99']):.1f} ms")
+        for arm in ("whole", "g14"):
+            fr = e3[scene][arm]["frames"]
+            g = lambda v, nd=2: "n/a" if v is None else f"{v:.{nd}f}"
+            print(f"   {scene} {arm:<6} frames {fr['frames']}  touched by decode {100 * fr['frac_touched']:.1f}%  overlap per frame: mean {fr['overlap_ms_mean_all']:.2f} ms (touched {fr['overlap_ms_mean_touched']:.2f}, max {fr['overlap_ms_max']:.2f})  "
+                  f"slowdown of touched frames p50 {g(fr['slowdown_touched_p50'])} p99 {g(fr['slowdown_touched_p99'])}  late frames {fr['late_frames']} (touched {fr['late_frames_touched']})")
         print(f"   rule for {scene}: {verdicts[scene][0]}  {json.dumps({k: round(v, 3) for k, v in verdicts[scene][1].items()})}")
     (ROOT / "data" / "v2" / "s2" / "summary.json").write_text(json.dumps(summary, indent=1, default=str), encoding="utf-8")
     plot(e1, e3, ROOT / "data" / "v2" / "s2_handover.png")

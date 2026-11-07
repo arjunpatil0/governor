@@ -72,7 +72,7 @@ def run_cell(w, cal, cfg, out, marker=False, warm_s=WARM_S, measure_s=MEASURE_S)
     tag = uuid.uuid4().hex[:8]
     pace_name, fr_name = f"Local\\gov_ho_pace_{tag}", f"Local\\gov_ho_fr_{tag}"
     pace, frames_ring = SeqBlock(pace_name, 3, True), SharedRing(fr_name, 16384, 3, True)
-    env = dict(os.environ, PATH=str(BIN) + ";" + os.environ["PATH"], GGML_CUDA_PAUSE_GROUPS=str(cfg["G"]), HINT_NAME=pace_name, GATE="1" if cfg["gate"] else "0", GUARD_MS="0.5")
+    env = dict(os.environ, PATH=str(BIN) + ";" + os.environ["PATH"], GGML_CUDA_PAUSE_GROUPS=str(cfg["G"]), HINT_NAME=pace_name, GATE="1" if cfg["gate"] else "0", GUARD_MS=str(cfg.get("guard_ms", 0.0)))   # guard 0 ms = the registered v1 static setting (1800_a_g0_d1)
     dlog = out / "driver.log"
     drv = subprocess.Popen([str(EXE), str(MODELS[cfg["model"]]), str(PROMPT), str(out / "decode"), "512"], stdin=subprocess.PIPE, stdout=open(dlog, "w"), stderr=subprocess.STDOUT, text=True, env=env)
     smp = None
@@ -110,7 +110,8 @@ def run_cell(w, cal, cfg, out, marker=False, warm_s=WARM_S, measure_s=MEASURE_S)
         win = (np.array(smp.t) >= t0 + warm_s) & (np.array(smp.t) < t0 + warm_s + measure_s)
         res.update(cfg=cfg, t0=t0, power_rejected=int(smp.guard.rejected), sm_mhz_median=float(np.median(sm[win])) if win.any() else None, abandoned=int(loop.abandoned),
                    exec=[l for l in dlog.read_text(errors="replace").splitlines() if l.startswith(("EXEC_MODE", "DONE"))])
-        np.savez_compressed(out / "frames.npz", t_sched=[r["t_sched"] for r in recs], lat_ms=[r["lat_ms"] for r in recs], t_end=[r["t_end"] for r in recs])
+        np.savez_compressed(out / "frames.npz", t_sched=[r["t_sched"] for r in recs], t_start=[r["t_start"] for r in recs], t_end=[r["t_end"] for r in recs],
+                            lat_ms=[r["lat_ms"] for r in recs], cost_ms=[r["cost_ms"] for r in recs])
         if marker:
             cal1 = w.gt_sync3(500)                                      # second idle calibration (the decode has exited): the offset is interpolated linearly between the two in the analysis
             np.savez_compressed(out / "marker.npz", samples=np.array(runner.samples), off0=cal0[0], rt0=cal0[1], q0=cal0[2], off1=cal1[0], rt1=cal1[1], q1=cal1[2])
