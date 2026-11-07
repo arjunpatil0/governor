@@ -1,0 +1,22 @@
+{
+ "G1": {
+  "nvidia_smi_samples": 60,
+  "nvidia_smi_sm_mhz_min": 1500.0,
+  "nvidia_smi_sm_mhz_median": 1500.0,
+  "nvidia_smi_sm_mhz_max": 1500.0,
+  "nvml_samples": 1445,
+  "nvml_sm_mhz_median": 1500.0,
+  "nvml_sm_mhz_max": 1500.0,
+  "power_rejected": 0
+ },
+ "G14": {
+  "nvidia_smi_samples": 60,
+  "nvidia_smi_sm_mhz_min": 1500.0,
+  "nvidia_smi_sm_mhz_median": 1500.0,
+  "nvidia_smi_sm_mhz_max": 1500.0,
+  "nvml_samples": 1459,
+  "nvml_sm_mhz_median": 1500.0,
+  "nvml_sm_mhz_max": 1500.0,
+  "power_rejected": 0
+ }
+}
