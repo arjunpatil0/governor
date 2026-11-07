@@ -67,7 +67,7 @@ def sweep(clock, reps, n_tokens, n_warm):
     cl = S.SafeClient()                                  # raises if the admin helper is not running: no silent unlocked run
     hb = S.Heartbeat(cl)
     hb.start()
-    meta = dict(stamp=stamp, clock_mhz=clock, reps=reps, n_tokens=n_tokens, n_warm=n_warm, model=str(MODEL), exe=str(EXE), configs=[c for c, _ in CONFIGS], exec_lines={})
+    meta = dict(stamp=stamp, model_file=MODEL.name, clock_mhz=clock, reps=reps, n_tokens=n_tokens, n_warm=n_warm, model=str(MODEL), exe=str(EXE), configs=[c for c, _ in CONFIGS], exec_lines={})
     try:
         reset_clocks(cl, is_admin=False)
         cl.reset()
@@ -99,7 +99,15 @@ def main():
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--tokens", type=int, default=300)
     ap.add_argument("--warm", type=int, default=20)
+    ap.add_argument("--model", choices=("3b", "8b"), default="3b")
+    ap.add_argument("--configs", default=None, help="comma-separated subset of the configuration names, e.g. G1,G14,G28")
     a = ap.parse_args()
+    global MODEL, CONFIGS
+    if a.model == "8b":
+        MODEL = ROOT / "data" / "llama" / "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+    if a.configs:
+        want = a.configs.split(",")
+        CONFIGS = [c for c in CONFIGS if c[0] in want]
     if not EXE.exists():
         sys.exit(f"missing {EXE}: build it with workloads/background/build_llama_v2.bat and build_llama_pause.bat")
     if a.smoke:
