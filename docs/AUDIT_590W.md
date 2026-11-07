@@ -75,3 +75,60 @@ Not tested: whether the glitch appears under load today (no hardware run was all
 2. Store a per-bin maximum next to the 0.5 s bin mean, so a single bad sample is visible in later audits. The raw sample series (about 15,000 samples per 60 s cell) is the better fix if storage allows.
 3. Do not replace rejected samples silently. Carry the previous good value, as the Governor loop already does for an empty span, and log it.
 4. In the sampled-source Governor loop, apply the guard before `recent_mean`, so one glitch cannot steer a decision. Any such change is a code change to be made deliberately and recorded; this audit changed none.
+
+## Addendum (2026-11-07): power source of every registered number, and the phantom-energy bound
+
+Read-only. The analysis below ran in memory on copies of `data/w5b/eval/results.csv`; no file under `data/` or `docs/` was written, and the registered output `data/w5_results.md` was not regenerated.
+
+### Source per number
+
+Counter power is `power_w = (E_end - E_start) / 1000 / 60 s` from two reads of `nvmlDeviceGetTotalEnergyConsumption` (`summarise_cell` in `experiments/w5a/w5a_metrics.py`). Sampled power is the `nvmlDeviceGetPowerUsage` stream. The analysis code (`analysis/w5_analysis.py`, `analysis/w5b_descriptive.py`) never reads `power_sampled_w`.
+
+| File | Figure | Source |
+|---|---|---|
+| `W5B_RESULTS.md` | HW1 conditions for d'B (S1, S5: 0/10 feasible; median miss 1.72%, 4.72%) | miss from frame records; the feasibility test is miss <= 1% and counter power <= budget, so counter for the power half |
+| | S5 superiority tests, scores | tok/s from the token ring; a cell scores 0 if infeasible, so the counter decides which cells score |
+| | non-inferiority ratios and CIs (S0, S2; 0.973, [0.943, 0.980], 8 blocks) | tok/s from the token ring; the blocks used are those where the comparator is feasible, so counter |
+| | "d'B power within 60 W in every 60 W cell (10/10)" | counter |
+| | HW3 differences (+17.52, -19.97, ...) | tok/s from the token ring, scored as above (counter through feasibility) |
+| | 35 W family (0 of 25 feasible; S1 median 37.7 W) | counter |
+| | final pacing mode counts | controller state, no power |
+| | observations 1 to 3 (tokens in window, d'B misses, tok/s comparisons) | token ring and frame records |
+| | observation 4 (c'B-T3b 58.4 W, feasible 8/10) and observation 5 (arm a 87 to 92 W) | counter |
+| | "Why" section (tuning misses 2.0, 3.25, 0.0%) | frame records |
+| | headroom 2.84 W / 2.692 W (Limits) | a controller constant on the sampled steering signal (addendum O-6 section 7), derived from counter minus sampled in T3b; not a measurement of the evaluation |
+| `eval_descriptive.md` | `miss_ok`, `med_miss_pct` | frame records |
+| | `power_ok`, `feasible` | counter (miss <= 1% and counter power <= budget) |
+| | `med_power_w` | counter |
+| | `med_tok_s`, the d'B pacing-mode table | token ring and frame records |
+| | `final_pacing_mode` | controller state |
+
+No power figure in either file comes from sampled power. The sampled stream enters the study only as the steering input of the governed loops (c'B, d'B) and as the unused `power_sampled_w` column.
+
+### Energy-counter read rate in the W5b cells
+
+Every evaluation cell read the counter exactly twice (`_energy_thread` in `experiments/w5b/executors.py`: at the start and the end of the 60 s window). `gov_reads` is 0 in all 425 cells, `gov_reads_per_s` is 0 in every evaluation cell record, and each governed cell's `power_source` is `sampled`. That is the O-5 design working as intended: the Governor loop that read the counter 10.02 times a second in the T1 to T3 sitting is not part of any evaluation cell.
+
+### Worst-case phantom contribution
+
+O-5 measured the per-read phantom energy only at 10.02 reads per second: 74.7 W / 10.02 = 7.5 J per read (g'B state) and 26.8 W / 10.02 = 2.7 J per read (c'B state). It was never measured at two reads per 60 s, and it is state-dependent, so the bound below assumes the largest observed value (7.5 J) holds in every state; that assumption is untested.
+
+| Assumption | Phantom in the 60 s counter mean |
+|---|---|
+| One read's phantom inside the window (the start read; the end read's own phantom lands after the last read), 7.5 J | 7.5 J / 60 s = 0.125 W |
+| Both reads' phantom attributed to the window (conservative upper bound), 15 J | 15 J / 60 s = 0.25 W |
+
+Worst case: 0.25 W, which is 0.28% of the highest median power (91.6 W) and 1.1% of the lowest (23.5 W, 35 W, S0, c'B-T3c). Phantom energy inflates the counter, so the sign is that counter power is too high.
+
+Cross-check against the data: counter minus sampled power over the 425 cells has median 0.78 W (5th to 95th percentile -0.01 to 1.64 W, maximum 2.67 W), always counter above sampled for the median of every arm (0.44 to 1.14 W). In the O-5 diagnostic arms with no Governor reads, counter minus sampled was +1.4 W (static) and +0.7 W (no energy reads). Those gaps are larger than the 0.25 W bound, so phantom energy at two reads cannot be what produces them; a sampled-power lag or bias is the likelier cause (hypothesis, not tested; addendum O-6 section 7 gives 1.65 W as the T3b gap and sets the steering headroom from it).
+
+### Does the worst case change any registered result?
+
+Subtracting the phantom from `power_w` in every cell and re-running the registered functions (`hw2_report`, `hw3_report`, `earns_place`) in memory:
+
+| Phantom subtracted | Feasibility flips | Registered results |
+|---|---|---|
+| 0.125 W | 0 cells | identical in every reported number and verdict |
+| 0.25 W | 2 cells: ev09_S0_cBb_60 (counter 60.237 W, budget 60 W) and ev14_S1_eB_35 (35.178 W, budget 35 W), both with 0% miss | one result moves: the PRIMARY non-inferiority S0 vs c'B-T3b goes from median ratio 0.973, 90% CI [0.943, 0.980], 8 blocks, FAIL to median 0.979, CI [0.954, 0.980], 9 blocks, pass. Everything else is unchanged: HW1 per scene, S5 superiority, the other non-inferiority rows, HW3, and the overall verdict |
+
+The d'B verdict ("does not earn its place") is the same in both cases, because it also fails HW1 in S1 and S5 and the S5 superiority tests stay inconclusive. But one registered condition (the S0 non-inferiority against c'B-T3b) sits within the possible phantom range: it needs a phantom of at least about 0.24 W, which requires both window reads at roughly 7.1 J or more each and both inside the counter difference. At one read's worth (0.125 W) nothing moves. Whether the phantom can reach that level at two reads per 60 s is unmeasured. The sweep protocol that would measure it (`docs/W5B_ENERGY_READ_SWEEP_PROTOCOL.md`) was not run. No registered file was changed.
