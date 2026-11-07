@@ -124,11 +124,20 @@ Cross-check against the data: counter minus sampled power over the 425 cells has
 
 ### Does the worst case change any registered result?
 
-Subtracting the phantom from `power_w` in every cell and re-running the registered functions (`hw2_report`, `hw3_report`, `earns_place`) in memory:
+Correction (2026-11-07). The first version of this subsection re-ran only the 60 W checks (`hw2_report`, `hw3_report`, `earns_place`) and concluded that one result moves. That was incomplete: it left out the HW1 tables, in particular the 35 W family. A second pass, then a third full pass over every registered output, showed that three results move at 0.25 W. The first version is superseded by this text.
 
-| Phantom subtracted | Feasibility flips | Registered results |
+Method of the full pass: the phantom is subtracted from `power_w` in every cell and every registered output is recomputed in memory with the registered functions (`hw1_table` at 60 W and 35 W for every scene and controller, `hw2_report`, `hw3_report`, `secondary_lines`, `earns_place`), 383 values in all, then compared with the unmodified inputs. Nothing under `data/` was written and `data/w5_results.md` was not regenerated.
+
+| Phantom subtracted | Feasibility flips | Registered outputs that move |
 |---|---|---|
-| 0.125 W | 0 cells | identical in every reported number and verdict |
-| 0.25 W | 2 cells: ev09_S0_cBb_60 (counter 60.237 W, budget 60 W) and ev14_S1_eB_35 (35.178 W, budget 35 W), both with 0% miss | one result moves: the PRIMARY non-inferiority S0 vs c'B-T3b goes from median ratio 0.973, 90% CI [0.943, 0.980], 8 blocks, FAIL to median 0.979, CI [0.954, 0.980], 9 blocks, pass. Everything else is unchanged: HW1 per scene, S5 superiority, the other non-inferiority rows, HW3, and the overall verdict |
+| 0.125 W | 0 cells | none (all 383 values identical) |
+| 0.25 W | 2 cells: ev09_S0_cBb_60 (counter 60.237 W, budget 60 W) and ev14_S1_eB_35 (35.178 W, budget 35 W), both with 0% miss | 3 of 383, listed below |
 
-The d'B verdict ("does not earn its place") is the same in both cases, because it also fails HW1 in S1 and S5 and the S5 superiority tests stay inconclusive. But one registered condition (the S0 non-inferiority against c'B-T3b) sits within the possible phantom range: it needs a phantom of at least about 0.24 W, which requires both window reads at roughly 7.1 J or more each and both inside the counter difference. At one read's worth (0.125 W) nothing moves. Whether the phantom can reach that level at two reads per 60 s is unmeasured. The sweep protocol that would measure it (`docs/W5B_ENERGY_READ_SWEEP_PROTOCOL.md`) was not run. No registered file was changed.
+The three outputs that move at 0.25 W:
+1. Non-inferiority S0 vs c'B-T3b (60 W, PRIMARY): median ratio 0.973, 90% CI [0.943, 0.980], 8 blocks, FAIL becomes 0.979, [0.954, 0.980], 9 blocks, pass.
+2. HW1 for c'B-T3b in S0 (60 W): feasible fraction 0.8 becomes 0.9, and HW1 changes from not holding to holding (the registered threshold is 0.9 with mean miss at most 1%). Cause: ev09_S0_cBb_60 becomes feasible.
+3. HW1 for eB in S1 (35 W, exploratory family): feasible fraction 0.8 becomes 1.0, and HW1 changes from not holding to holding. Cause: ev14_S1_eB_35 becomes feasible.
+
+Nothing else moves: HW1 for d'B in every scene and budget, HW1 for every other controller, S5 superiority, the other non-inferiority rows, HW3 and the overall verdict are identical in both cases. The d'B verdict ("does not earn its place") therefore stands under both readings, because d'B fails HW1 in S1 and S5 regardless and the S5 superiority tests stay inconclusive.
+
+Three registered outputs sit within the possible phantom range. They need a phantom of at least about 0.24 W, which requires both window reads at roughly 7.1 J or more each and both inside the counter difference. At one read's worth (0.125 W) nothing moves. Whether the phantom can reach that level at two reads per 60 s is unmeasured. The sweep protocol that would measure it (`docs/W5B_ENERGY_READ_SWEEP_PROTOCOL.md`) was not run. No registered file was changed.
