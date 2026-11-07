@@ -21,12 +21,14 @@ BIN = ROOT / "third_party" / "llama.cpp_v2" / "build" / "bin"
 MODEL = ROOT / "data" / "llama" / "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
 PROMPT = ROOT / "data" / "llama" / "prompt.txt"
 CONFIGS = [("G1", {"GGML_CUDA_PAUSE_GROUPS": "1"}), ("G2", {"GGML_CUDA_PAUSE_GROUPS": "2"}), ("G4", {"GGML_CUDA_PAUSE_GROUPS": "4"}), ("G7", {"GGML_CUDA_PAUSE_GROUPS": "7"}),
-           ("G14", {"GGML_CUDA_PAUSE_GROUPS": "14"}), ("G28", {"GGML_CUDA_PAUSE_GROUPS": "28"}), ("graphs_off", {"GGML_CUDA_DISABLE_GRAPHS": "1"})]
+           ("G14", {"GGML_CUDA_PAUSE_GROUPS": "14"}), ("G28", {"GGML_CUDA_PAUSE_GROUPS": "28"}), ("graphs_off", {"GGML_CUDA_DISABLE_GRAPHS": "1"}),
+           # control: a forced 2 ms busy-wait at every boundary; the token time must rise by about 2 ms x (G - 1), otherwise the boundaries are not real pause points
+           ("G4_pause2ms", {"GGML_CUDA_PAUSE_GROUPS": "4", "PAUSE_FORCE_US": "2000"}), ("G7_pause2ms", {"GGML_CUDA_PAUSE_GROUPS": "7", "PAUSE_FORCE_US": "2000"})]
 
 
 def run_exe(env_extra, prefix, n_tokens, n_warm, n_prompt=512, timeout=300):
     env = dict(os.environ, PATH=str(BIN) + ";" + os.environ["PATH"])
-    for k in ("GGML_CUDA_PAUSE_GROUPS", "GGML_CUDA_DISABLE_GRAPHS"):
+    for k in ("GGML_CUDA_PAUSE_GROUPS", "GGML_CUDA_DISABLE_GRAPHS", "PAUSE_FORCE_US"):
         env.pop(k, None)
     env.update(env_extra)
     r = subprocess.run([str(EXE), str(MODEL), str(PROMPT), str(prefix), str(n_prompt), str(n_tokens), str(n_warm)], capture_output=True, text=True, timeout=timeout, env=env)

@@ -5,6 +5,7 @@ Per configuration (warm-up tokens dropped, reps pooled by token): median total m
 measured per-boundary overhead in microseconds = (total(G) - total(G1)) / (G - 1). Writes summary.json beside the data and data/v2/s1_pause_cost.png."""
 import csv
 import json
+import re
 import statistics as st
 import sys
 from pathlib import Path
@@ -12,6 +13,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 FORECAST = {1: (0.0, 10.3), 2: (1.0, 5.4), 4: (2.9, 3.1), 7: (5.8, 2.1), 14: (12.6, 1.5), 28: (26.3, 1.1)}      # (slowdown %, longest group ms), committed in docs/V2_SPRINT1_PAUSE_COST.md before measuring
 GO_MAX_GROUP_MS, GO_MAX_OVERHEAD, MARGINAL_MAX_OVERHEAD = 2.5, 15.0, 30.0
+
+
+def plain_g(name):
+    m = re.fullmatch(r"G(\d+)", name)
+    return int(m.group(1)) if m else None
 
 
 def read(p):
@@ -66,8 +72,13 @@ def analyse(d):
     for name, r in res.items():
         r["overhead_pct"] = 100.0 * (r["median_total_ms"] - base) / base
         r["overhead_pct_range_over_reps"] = [100.0 * (min(r["rep_medians_ms"]) - bm) / bm, 100.0 * (max(r["rep_medians_ms"]) - bm) / bm]
-        g = int(name[1:]) if name.startswith("G") else None
+        g = plain_g(name)
         r["per_boundary_us"] = 1000.0 * (r["median_total_ms"] - base) / (g - 1) if g and g > 1 else None
+        fm = re.fullmatch(r"G(\d+)_pause2ms", name)
+        if fm:                                           # control: a forced 2 ms pause per boundary must raise the token time by about 2 ms x (G - 1) over the same G without it
+            gg = int(fm.group(1))
+            r["forced_pause_expected_rise_ms"] = 2.0 * (gg - 1)
+            r["forced_pause_measured_rise_ms"] = r["median_total_ms"] - res[f"G{gg}"]["median_total_ms"]
         if g in FORECAST:
             r["forecast_overhead_pct"], r["forecast_longest_group_ms"] = FORECAST[g]
         if g == 1:
@@ -76,7 +87,7 @@ def analyse(d):
 
 
 def verdict(res):
-    cand = [(int(n[1:]), r) for n, r in res.items() if n.startswith("G") and r["longest_group_ms_median"] is not None and r["longest_group_ms_median"] <= GO_MAX_GROUP_MS]
+    cand = [(plain_g(n), r) for n, r in res.items() if plain_g(n) and r["longest_group_ms_median"] is not None and r["longest_group_ms_median"] <= GO_MAX_GROUP_MS]
     if not cand:
         return "STOP", "no G brings the longest group (median per token) to 2.5 ms or below"
     g, r = min(cand, key=lambda c: c[1]["overhead_pct"])
@@ -89,7 +100,7 @@ def plot(res, out):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    gs = sorted(int(n[1:]) for n in res if n.startswith("G"))
+    gs = sorted(plain_g(n) for n in res if plain_g(n))
     fig, ax = plt.subplots(figsize=(7.2, 4.2))
     ax.plot(gs, [res[f"G{g}"]["overhead_pct"] for g in gs], "o-", color="#1f6feb", label="measured overhead vs G = 1 (%)")
     ax.plot([g for g in gs if g in FORECAST], [FORECAST[g][0] for g in gs if g in FORECAST], "s--", color="#8b949e", label="forecast overhead (%)")
@@ -121,6 +132,9 @@ def main(d):
         print(f"{n:<11}{r['median_total_ms']:>8.2f}{r['overhead_pct']:>8.1f}{r.get('forecast_overhead_pct', nan):>8.1f}{(r['longest_group_ms_median'] or nan):>12.2f}"
               f"{r.get('forecast_longest_group_ms', nan):>9.1f}{(r['gap_us_median'] or nan):>9.0f}{(r['per_boundary_us'] or nan):>13.0f}")
     print("token ids identical across reps:", {n: r["token_ids_identical_across_reps"] for n, r in res.items()})
+    for n, r in res.items():
+        if "forced_pause_expected_rise_ms" in r:
+            print(f"forced-pause control {n}: token time rose {r['forced_pause_measured_rise_ms']:.2f} ms, expected about {r['forced_pause_expected_rise_ms']:.1f} ms (2 ms x (G - 1))")
     print("VERDICT:", rule, "-", why)
     (Path(d) / "summary.json").write_text(json.dumps(dict(meta=meta, results=res, verdict=rule, why=why), indent=1, default=str), encoding="utf-8")
     plot(res, ROOT / "data" / "v2" / "s1_pause_cost.png")

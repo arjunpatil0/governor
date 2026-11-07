@@ -44,12 +44,15 @@ static int read_hint(double out[3]) {            // seqlock read, docs/FRAME_HIN
     return 0;
 }
 
-static void group_hook(int group, int, double t_launch, double t_done, float gpu_ms, void *) {
+static double g_force_pause_s = 0.0;             // PAUSE_FORCE_US: busy-wait at every boundary (not after the last group) to prove the boundaries are real pause points
+
+static void group_hook(int group, int n_groups, double t_launch, double t_done, float gpu_ms, void *) {
     const double a = qpc_now();
     double v[3] = {0, 0, 0}; int ok = read_hint(v);
     volatile int sink = ok + (int)v[0]; (void)sink;
     const double b = qpc_now();
     g_groups.push_back({g_token, group, t_launch, t_done, gpu_ms, (b - a) * 1e6});
+    if (g_force_pause_s > 0.0 && group < n_groups - 1) { const double end = qpc_now() + g_force_pause_s; while (qpc_now() < end) {} }
 }
 
 typedef void (*hook_fn)(int, int, double, double, float, void *);
@@ -85,6 +88,7 @@ int main(int argc, char **argv) {
     HANDLE hm = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 40, NULL);
     g_hint = (volatile uint64_t *)MapViewOfFile(hm, FILE_MAP_ALL_ACCESS, 0, 0, 40);
     { double v[3] = {0.0, 1e300, qpc_now()}; g_hint[1] = 3; memcpy((unsigned char *)g_hint + 16, v, 24); g_hint[0] = 2; }   // published once: not busy, next deadline far away
+    if (const char *fp = getenv("PAUSE_FORCE_US")) g_force_pause_s = atof(fp) * 1e-6;
     if (want_groups) set_hook(group_hook, nullptr);
 
     llama_context_params cp = llama_context_default_params();
