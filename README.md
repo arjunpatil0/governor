@@ -8,7 +8,7 @@ Three measured results, each with its source:
 2. A governor that adapts to the app produced 41.3 tok/s against 32.0 for the best fixed setting (+29%) when the app goes idle, with 0.00% and 0.04% late frames. This is a comparison made after the registered analysis, and the governor missed its registered target (see Results below). Source: [docs/W5B_RESULTS.md](docs/W5B_RESULTS.md) (observation 3), [data/w5b/eval_descriptive.md](data/w5b/eval_descriptive.md).
 3. Windows time-slices GPU processes with a 0.374 ms quantum and a 0.148 ms switch gap. While both processes have work, each runs at about 1/2.5 to 1/2.8 of its solo speed (2.5 fitted to measured runs, 2.79 derived from the two figures above). Source: [docs/W2_SUMMARY.md](docs/W2_SUMMARY.md) (row G and note 4), [docs/CONCEPTS.md](docs/CONCEPTS.md), [data/sim_calibration.json](data/sim_calibration.json).
 
-A GeForce GPU on Windows cannot be partitioned: MPS and MIG are unavailable, so a game and an LLM share the chip by time slices, and a token that overlaps a frame delays it. The toolkit makes the app tell the LLM when the next frame is due, and the LLM starts a token only where it fits.
+A GeForce GPU on Windows cannot be partitioned: MPS and MIG are unavailable, so an app such as a game and an LLM share the chip by time slices, and a token that overlaps a frame delays it. The toolkit makes the app tell the LLM when the next frame is due, and the LLM starts a token only where it fits.
 
 ```mermaid
 flowchart LR
