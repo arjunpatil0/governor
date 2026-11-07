@@ -27,3 +27,16 @@ Benchmark numbers
 
 Next step
 - Sprint 2 (owner's decision): build the real pausable decode against a live frame hint and measure what the other process gains at a pause, which this study did not measure. The output projection (about 1.3 ms) is the floor under the longest group at layer granularity.
+
+## Handover study (v2 sprint 2, 2026-11-08)
+
+What changed
+- Measured, on hardware, whether pausable decode frees the GPU for the 60 fps app: a hint-gated decode driver (per token or per layer group), a cell runner with a marker-kernel handover measurement, the 8B group sweep and 12 end-to-end cells. Results and limits: `docs/V2_SPRINT2_HANDOVER.md`. The 1500 MHz lock of sprint 1 was read back (nvidia-smi and NVML read 1500 MHz throughout).
+
+Benchmark numbers
+- Handover: the foreground's first-kernel delay is about 0.48 ms at p50 and 0.84 to 0.87 ms at p99 whether decode runs whole tokens or 14 groups (max 1.7 ms); the brief's forecast of about 10 ms for whole tokens was wrong (WDDM time-slices every ~0.37 ms, so the app shares the GPU instead of waiting for the token).
+- 8B: token 21.0 ms; G = 14 +1.4% with a 3.61 ms longest group; G = 28 +2.9% with 2.99 ms. The 8B output head is about 2.4 ms, so no G reaches 2.5 ms.
+- End to end (3 reps, 60 s, static aligned gate at 1800 MHz, guard 0): S1 3B 19.95 -> 47.9 tok/s, S5 8B 0.0 -> 24.2 tok/s going from the whole-token gate to 14 groups, late frames 0.00% in all 12 cells, power 57.9 to 59.2 W, `power_rejected` 0. Verdict by the stated rule: WIN on throughput; the late-frame clause could not be tested because the baseline already had none.
+
+Next step
+- Owner's decision: test pausable decode where the baseline misses (the learned governor's unaligned mode, bursty frame costs), and split the output head by rows to bring the 8B longest group under 2.5 ms.
