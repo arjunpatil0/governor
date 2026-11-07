@@ -76,13 +76,13 @@ The registered verdict is that the governor does not earn its place. Its feasibi
 
 ### Sensitivity to the energy-counter read overhead
 
-The registered results are close to the power budget in two cells. We tested how sensitive they are by removing a worst-case energy-counter read overhead from every cell: 0.25 W, extrapolated from O-5 measurements at a higher read rate and not measured at the two reads each cell used. Two cells become feasible (ev09_S0_cBb_60 at 60.237 W against 60 W, ev14_S1_eB_35 at 35.178 W against 35 W), and three of 383 registered outputs move:
+The registered results are close to the power budget in two cells. I tested how sensitive they are by removing a worst-case energy-counter read overhead from every cell: 0.25 W, extrapolated from O-5 measurements at a higher read rate and not measured at the two reads each cell used. Two cells become feasible (ev09_S0_cBb_60 at 60.237 W against 60 W, ev14_S1_eB_35 at 35.178 W against 35 W), and three of 383 registered outputs move:
 
 - S0 non-inferiority vs c'B-T3b (60 W, primary): 0.973, [0.943, 0.980], 8 blocks, FAIL becomes 0.979, [0.954, 0.980], 9 blocks, pass.
 - HW1 for c'B-T3b in S0 (60 W): feasibility 0.8 to 0.9, not holding to holding.
 - HW1 for eB in S1 (35 W, exploratory): feasibility 0.8 to 1.0, not holding to holding.
 
-No other output changes, including HW1 for the governor (d'B) in every scene, so its overall verdict stands. At the single-read bound (0.125 W) nothing changes. We report the registered results; the energy-read sweep in Future Work would settle which reading is correct.
+No other output changes, including HW1 for the governor (d'B) in every scene, so its overall verdict stands. At the single-read bound (0.125 W) nothing changes. I report the registered results; the energy-read sweep in Future Work would settle which reading is correct.
 
 A learned predictor was tried before the evaluation and did not change the design. On 271 held-out cells, a gradient-boosted model of feasibility made 1 false-feasible call (0.8%), against 39 (22.5%) for the analytic grey-box model, but it failed the registered coverage gate with 88.2% against 90%, and no candidate passed all gates. The registered fallback kept the grey-box model.
 
