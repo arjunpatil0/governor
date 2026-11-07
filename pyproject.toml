@@ -14,7 +14,7 @@ dependencies = []                      # the package itself uses only the standa
 [project.optional-dependencies]
 sim = ["numpy", "pandas", "scipy"]     # the plant simulator (sim/), the analysis and the examples that use it
 dashboard = ["numpy", "psutil", "nvidia-ml-py", "pywin32; sys_platform == 'win32'"]
-test = ["pytest", "numpy", "pandas", "scipy", "psutil", "pyyaml", "nvidia-ml-py", "pywin32; sys_platform == 'win32'"]   # the full suite also needs MSVC for the C tests and a GPU for the hardware tests
+test = ["pytest", "numpy", "pandas", "scipy", "psutil", "pyyaml", "matplotlib", "nvidia-ml-py", "pywin32; sys_platform == 'win32'"]   # the full suite also needs MSVC for the C tests and a GPU for the hardware tests
 
 [tool.setuptools]
 package-dir = { "" = "python" }
