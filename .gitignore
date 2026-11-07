@@ -12,3 +12,9 @@ workloads/background/*.obj
 data/nsys/*.nsys-rep
 data/nsys/*.sqlite
 data/w5b/_dryrun/
+
+.venv/
+*.egg-info/
+build/
+dist/
+docs/report/REPORT.html
