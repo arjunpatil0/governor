@@ -316,10 +316,14 @@ class LiveSource:
     registry, with the project's own SharedRing / SeqBlock readers (create=False: no header is ever written), plus sampled NVML power and SM clock."""
     mode = "live"
 
-    def __init__(self, session, poller=None, clock=time.perf_counter):
+    def __init__(self, session, poller=None, clock=time.perf_counter, vram=None):
         from telemetry.decision_block import DecisionBlock
         from telemetry.ring import SeqBlock, SharedRing
         self.session, self.clock, self.poller = session, clock, poller if poller is not None else NvmlPoller()
+        if vram is None and poller is None:                                  # production: per-process GPU memory (telemetry/vram.py, sampled, no energy counter); tests that inject a poller get none
+            from telemetry.vram import VramPoller
+            vram = VramPoller()
+        self.vram, self._vram_t = vram, None
         n = session["names"]
         self.frames = SharedRing(n["frames"], n.get("frames_capacity", 8192), 3, create=False)
         self.tokens = SharedRing(n["tokens"], n.get("tokens_capacity", 65536), 2, create=False)
@@ -381,7 +385,13 @@ class LiveSource:
         el = max(1e-9, now)
         stats = dict(frames=self.n_frames, late=self.n_late, tokens=self.n_tokens, miss_pct=100.0 * self.n_late / self.n_frames if self.n_frames else None, tok_s=self.n_tokens / el,
                      power_w=self.psum / self.pn if self.pn else None, window_s=el, power_glitches=self.power_glitches)
-        return clean(dict(seq=self.seq, mode="live", t=now, rate=1.0, phase="live", events=ev, pace=pace, stats=stats, dropped=int(dropped)))
+        msg = dict(seq=self.seq, mode="live", t=now, rate=1.0, phase="live", events=ev, pace=pace, stats=stats, dropped=int(dropped))
+        v = self.vram.read() if self.vram is not None else None
+        if v is not None and v["t"] != self._vram_t:                         # only when a new sample exists; the page keeps the last one
+            self._vram_t = v["t"]
+            msg["vram"] = dict(total_mib=v["total_mib"], used_mib=v["used_mib"], procs=sorted(
+                [dict(pid=pid, name=d.get("name"), mib=d["mib"], source=d["source"]) for pid, d in v["procs"].items()], key=lambda r: -(r["mib"] or 0)))
+        return clean(msg)
 
     def control(self, action, value=None):
         raise ValueError("a live feed cannot be controlled from the dashboard (read-only)")
@@ -389,3 +399,5 @@ class LiveSource:
     def close(self):
         if hasattr(self.poller, "close"):
             self.poller.close()
+        if self.vram is not None:
+            self.vram.stop()
