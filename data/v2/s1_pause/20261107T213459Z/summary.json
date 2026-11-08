@@ -1,0 +1,432 @@
+{
+ "meta": {
+  "stamp": "20261107T213459Z",
+  "clock_mhz": 1500,
+  "reps": 3,
+  "n_tokens": 300,
+  "n_warm": 20,
+  "model": "C:\\Users\\arjun\\governor\\data\\llama\\Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+  "exe": "C:\\Users\\arjun\\governor\\workloads\\background\\llama_pause_bench.exe",
+  "configs": [
+   "G1",
+   "G2",
+   "G4",
+   "G7",
+   "G14",
+   "G28",
+   "graphs_off",
+   "G4_pause2ms",
+   "G7_pause2ms"
+  ],
+  "exec_lines": {
+   "G1_rep1": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=0",
+    "DONE tokens=320 group_records=0"
+   ],
+   "G2_rep1": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=2 graphs_disabled=0",
+    "DONE tokens=320 group_records=642"
+   ],
+   "G4_rep1": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+    "DONE tokens=320 group_records=1284"
+   ],
+   "G7_rep1": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+    "DONE tokens=320 group_records=2247"
+   ],
+   "G14_rep1": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=14 graphs_disabled=0",
+    "DONE tokens=320 group_records=4494"
+   ],
+   "G28_rep1": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=28 graphs_disabled=0",
+    "DONE tokens=320 group_records=8988"
+   ],
+   "graphs_off_rep1": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=1",
+    "DONE tokens=320 group_records=0"
+   ],
+   "G4_pause2ms_rep1": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+    "DONE tokens=320 group_records=1284"
+   ],
+   "G7_pause2ms_rep1": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+    "DONE tokens=320 group_records=2247"
+   ],
+   "G1_rep2": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=0",
+    "DONE tokens=320 group_records=0"
+   ],
+   "G2_rep2": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=2 graphs_disabled=0",
+    "DONE tokens=320 group_records=642"
+   ],
+   "G4_rep2": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+    "DONE tokens=320 group_records=1284"
+   ],
+   "G7_rep2": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+    "DONE tokens=320 group_records=2247"
+   ],
+   "G14_rep2": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=14 graphs_disabled=0",
+    "DONE tokens=320 group_records=4494"
+   ],
+   "G28_rep2": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=28 graphs_disabled=0",
+    "DONE tokens=320 group_records=8988"
+   ],
+   "graphs_off_rep2": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=1",
+    "DONE tokens=320 group_records=0"
+   ],
+   "G4_pause2ms_rep2": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+    "DONE tokens=320 group_records=1284"
+   ],
+   "G7_pause2ms_rep2": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+    "DONE tokens=320 group_records=2247"
+   ],
+   "G1_rep3": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=0",
+    "DONE tokens=320 group_records=0"
+   ],
+   "G2_rep3": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=2 graphs_disabled=0",
+    "DONE tokens=320 group_records=642"
+   ],
+   "G4_rep3": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+    "DONE tokens=320 group_records=1284"
+   ],
+   "G7_rep3": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+    "DONE tokens=320 group_records=2247"
+   ],
+   "G14_rep3": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=14 graphs_disabled=0",
+    "DONE tokens=320 group_records=4494"
+   ],
+   "G28_rep3": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=28 graphs_disabled=0",
+    "DONE tokens=320 group_records=8988"
+   ],
+   "graphs_off_rep3": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=1 graphs_disabled=1",
+    "DONE tokens=320 group_records=0"
+   ],
+   "G4_pause2ms_rep3": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=4 graphs_disabled=0",
+    "DONE tokens=320 group_records=1284"
+   ],
+   "G7_pause2ms_rep3": [
+    "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=7 graphs_disabled=0",
+    "DONE tokens=320 group_records=2247"
+   ]
+  }
+ },
+ "results": {
+  "G1": {
+   "median_total_ms": 10.1375,
+   "p99_total_ms": 11.483848,
+   "rep_medians_ms": [
+    10.13945,
+    10.1349,
+    10.140699999999999
+   ],
+   "n_tokens": 900,
+   "token_ids_identical_across_reps": true,
+   "longest_group_ms_median": 10.1375,
+   "longest_group_ms_p99": null,
+   "group_gpu_ms_median": {},
+   "gap_us_median": null,
+   "gap_us_p99": null,
+   "hint_check_us_median": null,
+   "overhead_pct": 0.0,
+   "overhead_pct_range_over_reps": [
+    -0.044874228878292746,
+    0.012328084856662473
+   ],
+   "per_boundary_us": null,
+   "forecast_overhead_pct": 0.0,
+   "forecast_longest_group_ms": 10.3
+  },
+  "G2": {
+   "median_total_ms": 10.16815,
+   "p99_total_ms": 11.212528,
+   "rep_medians_ms": [
+    10.1903,
+    10.157,
+    10.160150000000002
+   ],
+   "n_tokens": 900,
+   "token_ids_identical_across_reps": true,
+   "longest_group_ms_median": 5.57056,
+   "longest_group_ms_p99": 5.77435648,
+   "group_gpu_ms_median": {
+    "0": 4.212688,
+    "1": 5.57056
+   },
+   "gap_us_median": 0.700005330145359,
+   "gap_us_p99": 6.108988309279076,
+   "hint_check_us_median": 0.0,
+   "overhead_pct": 0.3023427866831211,
+   "overhead_pct_range_over_reps": [
+    0.1730863113876981,
+    0.5015064919694905
+   ],
+   "per_boundary_us": 30.6500000000014,
+   "forecast_overhead_pct": 1.0,
+   "forecast_longest_group_ms": 5.4
+  },
+  "G4": {
+   "median_total_ms": 10.1891,
+   "p99_total_ms": 11.225625,
+   "rep_medians_ms": [
+    10.1852,
+    10.206399999999999,
+    10.168199999999999
+   ],
+   "n_tokens": 900,
+   "token_ids_identical_across_reps": true,
+   "longest_group_ms_median": 3.474432,
+   "longest_group_ms_p99": 3.61370624,
+   "group_gpu_ms_median": {
+    "0": 2.114224,
+    "1": 2.107184,
+    "2": 2.103296,
+    "3": 3.474432
+   },
+   "gap_us_median": 0.500003807246685,
+   "gap_us_p99": 5.903015553485668,
+   "hint_check_us_median": 0.0,
+   "overhead_pct": 0.5090012330456279,
+   "overhead_pct_range_over_reps": [
+    0.2835459517034821,
+    0.6602922249234279
+   ],
+   "per_boundary_us": 17.200000000000177,
+   "forecast_overhead_pct": 2.9,
+   "forecast_longest_group_ms": 3.1
+  },
+  "G7": {
+   "median_total_ms": 10.23215,
+   "p99_total_ms": 11.331952,
+   "rep_medians_ms": [
+    10.242,
+    10.2233,
+    10.23255
+   ],
+   "n_tokens": 900,
+   "token_ids_identical_across_reps": true,
+   "longest_group_ms_median": 2.581504,
+   "longest_group_ms_p99": 2.68392448,
+   "group_gpu_ms_median": {
+    "0": 1.226464,
+    "1": 1.210368,
+    "2": 1.18784,
+    "3": 1.183744,
+    "4": 1.21344,
+    "5": 1.210368,
+    "6": 2.581504
+   },
+   "gap_us_median": 0.500003807246685,
+   "gap_us_p99": 3.7009990774095276,
+   "hint_check_us_median": 0.0,
+   "overhead_pct": 0.9336621454993979,
+   "overhead_pct_range_over_reps": [
+    0.8269679321856707,
+    1.011396081641517
+   ],
+   "per_boundary_us": 15.775000000000242,
+   "forecast_overhead_pct": 5.8,
+   "forecast_longest_group_ms": 2.1
+  },
+  "G14": {
+   "median_total_ms": 10.35975,
+   "p99_total_ms": 11.403118000000001,
+   "rep_medians_ms": [
+    10.35415,
+    10.3703,
+    10.35455
+   ],
+   "n_tokens": 900,
+   "token_ids_identical_across_reps": true,
+   "longest_group_ms_median": 1.948672,
+   "longest_group_ms_p99": 2.02140672,
+   "group_gpu_ms_median": {
+    "0": 0.647184,
+    "1": 0.585728,
+    "2": 0.608256,
+    "3": 0.611328,
+    "4": 0.584704,
+    "5": 0.611328,
+    "6": 0.611328,
+    "7": 0.581632,
+    "8": 0.611328,
+    "9": 0.611328,
+    "10": 0.608256,
+    "11": 0.61232,
+    "12": 0.641024,
+    "13": 1.948672
+   },
+   "gap_us_median": 0.400003045797348,
+   "gap_us_p99": 3.2999960239976645,
+   "hint_check_us_median": 0.0,
+   "overhead_pct": 2.1923551171393414,
+   "overhead_pct_range_over_reps": [
+    2.1174718549822775,
+    2.2767507113304983
+   ],
+   "per_boundary_us": 17.096153846153904,
+   "forecast_overhead_pct": 12.6,
+   "forecast_longest_group_ms": 1.5
+  },
+  "G28": {
+   "median_total_ms": 10.5746,
+   "p99_total_ms": 11.662945,
+   "rep_medians_ms": [
+    10.5716,
+    10.5771,
+    10.568750000000001
+   ],
+   "n_tokens": 900,
+   "token_ids_identical_across_reps": true,
+   "longest_group_ms_median": 1.632256,
+   "longest_group_ms_p99": 1.683456,
+   "group_gpu_ms_median": {
+    "0": 0.329376,
+    "1": 0.324608,
+    "2": 0.294912,
+    "3": 0.297984,
+    "4": 0.320512,
+    "5": 0.294912,
+    "6": 0.297984,
+    "7": 0.320512,
+    "8": 0.294912,
+    "9": 0.297984,
+    "10": 0.324608,
+    "11": 0.294912,
+    "12": 0.293888,
+    "13": 0.323584,
+    "14": 0.294272,
+    "15": 0.294912,
+    "16": 0.324592,
+    "17": 0.2948,
+    "18": 0.293888,
+    "19": 0.324608,
+    "20": 0.321472,
+    "21": 0.294912,
+    "22": 0.294912,
+    "23": 0.324608,
+    "24": 0.324608,
+    "25": 0.324544,
+    "26": 0.324608,
+    "27": 1.632256
+   },
+   "gap_us_median": 0.400003045797348,
+   "gap_us_p99": 2.700020559132099,
+   "hint_check_us_median": 0.0,
+   "overhead_pct": 4.311713933415546,
+   "overhead_pct_range_over_reps": [
+    4.233957463176024,
+    4.316309070018587
+   ],
+   "per_boundary_us": 16.188888888888922,
+   "forecast_overhead_pct": 26.3,
+   "forecast_longest_group_ms": 1.1
+  },
+  "graphs_off": {
+   "median_total_ms": 11.575050000000001,
+   "p99_total_ms": 13.896171,
+   "rep_medians_ms": [
+    11.556799999999999,
+    11.4997,
+    11.7015
+   ],
+   "n_tokens": 900,
+   "token_ids_identical_across_reps": true,
+   "longest_group_ms_median": null,
+   "longest_group_ms_p99": null,
+   "group_gpu_ms_median": {},
+   "gap_us_median": null,
+   "gap_us_p99": null,
+   "hint_check_us_median": null,
+   "overhead_pct": 14.180517879161547,
+   "overhead_pct_range_over_reps": [
+    13.41542194103231,
+    15.405667960293696
+   ],
+   "per_boundary_us": null
+  },
+  "G4_pause2ms": {
+   "median_total_ms": 16.2548,
+   "p99_total_ms": 17.238392,
+   "rep_medians_ms": [
+    16.249650000000003,
+    16.2461,
+    16.27845
+   ],
+   "n_tokens": 900,
+   "token_ids_identical_across_reps": true,
+   "longest_group_ms_median": 3.47528,
+   "longest_group_ms_p99": 3.6127027199999997,
+   "group_gpu_ms_median": {
+    "0": 2.119984,
+    "1": 2.106368,
+    "2": 2.103296,
+    "3": 3.47528
+   },
+   "gap_us_median": 2000.6000122521073,
+   "gap_us_p99": 2006.901002023369,
+   "hint_check_us_median": 0.0,
+   "overhead_pct": 60.343279901356354,
+   "overhead_pct_range_over_reps": [
+    60.22663951200507,
+    60.5456903480958
+   ],
+   "per_boundary_us": null,
+   "forced_pause_expected_rise_ms": 6.0,
+   "forced_pause_measured_rise_ms": 6.0657
+  },
+  "G7_pause2ms": {
+   "median_total_ms": 22.39765,
+   "p99_total_ms": 23.449623,
+   "rep_medians_ms": [
+    22.3995,
+    22.39,
+    22.4026
+   ],
+   "n_tokens": 900,
+   "token_ids_identical_across_reps": true,
+   "longest_group_ms_median": 2.58336,
+   "longest_group_ms_p99": 2.71362048,
+   "group_gpu_ms_median": {
+    "0": 1.231712,
+    "1": 1.213824,
+    "2": 1.189888,
+    "3": 1.185792,
+    "4": 1.215488,
+    "5": 1.212416,
+    "6": 2.58336
+   },
+   "gap_us_median": 2000.5999831482768,
+   "gap_us_p99": 2005.1010174211115,
+   "hint_check_us_median": 0.0,
+   "overhead_pct": 120.93859432799013,
+   "overhead_pct_range_over_reps": [
+    120.82065595273906,
+    120.94492304809432
+   ],
+   "per_boundary_us": null,
+   "forced_pause_expected_rise_ms": 12.0,
+   "forced_pause_measured_rise_ms": 12.165499999999998
+  }
+ },
+ "verdict": "GO",
+ "why": "the best G meeting the 2.5 ms group limit is G = 14 (longest group 1.95 ms) with a per-token overhead of 2.2% against G = 1"
+}

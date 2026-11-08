@@ -1,0 +1,53 @@
+{
+ "stamp": "20261107T220932Z",
+ "model_file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+ "clock_mhz": 1500,
+ "reps": 3,
+ "n_tokens": 300,
+ "n_warm": 20,
+ "model": "C:\\Users\\arjun\\governor\\data\\llama\\Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+ "exe": "C:\\Users\\arjun\\governor\\workloads\\background\\llama_pause_bench.exe",
+ "configs": [
+  "G1",
+  "G14",
+  "G28"
+ ],
+ "exec_lines": {
+  "G1_rep1": [
+   "EXEC_MODE cuda offloaded=33/33 n_layer=32 groups=1 graphs_disabled=0",
+   "DONE tokens=320 group_records=0"
+  ],
+  "G14_rep1": [
+   "EXEC_MODE cuda offloaded=33/33 n_layer=32 groups=14 graphs_disabled=0",
+   "DONE tokens=320 group_records=4494"
+  ],
+  "G28_rep1": [
+   "EXEC_MODE cuda offloaded=33/33 n_layer=32 groups=28 graphs_disabled=0",
+   "DONE tokens=320 group_records=8988"
+  ],
+  "G1_rep2": [
+   "EXEC_MODE cuda offloaded=33/33 n_layer=32 groups=1 graphs_disabled=0",
+   "DONE tokens=320 group_records=0"
+  ],
+  "G14_rep2": [
+   "EXEC_MODE cuda offloaded=33/33 n_layer=32 groups=14 graphs_disabled=0",
+   "DONE tokens=320 group_records=4494"
+  ],
+  "G28_rep2": [
+   "EXEC_MODE cuda offloaded=33/33 n_layer=32 groups=28 graphs_disabled=0",
+   "DONE tokens=320 group_records=8988"
+  ],
+  "G1_rep3": [
+   "EXEC_MODE cuda offloaded=33/33 n_layer=32 groups=1 graphs_disabled=0",
+   "DONE tokens=320 group_records=0"
+  ],
+  "G14_rep3": [
+   "EXEC_MODE cuda offloaded=33/33 n_layer=32 groups=14 graphs_disabled=0",
+   "DONE tokens=320 group_records=4494"
+  ],
+  "G28_rep3": [
+   "EXEC_MODE cuda offloaded=33/33 n_layer=32 groups=28 graphs_disabled=0",
+   "DONE tokens=320 group_records=8988"
+  ]
+ }
+}

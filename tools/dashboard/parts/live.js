@@ -133,6 +133,7 @@ function paintMode() {
   for (const [m, id] of [['live', 'mb-live'], ['replay', 'mb-replay'], ['sim', 'mb-sim']]) $(id).setAttribute('aria-pressed', String(mode === m));
   $('modeline').textContent = modeLine();
   $('replaybar').hidden = mode !== 'replay';
+  $('vrampanel').hidden = mode !== 'live';
   $('pause').hidden = mode === 'live';
   const sp = $('speed');
   if (mode === 'replay') { sp.innerHTML = REPLAY_SPEEDS.map(([v, l]) => '<option value="' + v + '">' + l + '</option>').join(''); sp.value = '0.1'; }
@@ -161,8 +162,21 @@ function onHello(d) {
   const q = new URLSearchParams(location.search);
   if (mode === 'replay' && q.get('t')) api('/api/replay', { action: 'seek', value: +q.get('t') }).then(() => q.get('pause') ? api('/api/replay', { action: 'pause' }) : null).catch(() => {});
 }
+function paintVram(v) {
+  const rows = $('vram-rows'); rows.textContent = '';
+  $('vram-total').textContent = ' (' + Math.round(v.used_mib) + ' of ' + Math.round(v.total_mib) + ' MiB in use)';
+  for (const p of v.procs) {
+    const r = document.createElement('div'); r.className = 'vrow';
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = (p.name || 'process') + ' (' + p.pid + ')';
+    const bar = document.createElement('span'); bar.className = 'bar'; const fill = document.createElement('i'); fill.style.width = (num(p.mib) ? Math.min(100, 100 * p.mib / v.total_mib) : 0) + '%'; bar.appendChild(fill);
+    const mb = document.createElement('span'); mb.className = 'mb'; mb.textContent = num(p.mib) ? Math.round(p.mib) + ' MiB' : 'n/a';
+    r.append(nm, bar, mb); rows.appendChild(r);
+  }
+  $('vram-note').textContent = v.procs.length ? 'Processes the driver lists as using the GPU; figures from the Windows per-process counter (dedicated memory).' : 'No process is using the GPU right now.';
+}
 function onTick(d) {
   if (!feed) return;
+  if (mode === 'live' && d.vram) paintVram(d.vram);
   feed.ingest(d);
   if (mode === 'replay') syncReplayUi(d);
   else paintOutcome(false);

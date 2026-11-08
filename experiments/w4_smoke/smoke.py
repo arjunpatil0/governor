@@ -30,6 +30,7 @@ from telemetry.daemon import Daemon  # noqa: E402
 from telemetry.fg_publisher import FramePublisher  # noqa: E402
 from telemetry.nvml_source import NvmlSource  # noqa: E402
 from telemetry.obs_builder import ObsBuilder  # noqa: E402
+from telemetry.power_guard import PowerGuard  # noqa: E402
 from telemetry.ring import SeqBlock, SharedRing  # noqa: E402
 from workloads.common.exe_warm import ensure_warm  # noqa: E402
 from workloads.foreground.frame_loop import FmaFrameRunner, FrameLoop  # noqa: E402
@@ -87,18 +88,31 @@ def save(d, step, obj):
 
 
 class NvmlSampler(threading.Thread):
-    """~200 Hz SM clock / power sampler (QPC timestamps)."""
-    def __init__(self):
+    """~200 Hz SM clock / power sampler (QPC timestamps). v2 guard (docs/AUDIT_590W.md): a power reading that is negative or above 1.5x the card's maximum power limit (the 588 to 590 W NVML glitch)
+    is replaced by the last accepted reading (the sample is skipped if there is none yet), counted in guard.rejected, and the raw value and its time are kept in rej_w / rej_t. nv, h and guard can be injected (tests)."""
+    def __init__(self, nv=None, h=None, guard=None):
         super().__init__(daemon=True)
-        import pynvml as nv
-        nv.nvmlInit(); self.nv, self.h = nv, nv.nvmlDeviceGetHandleByIndex(0)
-        self.t, self.sm, self.pw = [], [], []
+        if nv is None:
+            import pynvml as nv
+            nv.nvmlInit(); h = nv.nvmlDeviceGetHandleByIndex(0)
+        self.nv, self.h = nv, h
+        self.guard = guard if guard is not None else PowerGuard.from_nvml(nv, h)
+        self.t, self.sm, self.pw, self.rej_t, self.rej_w = [], [], [], [], []
         self.stop_ev = threading.Event()
 
-    def run(self):
+    def sample_once(self):
         nv, h = self.nv, self.h
+        t, sm, raw = time.perf_counter(), nv.nvmlDeviceGetClockInfo(h, nv.NVML_CLOCK_SM), nv.nvmlDeviceGetPowerUsage(h) / 1000.0
+        p, ok = self.guard.filter(raw)
+        if not ok:
+            self.rej_t.append(t); self.rej_w.append(raw)
+        if p is None:
+            return
+        self.t.append(t); self.sm.append(sm); self.pw.append(p)
+
+    def run(self):
         while not self.stop_ev.is_set():
-            self.t.append(time.perf_counter()); self.sm.append(nv.nvmlDeviceGetClockInfo(h, nv.NVML_CLOCK_SM)); self.pw.append(nv.nvmlDeviceGetPowerUsage(h) / 1000.0)
+            self.sample_once()
             time.sleep(0.004)
 
     def stop(self):

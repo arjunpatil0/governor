@@ -1,0 +1,26 @@
+{
+ "frames": 3600,
+ "miss_frac": 0.014444444444444444,
+ "fg_p50_ms": 6.9660833542002365,
+ "fg_p99_ms": 17.758020318578875,
+ "bg_tokens": 2751,
+ "bg_tok_s": 45.85,
+ "tok_ms_p50": 18.2644,
+ "tok_ms_p99": 50.350899999999996,
+ "power_w": 57.645266666666664,
+ "energy_j": 3458.716,
+ "j_per_token": 1.2572577244638312,
+ "arm": "3b_g14",
+ "level": "heavy",
+ "rep": 2,
+ "seed": 3002,
+ "scene": "S1",
+ "t0": 244005.0287072,
+ "power_rejected": 0,
+ "sm_mhz_median": 1800.0,
+ "abandoned": 0,
+ "exec": [
+  "EXEC_MODE cuda offloaded=29/29 n_layer=28 groups=14 gate=1 guard_ms=0.00",
+  "DONE tokens=3067 groups=42938 ctx_end=3579"
+ ]
+}

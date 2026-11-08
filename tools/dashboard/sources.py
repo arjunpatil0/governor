@@ -14,7 +14,6 @@ import numpy as np
 
 PERIOD_S = 1.0 / 60.0
 WARM_S, MEASURE_S = 5.0, 60.0                         # the cell protocol (experiments/w5b/executors.py): 5 s warm-up, 60 s measured window
-POWER_PLAUSIBLE_MAX_W = 250.0                         # the RTX 4070 Laptop GPU cannot draw more; larger NVML readings are glitches
 LOOKAHEAD_S = 0.12                                   # replay messages carry events up to this far past "now" so the page can draw frames and tokens that are in progress
 MODEL_LABEL = {"llama32_1b": "1B", "llama32_3b": "3B", "phi35_mini": "Phi", "llama31_8b": "8B"}
 MODEL_CODE = {"llama32_1b": "1b", "llama32_3b": "3b", "phi35_mini": "phi", "llama31_8b": "8b"}
@@ -316,10 +315,16 @@ class LiveSource:
     registry, with the project's own SharedRing / SeqBlock readers (create=False: no header is ever written), plus sampled NVML power and SM clock."""
     mode = "live"
 
-    def __init__(self, session, poller=None, clock=time.perf_counter):
+    def __init__(self, session, poller=None, clock=time.perf_counter, vram=None, guard=None):
         from telemetry.decision_block import DecisionBlock
         from telemetry.ring import SeqBlock, SharedRing
         self.session, self.clock, self.poller = session, clock, poller if poller is not None else NvmlPoller()
+        if vram is None and poller is None:                                  # production: per-process GPU memory (telemetry/vram.py, sampled, no energy counter); tests that inject a poller get none
+            from telemetry.vram import VramPoller
+            vram = VramPoller()
+        self.vram, self._vram_t = vram, None
+        from telemetry.power_guard import PowerGuard
+        self.guard = guard if guard is not None else PowerGuard.default()         # reject readings above 1.5x the card's maximum power limit (docs/AUDIT_590W.md)
         n = session["names"]
         self.frames = SharedRing(n["frames"], n.get("frames_capacity", 8192), 3, create=False)
         self.tokens = SharedRing(n["tokens"], n.get("tokens_capacity", 65536), 2, create=False)
@@ -355,7 +360,7 @@ class LiveSource:
         ev["tokens"] = [[r[0] - r[1] / 1000.0 - self.ta, r[0] - self.ta] for r in tk]
         self.n_tokens += len(tk)
         p, sm = self.poller.read()
-        if p is not None and not (0.0 <= p <= POWER_PLAUSIBLE_MAX_W):                  # NVML on this laptop sometimes returns 590 W (590006 mW) for a few samples: not a power the GPU can draw; dropped and counted
+        if p is not None and not self.guard.ok(p):                  # NVML on this laptop sometimes returns 590 W (590006 mW) for a few samples: not a power the GPU can draw; dropped and counted
             self.power_glitches, p = self.power_glitches + 1, None
         ev["power"] = [] if p is None else [[now, p]]
         ev["sm"] = [] if sm is None else [[now, sm]]
@@ -381,7 +386,13 @@ class LiveSource:
         el = max(1e-9, now)
         stats = dict(frames=self.n_frames, late=self.n_late, tokens=self.n_tokens, miss_pct=100.0 * self.n_late / self.n_frames if self.n_frames else None, tok_s=self.n_tokens / el,
                      power_w=self.psum / self.pn if self.pn else None, window_s=el, power_glitches=self.power_glitches)
-        return clean(dict(seq=self.seq, mode="live", t=now, rate=1.0, phase="live", events=ev, pace=pace, stats=stats, dropped=int(dropped)))
+        msg = dict(seq=self.seq, mode="live", t=now, rate=1.0, phase="live", events=ev, pace=pace, stats=stats, dropped=int(dropped))
+        v = self.vram.read() if self.vram is not None else None
+        if v is not None and v["t"] != self._vram_t:                         # only when a new sample exists; the page keeps the last one
+            self._vram_t = v["t"]
+            msg["vram"] = dict(total_mib=v["total_mib"], used_mib=v["used_mib"], procs=sorted(
+                [dict(pid=pid, name=d.get("name"), mib=d["mib"], source=d["source"]) for pid, d in v["procs"].items()], key=lambda r: -(r["mib"] or 0)))
+        return clean(msg)
 
     def control(self, action, value=None):
         raise ValueError("a live feed cannot be controlled from the dashboard (read-only)")
@@ -389,3 +400,5 @@ class LiveSource:
     def close(self):
         if hasattr(self.poller, "close"):
             self.poller.close()
+        if self.vram is not None:
+            self.vram.stop()
