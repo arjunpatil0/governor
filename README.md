@@ -2,6 +2,22 @@
 
 A toolkit for sharing one laptop GPU between a deadline-bound app and a local LLM.
 
+## v2: pausable decode
+
+llama.cpp decodes a token as one CUDA graph, so v1 could start a token only if a whole token fit between frames. v2 splits the token into layer groups with a pause point between them and gates each group on the frame hint, so decode can use a gap shorter than a token. Three results, each with its source:
+
+1. Pausing makes a token 1.4% (Llama-3.1-8B) to 2.2% (Llama-3.2-3B) slower at 14 groups, with token-identical output; the longest uninterruptible piece is 1.95 ms for the 3B. Source: [docs/V2_SPRINT1_PAUSE_COST.md](docs/V2_SPRINT1_PAUSE_COST.md) (forecast against measured table), [docs/V2_SPRINT2_HANDOVER.md](docs/V2_SPRINT2_HANDOVER.md) (8B profile).
+2. At 0.00% late frames, the 8B went from 0 to 24.2 tok/s and the 3B from 19.95 to 47.9 tok/s, whole-token gate against 14-group gate. Source: [docs/V2_SPRINT2_HANDOVER.md](docs/V2_SPRINT2_HANDOVER.md) (end-to-end table), `data/v2/s2/`.
+3. With about 4 ms free per frame, whole-token decode gets 0 tok/s and pausable decode gets 17.5 tok/s, with an excess of 0.28 percentage points of late frames over the app alone (inside the noise band). With about 2 ms free it gets 7.2 tok/s at +1.71 pp, a stress level at which the app alone misses 29% of its frames. Source: [docs/V2_SPRINT4_LOW_SLACK.md](docs/V2_SPRINT4_LOW_SLACK.md) (main table), `data/v2/s4/`.
+
+The foreground in all of these is a synthetic kernel loop and the gates are static rules; this is not a registered comparison with the v1 governor.
+
+![Decode throughput and excess late frames against free GPU time per frame, whole-token gate against pausable gate](docs/figures/v2_cliff_vs_smooth.png)
+
+The figure joins conditions from three sprints that differ in foreground scene, guard and jitter; the caption in the report says how. Read [the v2 report](docs/report/REPORT_V2.pdf) (5 pages, source [REPORT_V2.md](docs/report/REPORT_V2.md), claim table [SOURCES_V2.md](docs/report/SOURCES_V2.md)) and [how the mechanism works and how to build the patched llama.cpp](docs/PAUSABLE_DECODE.md). The v1 results follow: [v1: three measured results](#v1-three-measured-results).
+
+## v1: three measured results
+
 Three measured results, each with its source:
 
 1. LLM decode keeps 96% of its throughput at 39% less power when the GPU clock is locked at 1500 MHz: 97.25 tok/s against 101.1 unlocked, at 56.3 W against 92 W. Source: [docs/W2_SUMMARY.md](docs/W2_SUMMARY.md) (row L), [data/w2_L_results.md](data/w2_L_results.md).
