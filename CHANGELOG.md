@@ -40,3 +40,14 @@ Benchmark numbers
 
 Next step
 - Owner's decision: test pausable decode where the baseline misses (the learned governor's unaligned mode, bursty frame costs), and split the output head by rows to bring the 8B longest group under 2.5 ms.
+
+## Jitter study (v2 sprint 3, 2026-11-08)
+
+What changed
+- Tested whether the pausable gate keeps frames on time when the app is irregular: a seeded jitter loop for the synthetic foreground (frame cost, submit time, unannounced bursts), a SOLO arm so that decode is not blamed for the app's own late frames, and a late-frame cause breakdown matched to SOLO by sequence index. Results and limits: `docs/V2_SPRINT3_JITTER.md`. The forecast and decision rule were pushed before any data existed.
+
+Benchmark numbers
+- 28 cells (none 1 rep; moderate and heavy 3 reps; SOLO, 3B whole-token, 3B 14-group, 8B 14-group). Excess late frames over SOLO for the 3B 14-group gate: 0.00 pp at moderate, 0.08 pp at heavy (reps 0.03 to 0.14); whole-token gate 0.00 at both; limits were 1 and 2 pp. tok/s: 14 groups 48.2 and 45.9, whole token 21.9 and 23.3. Verdict by the stated rule: PASS, no FAIL, no OVERLAP BONUS (whole-token excess 0.00 against 0.08). 97% of late frames at heavy are the app's own (SOLO misses them too); jitter makes the group gate touch 16 to 35% of frames (0.1 to 0.8% without jitter) but the touches are short (slowdown p99 1.2 to 1.7) and the frames have 8 to 11 ms of slack. `power_rejected` 0 in all cells.
+
+Next step
+- Owner's decision: repeat with an app that has little slack (12 to 14 ms frames), where the number of group touches could matter, and with correlated rather than independent jitter.
