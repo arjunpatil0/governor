@@ -109,6 +109,18 @@ DERIVED = [
     ("abstract", "1.4% to 2.2% slower per token", "8B 14 groups +1.4%, 3B 14 groups +2.2% in token time", "Sprint 1 and 2 tables"),
 ]
 
+EXTERNAL = [  # (cited as, URL, what the report says about it, from the abstract read on 2026-11-08)
+    ("ConServe, arXiv 2410.01228", "https://arxiv.org/abs/2410.01228", "co-serves online and offline LLM requests; sub-iteration, layer-wise preemption lets offline work yield on online load spikes"),
+    ("QLLM, arXiv 2503.09304", "https://arxiv.org/abs/2503.09304", "preempts best-effort MoE inference at expert granularity to cut time to first token of latency-sensitive requests; drops iteration-level scheduling so it can preempt at any layer"),
+    ("LayerLoom, arXiv 2611.00652", "https://arxiv.org/abs/2611.00652", "schedules LoRA backward work at layer rather than iteration granularity, within the latency slack of in-flight inference requests"),
+    ("Ripple, arXiv 2611.01067", "https://arxiv.org/abs/2611.01067", "unified-memory edge device; splits inference into pausable layer-based units, converts CPU job deadline slack into a GPU-byte budget; SGLang engine hooks and a central scheduler; evaluated on DGX Spark"),
+    ("REEF, OSDI 2022", "https://www.usenix.org/conference/osdi22/presentation/han", "microsecond-scale preemption by resetting idempotent kernels; evaluated on an AMD GPU with a restricted NVIDIA port"),
+    ("Hummingbird, arXiv 2601.04071", "https://arxiv.org/abs/2601.04071", "microsecond-granularity preemption on closed-source GPUs"),
+    ("GCAPS, arXiv 2406.05221", "https://arxiv.org/abs/2406.05221", "GPU context scheduling at the driver level for real-time tasks; response-time analysis; Jetson results"),
+    ("FIKIT, arXiv 2311.10359", "https://arxiv.org/abs/2311.10359", "lets low-priority tasks run in the idle gaps between kernels of high-priority tasks"),
+    ("VUDA, arXiv 2605.01352", "https://arxiv.org/abs/2605.01352", "controlled spatial sharing of CUDA compute and Vulkan graphics on NVIDIA GPUs without modifying drivers; 60 FPS rendering kept in a driving-perception scenario"),
+]
+
 
 def find(file, regex, tokens):
     p = ROOT / file
@@ -135,6 +147,8 @@ def main():
     out += [f"| {s} | {c} | {f} | {n} |" for s, c, f, n in rows]
     out += ["", "## Derived numbers (arithmetic on sourced numbers; the inputs are in the rows above)", "", "| Section | Number | Arithmetic | Inputs from |", "|---|---|---|---|"]
     out += [f"| {s} | {a} | {b} | {c} |" for s, a, b, c in DERIVED]
+    out += ["", "## Related work (section 8): abstracts read on 2026-11-08, not the full papers", "", "| Cited as | URL | What section 8 says, from the abstract |", "|---|---|---|"]
+    out += [f"| {a} | {b} | {c} |" for a, b, c in EXTERNAL]
     (HERE / "SOURCES_V2.md").write_text("\n".join(out) + "\n", encoding="utf-8")
     if bad:
         print("UNSOURCED:")

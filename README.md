@@ -10,6 +10,8 @@ llama.cpp decodes a token as one CUDA graph, so v1 could start a token only if a
 2. At 0.00% late frames, the 8B went from 0 to 24.2 tok/s and the 3B from 19.95 to 47.9 tok/s, whole-token gate against 14-group gate. Source: [docs/V2_SPRINT2_HANDOVER.md](docs/V2_SPRINT2_HANDOVER.md) (end-to-end table), `data/v2/s2/`.
 3. With about 4 ms free per frame, whole-token decode gets 0 tok/s and pausable decode gets 17.5 tok/s, with an excess of 0.28 percentage points of late frames over the app alone (inside the noise band). With about 2 ms free it gets 7.2 tok/s at +1.71 pp, a stress level at which the app alone misses 29% of its frames. Source: [docs/V2_SPRINT4_LOW_SLACK.md](docs/V2_SPRINT4_LOW_SLACK.md) (main table), `data/v2/s4/`.
 
+Layer-level preemption of LLM work is established ([ConServe](https://arxiv.org/abs/2410.01228), [QLLM](https://arxiv.org/abs/2503.09304), [LayerLoom](https://arxiv.org/abs/2611.00652), [Ripple](https://arxiv.org/abs/2611.01067); GPU-level preemption and sharing: [REEF](https://www.usenix.org/conference/osdi22/presentation/han), [Hummingbird](https://arxiv.org/abs/2601.04071), [GCAPS](https://arxiv.org/abs/2406.05221), [FIKIT](https://arxiv.org/abs/2311.10359), [VUDA](https://arxiv.org/abs/2605.01352)). What v2 adds is a measurement of applying it to cross-process sharing on one consumer Windows GPU against a 60 fps frame deadline, with no driver support; see section 8 of the report.
+
 The foreground in all of these is a synthetic kernel loop and the gates are static rules; this is not a registered comparison with the v1 governor.
 
 ![Decode throughput and excess late frames against free GPU time per frame, whole-token gate against pausable gate](docs/figures/v2_cliff_vs_smooth.png)
