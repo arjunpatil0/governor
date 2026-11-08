@@ -32,11 +32,12 @@ SEED_BASE = {"none": 1000, "moderate": 2000, "heavy": 3000}
 WARM_S, MEASURE_S = 5.0, 60.0
 
 
-def run_cell_j(w, cal, arm, level, rep, out, warm_s=WARM_S, measure_s=MEASURE_S):
+def run_cell_j(w, cal, arm, level, rep, out, warm_s=WARM_S, measure_s=MEASURE_S, c0=7.0, guard_ms=0.0, spec_override=None, scene_override=None):
+    """Sprint 4 passes c0 (nominal frame cost in ms at 1800 MHz), guard_ms (the early-start margin of the gate), spec_override (dict(model, G) or False for SOLO) and scene_override; the defaults are sprint 3."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    spec = ARMS[arm]
-    scene = spec["scene"] if spec else "S1"                         # the foreground of S5 is the S1 loop (only the model differs), so SOLO at S1 is the SOLO of both
+    spec = ARMS[arm] if spec_override is None else (spec_override or None)
+    scene = scene_override or (spec["scene"] if spec else "S1")    # the foreground of S5 is the S1 loop (only the model differs), so SOLO at S1 is the SOLO of both
     seed = SEED_BASE[level] + rep
     n_frames = int(round((warm_s + measure_s) * 60.0))
     tag = uuid.uuid4().hex[:8]
@@ -44,7 +45,7 @@ def run_cell_j(w, cal, arm, level, rep, out, warm_s=WARM_S, measure_s=MEASURE_S)
     pace, frames_ring = SeqBlock(pace_name, 3, True), SharedRing(fr_name, 16384, 3, True)
     drv, dlog = None, out / "driver.log"
     if spec:
-        env = dict(os.environ, PATH=str(H.BIN) + ";" + os.environ["PATH"], GGML_CUDA_PAUSE_GROUPS=str(spec["G"]), HINT_NAME=pace_name, GATE="1", GUARD_MS="0")
+        env = dict(os.environ, PATH=str(H.BIN) + ";" + os.environ["PATH"], GGML_CUDA_PAUSE_GROUPS=str(spec["G"]), HINT_NAME=pace_name, GATE="1", GUARD_MS=str(guard_ms))
         drv = subprocess.Popen([str(H.EXE), str(H.MODELS[spec["model"]]), str(H.PROMPT), str(out / "decode"), "512"], stdin=subprocess.PIPE, stdout=open(dlog, "w"), stderr=subprocess.STDOUT, text=True, env=env)
     smp = None
     try:
@@ -66,7 +67,7 @@ def run_cell_j(w, cal, arm, level, rep, out, warm_s=WARM_S, measure_s=MEASURE_S)
         th = threading.Thread(target=energy, daemon=True)
         th.start()
         runner = FmaFrameRunner(w, cal)
-        fg = fg_spec(scene, 7.0, 5000.0)
+        fg = fg_spec(scene, c0, 5000.0)
         pub = FramePublisher(frames_ring, pace)
         if level == "none":
             loop = FrameLoop(fg, runner, pub)                      # exactly the sprint-2 loop (busy 1 ms before the scheduled arrival)
@@ -85,7 +86,7 @@ def run_cell_j(w, cal, arm, level, rep, out, warm_s=WARM_S, measure_s=MEASURE_S)
         res = summarise_cell(recs, tk[:, 0], tk[:, 1], t0, warm_s, measure_s, e.get("start", 0.0), e.get("end", 0.0), H.PERIOD_MS)
         sm, st_ = np.array(smp.sm), np.array(smp.t)
         win = (st_ >= t0 + warm_s) & (st_ < t0 + warm_s + measure_s)
-        res.update(arm=arm, level=level, rep=rep, seed=seed, scene=scene, t0=t0, power_rejected=int(smp.guard.rejected), sm_mhz_median=float(np.median(sm[win])) if win.any() else None,
+        res.update(arm=arm, level=level, rep=rep, seed=seed, scene=scene, c0=c0, guard_ms=guard_ms, t0=t0, power_rejected=int(smp.guard.rejected), sm_mhz_median=float(np.median(sm[win])) if win.any() else None,
                    abandoned=int(loop.abandoned), exec=[l for l in dlog.read_text(errors="replace").splitlines() if l.startswith(("EXEC_MODE", "DONE"))] if drv else [])
         k = np.array([r.get("k", int(round((r["t_sched"] - t0) * 60.0))) for r in recs])
         np.savez_compressed(out / "frames.npz", k=k, t_sched=[r["t_sched"] for r in recs], t_submit=[r.get("t_submit", r["t_sched"]) for r in recs], t_start=[r["t_start"] for r in recs],
