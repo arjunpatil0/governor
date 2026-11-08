@@ -1,0 +1,23 @@
+{
+ "frames": 3600,
+ "miss_frac": 0.0,
+ "fg_p50_ms": 7.068016653647646,
+ "fg_p99_ms": 9.334171325317579,
+ "bg_tokens": 0,
+ "bg_tok_s": 0.0,
+ "tok_ms_p50": NaN,
+ "tok_ms_p99": NaN,
+ "power_w": 28.988533333333333,
+ "energy_j": 1739.312,
+ "j_per_token": NaN,
+ "arm": "solo",
+ "level": "none",
+ "rep": 1,
+ "seed": 1001,
+ "scene": "S1",
+ "t0": 242691.7486397,
+ "power_rejected": 0,
+ "sm_mhz_median": 1800.0,
+ "abandoned": 0,
+ "exec": []
+}
