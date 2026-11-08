@@ -51,3 +51,14 @@ Benchmark numbers
 
 Next step
 - Owner's decision: repeat with an app that has little slack (12 to 14 ms frames), where the number of group touches could matter, and with correlated rather than independent jitter.
+
+## Low-slack study (v2 sprint 4, 2026-11-08)
+
+What changed
+- Tested whether the pausable gate still helps when the app leaves 4 ms (TIGHT) or 2 ms (VERY TIGHT) free per frame, and whether an early-start margin (the gate's guard, 1.0 ms) cuts collisions with early frames. Step 0: the gate already keeps one duration estimate per group (median of the last 8 clean durations), so nothing was switched. New: `tools/slack_cell.py` (calibrates the constant-cost foreground to a SOLO median frame time, runs 2 levels x 6 arms x 2 reps), `tools/slack_analyze.py`, and `run_cell_j` options for cost, guard and scene. Results and limits: `docs/V2_SPRINT4_LOW_SLACK.md`. The forecast and decision rule were pushed before any data existed.
+
+Benchmark numbers
+- 24 cells. SOLO median frame times 12.68 ms and 14.70 ms (3.99 and 1.97 ms free). 3B 14 groups, guard 0: 17.5 tok/s with +0.28 pp excess late at TIGHT, 7.2 tok/s with +1.71 pp at VERY TIGHT (rep 1 alone is +2.28 pp); whole token 0 tok/s. Verdict: PASS at both levels, no FAIL, MARGIN WORKS no (guard 1.0 cuts decode-attributed late frames 21 to 2 and 80 to 3 but keeps 76% and 64% of tok/s against 85% required). 8B: 5 to 6 tok/s at TIGHT, 1.5 to 2.0 at VERY TIGHT. The forecast was wrong about which 3B arm passes (guard 0, not guard 1.0) and about SOLO lateness at VERY TIGHT (29% against 17%). Power at most 50 W; `power_rejected` 0 in all cells.
+
+Next step
+- Owner's decision: correlated rather than independent jitter, and finding why guard 0 overlaps frames that are not early submits.
