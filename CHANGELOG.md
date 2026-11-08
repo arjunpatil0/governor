@@ -2,6 +2,24 @@
 
 Newest first. The v2 sprint entries (pausable decode, branch v2-foreground, merged into master for v2.0.0) are one entry per sprint: what changed, benchmark numbers, next step. v2 is a lightweight engineering track, not a pre-registered study; the v1 registered results, constants and the v1 driver exe are not touched.
 
+## v2.0.0 (2026-11-08)
+
+What this release is: the v1.0.0 toolkit plus pausable LLM decode (layer-group decode gated on the frame hint), measured in four sprints, with a report and a mechanism document. v1 registered results, constants and the v1 driver executable are unchanged; v1.0.0 stays tagged where it was.
+
+Added
+- `workloads/background/pause_patch/llama_pause_groups_620d2225c.patch`: the llama.cpp patch as a `.patch` file against the pinned commit (`git apply --check` passes on a clean checkout; byte-identical to the tree used for the measurements). `docs/PAUSABLE_DECODE.md` explains the mechanism and the build.
+- `docs/report/REPORT_V2.md` and `REPORT_V2.pdf` (5 pages), `SOURCES_V2.md` (83 claims, each tied to a file and line) and `STYLE_CHECK_V2.md`; built by `build_report_v2.py`, `build_sources_v2.py` and `style_check_v2.py`.
+- `tools/v2_figure.py` and `docs/figures/v2_cliff_vs_smooth.png`: throughput and excess late frames against free GPU time per frame, every end-to-end condition of sprints 2 to 4, from the committed data.
+- README: a "v2: pausable decode" section above the v1 results (the v1 text is unchanged; one heading was added as an anchor for the link back).
+
+Headline results (sources in the report): pausing costs 1.4% to 2.2% in token time at 14 groups with identical tokens; at 0.00% late frames the 8B went from 0 to 24.2 tok/s and the 3B from 19.95 to 47.9; with about 4 ms free per frame whole-token decode gets 0 tok/s and pausable decode 17.5 (+0.28 pp excess late, inside the noise band); at about 2 ms free (a stress level, the app alone misses 29%) 7.2 tok/s at +1.71 pp, a pass on the mean of two reps with rep 1 over the limit.
+
+Known limits of v2.0.0
+- The foreground is a synthetic kernel loop and the gates are static rules; there is no registered comparison with the v1 governor.
+- Prefill is not split. The output head (about 1.3 ms for the 3B, 2.4 ms for the 8B) is the floor under the longest uninterruptible piece.
+- Two or three reps per cell, one machine, one GPU and driver, Windows only. The 14-group gate has no power control and draws 57 to 60 W at 1800 MHz.
+- Many forecasts were wrong (listed in the report, section 5).
+
 ## Low-slack study (v2 sprint 4, 2026-11-08)
 
 What changed
