@@ -2,6 +2,14 @@
 
 Newest first. The v2 sprint entries (pausable decode, branch v2-foreground, merged into master for v2.0.0) are one entry per sprint: what changed, benchmark numbers, next step. v2 is a lightweight engineering track, not a pre-registered study; the v1 registered results, constants and the v1 driver exe are not touched.
 
+## v2.0.1 (docs) (2026-11-08)
+
+Related work section, novelty hedged. Documentation only; no code, data or measurement changed, and v2.0.0 stays tagged where it was.
+
+- `docs/report/REPORT_V2.md` gains section 8, Related work (ConServe, QLLM, LayerLoom, Ripple, REEF, Hummingbird, GCAPS, FIKIT, VUDA), written from the abstracts only. It states that layer-level LLM preemption is established and positions this work as cross-process, on-device sharing against a 60 fps frame deadline on consumer Windows hardware without driver support. The abstract and the mechanism section now say the mechanism is not new.
+- `docs/report/SOURCES_V2.md` lists the cited works with URLs; the PDF is rebuilt (5 pages).
+- README v2 section: one sentence and links to the cited work.
+
 ## v2.0.0 (2026-11-08)
 
 What this release is: the v1.0.0 toolkit plus pausable LLM decode (layer-group decode gated on the frame hint), measured in four sprints, with a report and a mechanism document. v1 registered results, constants and the v1 driver executable are unchanged; v1.0.0 stays tagged where it was.
