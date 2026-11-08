@@ -1,5 +1,5 @@
 @echo off
-rem v2 sprint 1: builds the PATCHED copy of the pinned llama.cpp (third_party\llama.cpp_v2, made by third_party\apply_pause_patch.py) into its own build directory.
+rem v2 sprint 1: builds the PATCHED copy of the pinned llama.cpp (third_party\llama.cpp_v2, made by workloads\background\pause_patch\apply_pause_patch.py or the .patch file in the same folder) into its own build directory.
 rem Same flags as third_party\build_llama.bat. The pinned build (third_party\llama.cpp\build) and the v1 driver exe are not touched.
 call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat" >nul
 if errorlevel 1 exit /b 1
