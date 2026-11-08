@@ -170,7 +170,7 @@ def plot(table, pts, out):
         pe = [(p[0], p[2]) for p in pt if p[2] is not None]
         if pe:
             ax[1].plot([p[0] for p in pe], [p[1] for p in pe], m + "-", color=c, label=lab)
-    ax[0].set_xlabel("free time per frame (ms) = 16.67 - SOLO median frame time"); ax[0].set_ylabel("background tok/s"); ax[0].set_title("Throughput against free time per frame (sprint 3 moderate points at about 9.6 ms)", fontsize=9)
+    ax[0].set_xlabel("free time per frame (ms) = 16.67 - SOLO median frame time"); ax[0].set_ylabel("background tok/s"); ax[0].set_title("Throughput against free time per frame (sprint 3 moderate points at 9.74 ms)", fontsize=9)
     ax[0].invert_xaxis(); ax[0].legend(fontsize=7)
     ax[1].set_xlabel("free time per frame (ms)"); ax[1].set_ylabel("excess late frames over SOLO (pp)"); ax[1].set_title("Excess late frames against free time per frame", fontsize=9); ax[1].invert_xaxis(); ax[1].axhline(0, color="k", lw=0.5)
     fig.tight_layout()
