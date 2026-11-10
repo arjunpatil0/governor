@@ -56,6 +56,7 @@ def test_a_run_cell_llm_alone_records_game_absent_and_refuses_with_game(tmp_path
 
 def test_a_main_llm_alone_mode_runs_only_llm_alone(tmp_path):
     calls = []
+    rg_synth.write_fresh_clock_check(tmp_path / "run")
     runner = lambda arm, rep, out, cfg: (calls.append((arm, Path(out))), Path(out).mkdir(parents=True, exist_ok=True), (Path(out) / "result.json").write_text("{}"))[0]
     code = r.main(main_args(tmp_path, "--llm-alone", "--run-dir", str(tmp_path / "run")), probes=FakeProbes(game=False), runner=runner)
     assert code == 0 and calls == [("LLM_ALONE", tmp_path / "run" / "llm_alone")]

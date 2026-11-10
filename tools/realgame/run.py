@@ -14,6 +14,7 @@ import argparse
 import json
 import random
 import sys
+import time
 import traceback
 from pathlib import Path
 
@@ -22,7 +23,10 @@ from tools.realgame import decision
 DEFAULT_SEED = 89770043
 DEFAULT_REPS = 5
 DEFAULT_ARMS = ("UNGATED", "PRIO_IDLE", "DUTY50", "IGPU")
-MAX_NOISE_REPS = 2          # amendment 14: more than 2 distinct reps failing the noise check at any attempt stops the sweep (never loosened)
+NOISE_OK = "NOISE_OK.json"  # marker in the attempt directory, written only after the per-rep noise check passed
+CLOCK_CHECK = "clock_check.json"
+DEFAULT_MAX_CLOCK_CHECK_AGE_S = 21600
+MAX_NOISE_REPS = 2         # amendment 14: more than 2 distinct reps failing the noise check at any attempt stops the sweep (never loosened)
 
 
 class NoiseStop(RuntimeError):
@@ -53,10 +57,13 @@ def llm_alone_dir(run_dir):
     return Path(run_dir) / "llm_alone"
 
 
-def write_run_meta(run_dir, seed, reps, arms, order, igpu_dropped_reason=None):
+def write_run_meta(run_dir, seed, reps, arms, order, igpu_dropped_reason=None, clock_check=None):
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "run_meta.json").write_text(json.dumps({"seed": seed, "reps": reps, "arms": list(arms), "order": order, "igpu_dropped_reason": igpu_dropped_reason}, indent=1))
+    meta = {"seed": seed, "reps": reps, "arms": list(arms), "order": order, "igpu_dropped_reason": igpu_dropped_reason}
+    if clock_check is not None:
+        meta["clock_check"] = clock_check
+    (run_dir / "run_meta.json").write_text(json.dumps(meta, indent=1))
 
 
 def _attempts(run_dir, rep):
@@ -65,20 +72,31 @@ def _attempts(run_dir, rep):
     return nums
 
 
+def noise_marker(run_dir, rep, attempt):
+    return Path(run_dir) / f"rep{rep}" / f"attempt{attempt}" / NOISE_OK
+
+
 def _attempt_state(run_dir, rep, attempt, order_rep):
-    """'failed' if any cell has FAILED.json, 'complete' if every cell has result.json, else 'partial'."""
+    """'failed' if any cell has FAILED.json; 'complete' if every cell has result.json AND NOISE_OK.json exists; 'unchecked' if every cell has result.json but the noise check never
+    passed (no marker); else 'partial'."""
     cells = [cell_dir(run_dir, rep, attempt, i, a) for i, a in enumerate(order_rep)]
     if any((c / "FAILED.json").exists() for c in cells):
         return "failed"
-    return "complete" if all((c / "result.json").exists() for c in cells) else "partial"
+    if not all((c / "result.json").exists() for c in cells):
+        return "partial"
+    return "complete" if noise_marker(run_dir, rep, attempt).exists() else "unchecked"
 
 
 def final_attempts(run_dir, order):
-    """{rep: highest complete attempt}; raises ValueError if a rep has none."""
+    """{rep: highest complete attempt}; raises ValueError if a rep has none (an attempt with all results but no NOISE_OK.json is named in the message)."""
     out = {}
     for rep, o in enumerate(order):
-        done = [a for a in _attempts(run_dir, rep) if _attempt_state(run_dir, rep, a, o) == "complete"]
+        states = {a: _attempt_state(run_dir, rep, a, o) for a in _attempts(run_dir, rep)}
+        done = [a for a, s in states.items() if s == "complete"]
         if not done:
+            unchecked = sorted(a for a, s in states.items() if s == "unchecked")
+            if unchecked:
+                raise ValueError(f"rep {rep} attempt {unchecked[-1]} has all results but no {NOISE_OK} (the per-rep noise check never passed for it) in {run_dir}; resume the sweep to run the check")
             raise ValueError(f"rep {rep} has no complete attempt in {run_dir}")
         out[rep] = max(done)
     return out
@@ -88,15 +106,18 @@ def failed_attempts(run_dir, order):
     return {rep: [a for a in _attempts(run_dir, rep) if _attempt_state(run_dir, rep, a, o) == "failed"] for rep, o in enumerate(order)}
 
 
-def _check_or_write_meta(run_dir, seed, order, arms, igpu_dropped_reason):
+def _check_or_write_meta(run_dir, seed, order, arms, igpu_dropped_reason, clock_check=None):
     p = Path(run_dir) / "run_meta.json"
     reps = len(order)
     if p.exists():
         old = json.loads(p.read_text())
         if old["seed"] != seed or old["reps"] != reps or old["order"] != order:
             raise ValueError(f"run_meta.json in {run_dir} disagrees with the requested seed/reps/order (stored seed={old['seed']}, reps={old['reps']}): refusing to resume")
+        if clock_check is not None:                                           # the clock check that gated THIS invocation replaces an earlier one
+            old["clock_check"] = clock_check
+            p.write_text(json.dumps(old, indent=1))
     else:
-        write_run_meta(run_dir, seed, reps, arms, order, igpu_dropped_reason)
+        write_run_meta(run_dir, seed, reps, arms, order, igpu_dropped_reason, clock_check)
 
 
 def _write_failed(d, arm, rep, attempt, error, tb="", reason="error"):
@@ -122,11 +143,30 @@ def rep_noise_from_results(run_dir, rep, attempt, order_rep):
     return decision.rep_noise_check(first, last)
 
 
+def _noise_gate(run_dir, rep, attempt, order_rep, noise_check, log, n_reps):
+    """Run the per-rep noise check of a finished attempt. Pass (or noise_check None: plumbing tests) -> NOISE_OK.json is written, True. Fail -> FAILED.json (reason 'noise') in the
+    closing cell, False (NoiseStop when more than MAX_NOISE_REPS reps failed). An exception from noise_check propagates and no marker is written."""
+    if noise_check is None:
+        ok, why = True, []
+    else:
+        ok, why = noise_check(run_dir, rep, attempt, order_rep)
+    if ok:
+        noise_marker(run_dir, rep, attempt).write_text(json.dumps({"rep": rep, "attempt": attempt, "ok": True, "checked": noise_check is not None}, indent=1))
+        return True
+    msg = "noise: " + "; ".join(why)
+    _write_failed(cell_dir(run_dir, rep, attempt, len(order_rep) - 1, order_rep[-1]), order_rep[-1], rep, attempt, msg, reason="noise")
+    log(f"rep {rep} attempt {attempt} FAILED the noise check ({msg}); the whole rep will be rerun with the same order")
+    bad_reps = noise_failed_reps(run_dir)
+    if len(bad_reps) > MAX_NOISE_REPS:
+        raise NoiseStop(f"sweep stopped: reps {sorted(bad_reps)} failed the per-rep noise check (more than {MAX_NOISE_REPS} of {n_reps}); the limits are not loosened")
+    return False
+
+
 def _any_cell_ran(run_dir):
     return any(Path(run_dir).glob("rep*/attempt*/*/result.json")) or any(Path(run_dir).glob("rep*/attempt*/*/FAILED.json"))
 
 
-def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, rest=None, max_attempts=3, log=print, igpu_dropped_reason=None, noise_check=None):
+def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, rest=None, max_attempts=3, log=print, igpu_dropped_reason=None, noise_check=None, clock_check=None):
     """runner(arm, rep, out_dir, cfg) must write out_dir/result.json (cell.run_cell does). rest(read_temp, start_temp) -> dict; see cell.rest_until_cool.
     LLM_ALONE is not part of the sweep (see run_llm_alone). noise_check(run_dir, rep, attempt, order_rep) -> (ok, reasons) runs after the closing SOLO of each attempt (amendment 14;
     run.main always passes rep_noise_from_results; None disables it for unit tests of the plumbing). A failing rep is rerun as a new attempt and written to FAILED.json with
@@ -134,7 +174,7 @@ def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, re
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     arms = tuple(a for a in order[0] if a != "SOLO")
-    _check_or_write_meta(run_dir, seed, order, arms, igpu_dropped_reason)
+    _check_or_write_meta(run_dir, seed, order, arms, igpu_dropped_reason, clock_check)
     ran_before = _any_cell_ran(run_dir)                                   # the very first cell of the sweep does not rest
     sweep_ref_temp, prev_label = None, None
     for rep, order_rep in enumerate(order):
@@ -147,6 +187,10 @@ def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, re
                     first_open = next(cell_dir(run_dir, rep, a, i, arm) for i, arm in enumerate(order_rep) if not (cell_dir(run_dir, rep, a, i, arm) / "result.json").exists())
                     _write_failed(first_open, first_open.name.split("_", 1)[1], rep, a, "interrupted: unfinished attempt found on resume, treated as a failed attempt")
                     log(f"rep {rep} attempt {a}: unfinished, marked failed (interrupted); a new attempt starts")
+            for a in attempts:                                            # all results but never noise-checked (interrupted before/inside the check): check it now
+                if _attempt_state(run_dir, rep, a, order_rep) == "unchecked":
+                    log(f"rep {rep} attempt {a}: all cells done but never noise-checked; checking now")
+                    _noise_gate(run_dir, rep, a, order_rep, noise_check, log, len(order))
             states = {a: _attempt_state(run_dir, rep, a, order_rep) for a in attempts}
             if any(s == "complete" for s in states.values()):
                 break                                                       # rep done
@@ -181,16 +225,8 @@ def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, re
                     log(f"  FAILED {pos}_{arm}: {e}; the whole rep will be rerun with the same order")
                     failed = True
                     break
-            if not failed and noise_check is not None:
-                ok, why = noise_check(run_dir, rep, attempt, order_rep)
-                if not ok:
-                    msg = "noise: " + "; ".join(why)
-                    _write_failed(cell_dir(run_dir, rep, attempt, len(order_rep) - 1, order_rep[-1]), order_rep[-1], rep, attempt, msg, reason="noise")
-                    log(f"rep {rep} attempt {attempt} FAILED the noise check ({msg}); the whole rep will be rerun with the same order")
-                    bad_reps = noise_failed_reps(run_dir)
-                    if len(bad_reps) > MAX_NOISE_REPS:
-                        raise NoiseStop(f"sweep stopped: reps {sorted(bad_reps)} failed the per-rep noise check (more than {MAX_NOISE_REPS} of {len(order)}); the limits are not loosened")
-                    continue
+            if not failed and not _noise_gate(run_dir, rep, attempt, order_rep, noise_check, log, len(order)):
+                continue
             if not failed:
                 break
 
@@ -204,6 +240,35 @@ def run_llm_alone(cfg, run_dir, runner, log=print):
     log("run LLM_ALONE (game absent)")
     runner("LLM_ALONE", 0, alone, cfg)
     return True
+
+
+def write_clock_check(run_dir, status, state, problems, now=None):
+    """--check-clocks result: run_dir/clock_check.json (status passed/refused, epoch + ISO timestamp, helper_present, idle probe summary, thresholds, problems)."""
+    now = time.time() if now is None else now
+    doc = {"status": status, "timestamp": now, "timestamp_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(now)), "helper_present": list((state or {}).get("helper_present") or []),
+           "idle_probe": (state or {}).get("idle_probe"), "thresholds": (state or {}).get("heuristic"), "problems": list(problems)}
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / CLOCK_CHECK).write_text(json.dumps(doc, indent=1, default=str))
+    return doc
+
+
+def load_clock_check(run_dir, max_age_s, now=None):
+    """-> (doc, None) when run_dir/clock_check.json exists, has status 'passed' and is no older than max_age_s; else (None, refusal text)."""
+    f = Path(run_dir) / CLOCK_CHECK
+    if not f.exists():
+        return None, f"{f} does not exist: run `--check-clocks --run-dir {run_dir}` (game absent) first"
+    try:
+        doc = json.loads(f.read_text())
+        ts = float(doc["timestamp"])
+    except (ValueError, KeyError, TypeError, OSError) as e:
+        return None, f"{f} is unreadable or has no valid timestamp ({type(e).__name__}: {e}); rerun --check-clocks"
+    if doc.get("status") != "passed":
+        return None, f"{f} status is {doc.get('status')!r}, not 'passed' (clock state refused): fix it and rerun --check-clocks"
+    age = (time.time() if now is None else now) - ts
+    if age > max_age_s:
+        return None, f"{f} is older than {max_age_s} s ({age:.0f} s old): rerun --check-clocks"
+    return doc, None
 
 
 def _parser():
@@ -228,6 +293,7 @@ def _parser():
     p.add_argument("--game-process", required=True, help="executable name, must end with .exe")
     p.add_argument("--drop-igpu", metavar="REASON", help="drop the IGPU arm and record the reason")
     p.add_argument("--max-attempts", type=int, default=3)
+    p.add_argument("--max-clock-check-age-s", type=float, default=DEFAULT_MAX_CLOCK_CHECK_AGE_S, help="the sweep (and --llm-alone) refuses unless run-dir/clock_check.json passed and is no older than this")
     return p
 
 
@@ -246,9 +312,15 @@ def main(argv=None, probes=None, runner=None):
         probes = probes or cell.SystemProbes()
         if probes.process_running(args.game_process):
             print(f"--check-clocks: game process {args.game_process} is running; the idle probe needs the game absent", file=sys.stderr)
+            if args.run_dir:
+                write_clock_check(args.run_dir, "refused", None, [f"game process {args.game_process} is running; the idle probe needs the game absent"])
             return 2
         problems, state = cell.clock_state_check(probes, args.game_process)
         print(json.dumps(state, indent=1, default=str))
+        if args.run_dir:
+            write_clock_check(args.run_dir, "refused" if problems else "passed", state, problems)
+        else:
+            print("note: no --run-dir, so no clock_check.json was written; the sweep will refuse without it", file=sys.stderr)
         if problems:
             print("clock state refused:\n  " + "\n  ".join(problems), file=sys.stderr)
             return 2
@@ -289,15 +361,20 @@ def main(argv=None, probes=None, runner=None):
     if not args.run_dir:
         print("--run-dir is required unless --dry-run", file=sys.stderr)
         return 2
+    clock_check, why = load_clock_check(args.run_dir, args.max_clock_check_age_s)
+    if clock_check is None:
+        print(f"clock check refused: {why}", file=sys.stderr)
+        return 2
     deps = cell.real_deps(cfg) if runner is None else None
     runner = runner or (lambda arm, rep, out_dir, c: cell.run_cell(arm, rep, out_dir, c, deps))
     if args.llm_alone:
+        _check_or_write_meta(Path(args.run_dir), args.seed, order, arms, args.drop_igpu, clock_check)
         run_llm_alone(cfg, Path(args.run_dir), runner)
         return 0
     read_temp = deps.nvml.temp_c if deps is not None else None
     try:
         run_sweep(cfg, Path(args.run_dir), order, runner, seed=args.seed, read_temp=read_temp, rest=cell.rest_until_cool if read_temp else None,
-                  max_attempts=args.max_attempts, igpu_dropped_reason=args.drop_igpu, noise_check=rep_noise_from_results)
+                  max_attempts=args.max_attempts, igpu_dropped_reason=args.drop_igpu, noise_check=rep_noise_from_results, clock_check=clock_check)
     except NoiseStop as e:
         print(str(e), file=sys.stderr)
         return 3

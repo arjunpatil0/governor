@@ -52,7 +52,8 @@ def cell_summary(cell_dir):
     res = _load(d)
     out = {"arm": res["arm"], "rep": res["rep"], "t_open": res["t_open"], "t_close": res["t_close"], "power_w": res.get("power_w"), "energy_j": res.get("energy_j"),
            "sm_clock_mhz_median": res.get("sm_clock_mhz_median"), "throttle_mask_or": res.get("throttle_mask_or"), "throttle_flag_mask_or": res.get("throttle_flag_mask_or"),
-           "temp_c": res.get("temp_c"), "vram_mb": res.get("vram_mb"), "shared_gpu_mem_bytes": res.get("shared_gpu_mem_bytes"), "prio_readbacks": res.get("prio_readbacks")}
+           "temp_c": res.get("temp_c"), "vram_mb": res.get("vram_mb"), "shared_gpu_mem_bytes": res.get("shared_gpu_mem_bytes"), "prio_readbacks": res.get("prio_readbacks"),
+           "present_modes": res.get("present_modes")}
     if (d / "frames.csv").exists():
         cm = metrics.cell_frame_metrics(presentmon.parse_csv(d / "frames.csv"), res["t_open"], res["t_close"], res["qpc_hz"])
         fm = cm["frame"]
@@ -192,6 +193,10 @@ def _markdown(s):
     lines = [f"# R1 analysis", "", f"Branch: **{d['branch']}**", ""] + [f"- {r}" for r in d["reasons"]] + ["", "| arm | mean worsening % | mean hitch pp | within limits | harmful |", "|---|---|---|---|---|"]
     for a, e in d["arms"].items():
         lines.append(f"| {a} | {e['mean_worsening_pct']:.3f} | {e['mean_hitch_pp']:.3f} | {e['within_limits']} | {e['harmful']} |")
+    modes = {}
+    for c in s["cells"]:
+        modes.setdefault(c["arm"], set()).update(c.get("present_modes") or [])
+    lines += ["", "Present modes (recorded only, decides nothing):"] + [f"- {arm}: {', '.join(sorted(m)) or 'none recorded'}" for arm, m in modes.items()]
     if not d.get("igpu_tested", True):
         lines += ["", "IGPU option not tested: the IGPU arm was dropped, so the branches above are evaluated on PRIO_IDLE alone."]
     lines += ["", f"Noise precondition ok: {d['noise']['ok']} (drift p99 {d['noise']['drift_p99_pct_mean']:.3f} %, hitch {d['noise']['drift_hitch_pp_mean']:.3f} pp)",

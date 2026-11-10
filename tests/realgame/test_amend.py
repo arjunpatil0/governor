@@ -3,6 +3,8 @@ import json
 
 import pytest
 
+import rg_synth
+
 from test_cell import Clock, FakeProbes, FakeSampler, make_cfg, make_deps
 from tools.realgame import cell as c
 from tools.realgame import clockcheck as cc
@@ -78,6 +80,7 @@ def test_main_returns_nonzero_on_noise_stop(tmp_path, capsys, monkeypatch):
         raise r.NoiseStop("3 of 5 reps failed the noise check")
     monkeypatch.setattr(r, "run_sweep", boom)
     from test_review2 import main_args
+    rg_synth.write_fresh_clock_check(tmp_path / "run")
     code = r.main(main_args(tmp_path, "--igpu-vk-index", "1", "--run-dir", str(tmp_path / "run")), probes=FakeProbes(), runner=lambda *a: None)
     assert code not in (0, None) and "noise" in capsys.readouterr().err.lower()
 
@@ -86,6 +89,7 @@ def test_main_wires_the_real_noise_check(tmp_path, monkeypatch):
     seen = {}
     monkeypatch.setattr(r, "run_sweep", lambda *a, **k: seen.update(k))
     from test_review2 import main_args
+    rg_synth.write_fresh_clock_check(tmp_path / "run")
     assert r.main(main_args(tmp_path, "--igpu-vk-index", "1", "--run-dir", str(tmp_path / "run")), probes=FakeProbes(), runner=lambda *a: None) == 0
     assert seen["noise_check"] is r.rep_noise_from_results
 
@@ -118,23 +122,23 @@ def s(sm, pstate="P0", util=0):
 
 
 def test_helper_pipe_present_refuses():
-    assert cc.helper_present(exists=lambda p: p == r"\\.\pipe\governor_clock", list_cmdlines=lambda: []) != []
+    assert cc.helper_present(list_pipes=lambda: ["governor_clock"], list_cmdlines=lambda: []) != []
     assert cc.PIPE_PATH == r"\\.\pipe\governor_clock"
 
 
 def test_helper_process_present_refuses():
-    got = cc.helper_present(exists=lambda p: False, list_cmdlines=lambda: ["C:\\py\\python.exe actuators\\clock_helper.py --serve"])
+    got = cc.helper_present(list_pipes=lambda: [], list_cmdlines=lambda: ["C:\\py\\python.exe actuators\\clock_helper.py --serve"])
     assert got and "clock_helper" in got[0]
 
 
 def test_helper_absent_passes():
-    assert cc.helper_present(exists=lambda p: False, list_cmdlines=lambda: ["python.exe -m pytest", "explorer.exe", None, ""]) == []
+    assert cc.helper_present(list_pipes=lambda: [], list_cmdlines=lambda: ["python.exe -m pytest", "explorer.exe", None, ""]) == []
 
 
 def test_helper_lister_failure_is_best_effort_not_a_crash():
     def boom():
         raise OSError("access denied")
-    assert cc.helper_present(exists=lambda p: False, list_cmdlines=boom) == []
+    assert cc.helper_present(list_pipes=lambda: [], list_cmdlines=boom) == []
 
 
 def test_idle_probe_locked_when_sm_above_1000_in_p0_for_3s():

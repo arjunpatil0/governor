@@ -113,7 +113,7 @@ def test_failed_cell_reruns_whole_rep_same_order_and_keeps_attempts(tmp_path):
     failed = [p for p in a1.rglob("FAILED.json")]
     assert len(failed) == 1 and "synthetic cell failure" in failed[0].read_text()
     assert (a1 / f"0_SOLO" / "result.json").exists()                       # attempt 1's finished cell is kept
-    a2 = sorted(p.name for p in (tmp_path / "run" / "rep0" / "attempt2").iterdir())
+    a2 = sorted(p.name for p in (tmp_path / "run" / "rep0" / "attempt2").iterdir() if p.is_dir())      # NOISE_OK.json is a file
     assert a2 == [f"{i}_{a}" for i, a in enumerate(order[0])]              # whole rep, same order
     assert r.final_attempts(tmp_path / "run", order) == {0: 2, 1: 1}
 

@@ -1,4 +1,5 @@
-"""Read-only clock-state checks for sprint R1 (docs/R1_PREREG.md amendment 15). Nothing here changes any GPU state: it only READS the existence of a named pipe, the command
+"""Read-only clock-state checks for sprint R1 (docs/R1_PREREG.md amendment 15). Nothing here changes any GPU state: it only READS the pipe namespace listing (the helper's named pipe is detected by
+listing the pipe namespace and NEVER connected to or opened: a client connection would make the helper reset the clocks on disconnect), the command
 lines of running processes, and the SM clock / performance state / utilization (NVML, or the query interface of the vendor tool). The sweep is run with unlocked clocks;
 these checks refuse to start a cell when the admin clock helper is present or the SM clock looks locked.
 
@@ -10,7 +11,9 @@ import os
 import subprocess
 import time
 
-PIPE_PATH = r"\\.\pipe\governor_clock"
+PIPE_NAME = "governor_clock"
+PIPE_DIR = "\\\\.\\pipe\\"
+PIPE_PATH = PIPE_DIR + PIPE_NAME
 HELPER_MARKER = "clock_helper"
 IDLE_SM_MHZ_ABOVE = 1000
 PROBE_S = 3.0
@@ -57,15 +60,20 @@ def default_list_cmdlines():
     return out
 
 
-def helper_present(exists=os.path.exists, list_cmdlines=default_list_cmdlines):
-    """-> list of reasons (empty = the admin clock helper is not running): the named pipe exists, or a process command line contains 'clock_helper'.
-    A failing process lister is tolerated (best effort), the pipe check still applies."""
+def default_list_pipes():
+    """Names in the pipe namespace (a directory listing; no pipe is opened or connected)."""
+    return os.listdir(PIPE_DIR)
+
+
+def helper_present(list_pipes=default_list_pipes, list_cmdlines=default_list_cmdlines):
+    """-> list of reasons (empty = the admin clock helper is not running): its named pipe is listed in the pipe namespace (never connected to), or a process command line contains
+    'clock_helper'. If the pipe namespace cannot be listed the helper is treated as PRESENT (refuse) and the error is recorded. A failing process lister is tolerated (best effort)."""
     found = []
     try:
-        if exists(PIPE_PATH):
-            found.append(f"named pipe {PIPE_PATH} exists")
-    except OSError as e:
-        found.append(f"named pipe {PIPE_PATH} could not be checked: {e}")
+        if PIPE_NAME in {str(n).lower() for n in list_pipes()}:
+            found.append(f"named pipe {PIPE_PATH} is listed")
+    except Exception as e:                                                                # noqa: BLE001
+        found.append(f"pipe namespace could not be listed, treating the helper as present: {type(e).__name__}: {e}")
     try:
         for cmd in list_cmdlines() or []:
             if cmd and HELPER_MARKER in cmd.lower():

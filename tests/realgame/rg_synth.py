@@ -12,6 +12,14 @@ WINDOW_S = 10.0
 ARM_PARAMS = {"SOLO": (0.0, 0, 0.0), "UNGATED": (0.15, 31.0, 45.0), "PRIO_IDLE": (0.12, 31.0, 40.0), "DUTY50": (0.06, 28.0, 25.0), "IGPU": (0.002, 26.0, 16.0)}
 
 
+def write_fresh_clock_check(run_dir):
+    """A passed, fresh clock_check.json (what `run.py --check-clocks --run-dir` writes) so that main() will start a sweep / LLM-alone run."""
+    import time
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "clock_check.json").write_text(json.dumps({"status": "passed", "timestamp": time.time(), "helper_present": [], "idle_probe": {"status": "unlocked"}, "thresholds": {}}))
+
+
 def _frames_csv(rng, arm, t_open, swap_extra=True):
     p_spike, spike_ms, _ = ARM_PARAMS[arm]
     rows, t = [HEADER], t_open - 3.0                          # capture starts 3 s before the window
@@ -50,8 +58,10 @@ def write_cell(d: Path, arm, rep, seed, t_open, prio_readbacks=None):
     if arm == "LLM_ALONE":
         res["tok_s"] = None
         res["game_absent"] = True
+        res["present_modes"] = None
         (d / "llm_tokens.csv").write_text(_tokens_csv(rng, 100.0, t_open))
     else:
+        res["present_modes"] = ["Flip"]
         (d / "frames.csv").write_text(_frames_csv(rng, arm, t_open, swap_extra=(arm != "SOLO")))
         if arm != "SOLO":
             (d / "llm_tokens.csv").write_text(_tokens_csv(rng, ARM_PARAMS[arm][2], t_open))
@@ -80,4 +90,5 @@ def build_tree(root: Path, seed=11, reps=3, failed_first_attempt=True, prio_read
                 k += 1
                 rb = list(prio_readbacks) if arm == "PRIO_IDLE" else None
                 write_cell(rg_run.cell_dir(root, rep, attempt, pos, arm), arm, rep, seed * 1000 + k, 10000.0 + 100.0 * k, rb)
+            rg_run.noise_marker(root, rep, attempt).write_text(json.dumps({"rep": rep, "attempt": attempt, "ok": True, "checked": True}))
     return order
