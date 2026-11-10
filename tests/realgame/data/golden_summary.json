@@ -1,0 +1,1292 @@
+{
+ "run_meta": {
+  "seed": 11,
+  "reps": 3,
+  "arms": [
+   "UNGATED",
+   "PRIO_IDLE",
+   "DUTY50",
+   "IGPU"
+  ],
+  "order": [
+   [
+    "SOLO",
+    "UNGATED",
+    "PRIO_IDLE",
+    "DUTY50",
+    "IGPU",
+    "SOLO"
+   ],
+   [
+    "SOLO",
+    "PRIO_IDLE",
+    "UNGATED",
+    "DUTY50",
+    "IGPU",
+    "SOLO"
+   ],
+   [
+    "SOLO",
+    "UNGATED",
+    "IGPU",
+    "DUTY50",
+    "PRIO_IDLE",
+    "SOLO"
+   ]
+  ],
+  "igpu_dropped_reason": null
+ },
+ "llm_alone": {
+  "arm": "LLM_ALONE",
+  "rep": 0,
+  "t_open": 5000.0,
+  "t_close": 5010.0,
+  "power_w": 80.037422191,
+  "energy_j": null,
+  "sm_clock_mhz_median": 1500,
+  "throttle_mask_or": 0,
+  "throttle_flag_mask_or": null,
+  "temp_c": {
+   "start": 60.0,
+   "end": 66.0
+  },
+  "vram_mb": {
+   "start": 1000.0,
+   "end": 1100.0
+  },
+  "shared_gpu_mem_bytes": {
+   "start": 10485760,
+   "end": 10485760
+  },
+  "prio_readbacks": null,
+  "n_tokens": 999,
+  "tok_s": 99.9
+ },
+ "cells": [
+  {
+   "arm": "SOLO",
+   "rep": 0,
+   "t_open": 10100.0,
+   "t_close": 10110.0,
+   "power_w": 80.230853965,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.668,
+   "p99": 16.716,
+   "low1_fps": 59.821134807,
+   "hitch_share": 0.0,
+   "n_frames": 599,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 7.977,
+   "swapchain": "0x1",
+   "pos": 0,
+   "attempt": 2
+  },
+  {
+   "arm": "UNGATED",
+   "rep": 0,
+   "t_open": 10200.0,
+   "t_close": 10210.0,
+   "power_w": 80.850993993,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.677,
+   "p99": 34.88098,
+   "low1_fps": 28.616397196,
+   "hitch_share": 14.478764479,
+   "n_frames": 518,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 8.023,
+   "swapchain": "0x1",
+   "n_tokens": 450,
+   "tok_s": 45.0,
+   "pos": 1,
+   "attempt": 2
+  },
+  {
+   "arm": "PRIO_IDLE",
+   "rep": 0,
+   "t_open": 10300.0,
+   "t_close": 10310.0,
+   "power_w": 80.993288313,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": [
+    0,
+    0
+   ],
+   "p50": 16.669,
+   "p99": 34.69732,
+   "low1_fps": 28.68960241,
+   "hitch_share": 11.401869159,
+   "n_frames": 535,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 7.969,
+   "swapchain": "0x1",
+   "n_tokens": 400,
+   "tok_s": 40.0,
+   "pos": 2,
+   "attempt": 2
+  },
+  {
+   "arm": "DUTY50",
+   "rep": 0,
+   "t_open": 10400.0,
+   "t_close": 10410.0,
+   "power_w": 80.654929795,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.67,
+   "p99": 31.10535,
+   "low1_fps": 31.628554259,
+   "hitch_share": 5.633802817,
+   "n_frames": 568,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 7.975,
+   "swapchain": "0x1",
+   "n_tokens": 249,
+   "tok_s": 24.9,
+   "pos": 3,
+   "attempt": 2
+  },
+  {
+   "arm": "IGPU",
+   "rep": 0,
+   "t_open": 10500.0,
+   "t_close": 10510.0,
+   "power_w": 80.550584392,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.665,
+   "p99": 16.716,
+   "low1_fps": 54.626898285,
+   "hitch_share": 0.168918919,
+   "n_frames": 592,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 7.967,
+   "swapchain": "0x1",
+   "n_tokens": 159,
+   "tok_s": 15.9,
+   "pos": 4,
+   "attempt": 2
+  },
+  {
+   "arm": "SOLO",
+   "rep": 0,
+   "t_open": 10600.0,
+   "t_close": 10610.0,
+   "power_w": 80.812023612,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.667,
+   "p99": 16.71502,
+   "low1_fps": 59.821731241,
+   "hitch_share": 0.0,
+   "n_frames": 599,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 7.968,
+   "swapchain": "0x1",
+   "pos": 5,
+   "attempt": 2
+  },
+  {
+   "arm": "SOLO",
+   "rep": 1,
+   "t_open": 10700.0,
+   "t_close": 10710.0,
+   "power_w": 80.317378988,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.6685,
+   "p99": 16.716,
+   "low1_fps": 59.821134807,
+   "hitch_share": 0.0,
+   "n_frames": 600,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 8.0,
+   "swapchain": "0x1",
+   "pos": 0,
+   "attempt": 1
+  },
+  {
+   "arm": "PRIO_IDLE",
+   "rep": 1,
+   "t_open": 10800.0,
+   "t_close": 10810.0,
+   "power_w": 80.419751041,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": [
+    0,
+    0
+   ],
+   "p50": 16.671,
+   "p99": 34.4242,
+   "low1_fps": 28.826612729,
+   "hitch_share": 12.665406427,
+   "n_frames": 529,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 8.001,
+   "swapchain": "0x1",
+   "n_tokens": 400,
+   "tok_s": 40.0,
+   "pos": 1,
+   "attempt": 1
+  },
+  {
+   "arm": "UNGATED",
+   "rep": 1,
+   "t_open": 10900.0,
+   "t_close": 10910.0,
+   "power_w": 80.118807295,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.6775,
+   "p99": 34.5937,
+   "low1_fps": 28.733567991,
+   "hitch_share": 14.038461538,
+   "n_frames": 520,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 8.037,
+   "swapchain": "0x1",
+   "n_tokens": 448,
+   "tok_s": 44.8,
+   "pos": 2,
+   "attempt": 1
+  },
+  {
+   "arm": "DUTY50",
+   "rep": 1,
+   "t_open": 11000.0,
+   "t_close": 11010.0,
+   "power_w": 80.420577317,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 115343360
+   },
+   "prio_readbacks": null,
+   "p50": 16.669,
+   "p99": 31.09285,
+   "low1_fps": 31.744352151,
+   "hitch_share": 6.360424028,
+   "n_frames": 566,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 7.9885,
+   "swapchain": "0x1",
+   "n_tokens": 249,
+   "tok_s": 24.9,
+   "pos": 3,
+   "attempt": 1
+  },
+  {
+   "arm": "IGPU",
+   "rep": 1,
+   "t_open": 11100.0,
+   "t_close": 11110.0,
+   "power_w": 80.300492486,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.667,
+   "p99": 16.716,
+   "low1_fps": 59.822327687,
+   "hitch_share": 0.0,
+   "n_frames": 592,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 7.99,
+   "swapchain": "0x1",
+   "n_tokens": 160,
+   "tok_s": 16.0,
+   "pos": 4,
+   "attempt": 1
+  },
+  {
+   "arm": "SOLO",
+   "rep": 1,
+   "t_open": 11200.0,
+   "t_close": 11210.0,
+   "power_w": 80.878008159,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.665,
+   "p99": 16.716,
+   "low1_fps": 59.821134807,
+   "hitch_share": 0.0,
+   "n_frames": 600,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 8.0035,
+   "swapchain": "0x1",
+   "pos": 5,
+   "attempt": 1
+  },
+  {
+   "arm": "SOLO",
+   "rep": 2,
+   "t_open": 11300.0,
+   "t_close": 11310.0,
+   "power_w": 80.985201434,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.666,
+   "p99": 16.715,
+   "low1_fps": 59.823946671,
+   "hitch_share": 0.0,
+   "n_frames": 601,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 8.016,
+   "swapchain": "0x1",
+   "pos": 0,
+   "attempt": 1
+  },
+  {
+   "arm": "UNGATED",
+   "rep": 2,
+   "t_open": 11400.0,
+   "t_close": 11410.0,
+   "power_w": 80.199704229,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.676,
+   "p99": 34.6193,
+   "low1_fps": 28.730128328,
+   "hitch_share": 13.766730402,
+   "n_frames": 523,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 8.019,
+   "swapchain": "0x1",
+   "n_tokens": 451,
+   "tok_s": 45.1,
+   "pos": 1,
+   "attempt": 1
+  },
+  {
+   "arm": "IGPU",
+   "rep": 2,
+   "t_open": 11500.0,
+   "t_close": 11510.0,
+   "power_w": 80.341495139,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.663,
+   "p99": 16.716,
+   "low1_fps": 54.203969537,
+   "hitch_share": 0.168918919,
+   "n_frames": 592,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 8.0145,
+   "swapchain": "0x1",
+   "n_tokens": 159,
+   "tok_s": 15.9,
+   "pos": 2,
+   "attempt": 1
+  },
+  {
+   "arm": "DUTY50",
+   "rep": 2,
+   "t_open": 11600.0,
+   "t_close": 11610.0,
+   "power_w": 80.976813191,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.669,
+   "p99": 30.914,
+   "low1_fps": 31.932218544,
+   "hitch_share": 5.253940455,
+   "n_frames": 571,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 7.98,
+   "swapchain": "0x1",
+   "n_tokens": 250,
+   "tok_s": 25.0,
+   "pos": 3,
+   "attempt": 1
+  },
+  {
+   "arm": "PRIO_IDLE",
+   "rep": 2,
+   "t_open": 11700.0,
+   "t_close": 11710.0,
+   "power_w": 80.586300564,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": [
+    0,
+    0
+   ],
+   "p50": 16.672,
+   "p99": 34.63638,
+   "low1_fps": 28.741688862,
+   "hitch_share": 11.423220974,
+   "n_frames": 534,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 8.0185,
+   "swapchain": "0x1",
+   "n_tokens": 399,
+   "tok_s": 39.9,
+   "pos": 4,
+   "attempt": 1
+  },
+  {
+   "arm": "SOLO",
+   "rep": 2,
+   "t_open": 11800.0,
+   "t_close": 11810.0,
+   "power_w": 80.925315204,
+   "energy_j": null,
+   "sm_clock_mhz_median": 1500,
+   "throttle_mask_or": 0,
+   "throttle_flag_mask_or": null,
+   "temp_c": {
+    "start": 60.0,
+    "end": 66.0
+   },
+   "vram_mb": {
+    "start": 1000.0,
+    "end": 1100.0
+   },
+   "shared_gpu_mem_bytes": {
+    "start": 10485760,
+    "end": 10485760
+   },
+   "prio_readbacks": null,
+   "p50": 16.6665,
+   "p99": 16.716,
+   "low1_fps": 59.821134807,
+   "hitch_share": 0.0,
+   "n_frames": 600,
+   "n_dropped": 3,
+   "gpu_busy_ms_median": 8.004,
+   "swapchain": "0x1",
+   "pos": 5,
+   "attempt": 1
+  }
+ ],
+ "decision": {
+  "noise": {
+   "ok": true,
+   "mean_abs_p99_diff_pct": 0.00394843,
+   "mean_abs_hitch_diff_pp": 0.0,
+   "solo_hitch_below_1pct_every_rep": true,
+   "drift_p99_pct_mean": 3.9884e-05,
+   "drift_hitch_pp_mean": 0.0,
+   "drift_p99_pct_per_rep": [
+    -0.005862818,
+    0.0,
+    0.005982471
+   ],
+   "drift_hitch_pp_per_rep": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "arms": {
+   "UNGATED": {
+    "within_limits": false,
+    "within_claim": false,
+    "harmful": true,
+    "mean_worsening_pct": 107.577646265,
+    "mean_hitch_pp": 14.09465214,
+    "worsening_pct_stats": {
+     "mean": 107.577646265,
+     "median": 107.108970716,
+     "worst": 108.674338982,
+     "boot_lo": 106.949629098,
+     "boot_hi": 108.674338982,
+     "boot_n": 10000,
+     "boot_seed": 89770043,
+     "values": [
+      108.674338982,
+      106.949629098,
+      107.108970716
+     ]
+    },
+    "hitch_pp_stats": {
+     "mean": 14.09465214,
+     "median": 14.038461538,
+     "worst": 14.478764479,
+     "boot_lo": 13.766730402,
+     "boot_hi": 14.478764479,
+     "boot_n": 10000,
+     "boot_seed": 89770043,
+     "values": [
+      14.478764479,
+      14.038461538,
+      13.766730402
+     ]
+    },
+    "paired": [
+     {
+      "worsening_pct": 108.674338982,
+      "hitch_pp": 14.478764479,
+      "toks": 45.0
+     },
+     {
+      "worsening_pct": 106.949629098,
+      "hitch_pp": 14.038461538,
+      "toks": 44.8
+     },
+     {
+      "worsening_pct": 107.108970716,
+      "hitch_pp": 13.766730402,
+      "toks": 45.1
+     }
+    ],
+    "toks_mean": 44.966666667
+   },
+   "PRIO_IDLE": {
+    "within_limits": false,
+    "within_claim": false,
+    "harmful": true,
+    "mean_worsening_pct": 106.90746027,
+    "mean_hitch_pp": 11.83016552,
+    "worsening_pct_stats": {
+     "mean": 106.90746027,
+     "median": 107.211151327,
+     "worst": 107.57559895,
+     "boot_lo": 105.935630534,
+     "boot_hi": 107.57559895,
+     "boot_n": 10000,
+     "boot_seed": 89770043,
+     "values": [
+      107.57559895,
+      105.935630534,
+      107.211151327
+     ]
+    },
+    "hitch_pp_stats": {
+     "mean": 11.83016552,
+     "median": 11.423220974,
+     "worst": 12.665406427,
+     "boot_lo": 11.401869159,
+     "boot_hi": 12.665406427,
+     "boot_n": 10000,
+     "boot_seed": 89770043,
+     "values": [
+      11.401869159,
+      12.665406427,
+      11.423220974
+     ]
+    },
+    "paired": [
+     {
+      "worsening_pct": 107.57559895,
+      "hitch_pp": 11.401869159,
+      "toks": 40.0
+     },
+     {
+      "worsening_pct": 105.935630534,
+      "hitch_pp": 12.665406427,
+      "toks": 40.0
+     },
+     {
+      "worsening_pct": 107.211151327,
+      "hitch_pp": 11.423220974,
+      "toks": 39.9
+     }
+    ],
+    "toks_mean": 39.966666667
+   },
+   "DUTY50": {
+    "within_limits": false,
+    "within_claim": false,
+    "harmful": true,
+    "mean_worsening_pct": 85.678464816,
+    "mean_hitch_pp": 5.7493891,
+    "worsening_pct_stats": {
+     "mean": 85.678464816,
+     "median": 86.006520699,
+     "worst": 86.086754158,
+     "boot_lo": 84.94211959,
+     "boot_hi": 86.086754158,
+     "boot_n": 10000,
+     "boot_seed": 89770043,
+     "values": [
+      86.086754158,
+      86.006520699,
+      84.94211959
+     ]
+    },
+    "hitch_pp_stats": {
+     "mean": 5.7493891,
+     "median": 5.633802817,
+     "worst": 6.360424028,
+     "boot_lo": 5.253940455,
+     "boot_hi": 6.360424028,
+     "boot_n": 10000,
+     "boot_seed": 89770043,
+     "values": [
+      5.633802817,
+      6.360424028,
+      5.253940455
+     ]
+    },
+    "paired": [
+     {
+      "worsening_pct": 86.086754158,
+      "hitch_pp": 5.633802817,
+      "toks": 24.9
+     },
+     {
+      "worsening_pct": 86.006520699,
+      "hitch_pp": 6.360424028,
+      "toks": 24.9
+     },
+     {
+      "worsening_pct": 84.94211959,
+      "hitch_pp": 5.253940455,
+      "toks": 25.0
+     }
+    ],
+    "toks_mean": 24.933333333,
+    "reference_only": true
+   },
+   "IGPU": {
+    "within_limits": true,
+    "within_claim": true,
+    "harmful": false,
+    "mean_worsening_pct": 0.001974215,
+    "mean_hitch_pp": 0.112612613,
+    "worsening_pct_stats": {
+     "mean": 0.001974215,
+     "median": 0.002931409,
+     "worst": 0.002991236,
+     "boot_lo": 0.0,
+     "boot_hi": 0.002991236,
+     "boot_n": 10000,
+     "boot_seed": 89770043,
+     "values": [
+      0.002931409,
+      0.0,
+      0.002991236
+     ]
+    },
+    "hitch_pp_stats": {
+     "mean": 0.112612613,
+     "median": 0.168918919,
+     "worst": 0.168918919,
+     "boot_lo": 0.0,
+     "boot_hi": 0.168918919,
+     "boot_n": 10000,
+     "boot_seed": 89770043,
+     "values": [
+      0.168918919,
+      0.0,
+      0.168918919
+     ]
+    },
+    "paired": [
+     {
+      "worsening_pct": 0.002931409,
+      "hitch_pp": 0.168918919,
+      "toks": 15.9
+     },
+     {
+      "worsening_pct": 0.0,
+      "hitch_pp": 0.0,
+      "toks": 16.0
+     },
+     {
+      "worsening_pct": 0.002991236,
+      "hitch_pp": 0.168918919,
+      "toks": 15.9
+     }
+    ],
+    "toks_mean": 15.933333333
+   }
+  },
+  "ungated_valid": true,
+  "ungated_max_token_gap_s": 0.02444,
+  "prio_idle_valid": true,
+  "igpu_measured": true,
+  "llm_alone_toks": 99.9,
+  "predictability_pass": true,
+  "fix": "IGPU",
+  "fixes": [
+   "IGPU"
+  ],
+  "branch": "SIMPLE_FIX",
+  "reasons": [
+   "IGPU within limits with enough throughput; the fix is IGPU (higher tok/s)"
+  ]
+ },
+ "predictability": {
+  "solo": {
+   "primary": {
+    "N": 8,
+    "n_cells": 6,
+    "n_predictions": 3551,
+    "start": {
+     "p50": 0.027414284,
+     "p95": 0.071842858,
+     "p99": 0.088942857,
+     "max": 0.106614285,
+     "n": 3551
+    },
+    "end": {
+     "p50": 0.250499999,
+     "p95": 0.672271428,
+     "p99": 0.795828571,
+     "max": 0.898800001,
+     "n": 3551
+    },
+    "baseline_start": {
+     "p50": 0.025899999,
+     "p95": 0.065900001,
+     "p99": 0.08005,
+     "max": 0.098800001,
+     "n": 3551
+    },
+    "baseline_end": {
+     "p50": 0.237200002,
+     "p95": 0.62835,
+     "p99": 0.743650002,
+     "max": 0.816999998,
+     "n": 3551
+    },
+    "idle": {
+     "p50": 8.67,
+     "p95": 9.0261,
+     "p99": 9.076,
+     "min": 8.222,
+     "max": 9.112,
+     "mean": 8.668981106,
+     "n": 3599
+    },
+    "conditions": {
+     "start_p95_ok": true,
+     "end_p95_ok": true,
+     "median_idle_ok": true
+    },
+    "pass": true
+   },
+   "sensitivity": {
+    "4": {
+     "N": 4,
+     "n_cells": 6,
+     "n_predictions": 3575,
+     "start": {
+      "p50": 0.029333334,
+      "p95": 0.079530001,
+      "p99": 0.098508,
+      "max": 0.137499997,
+      "n": 3575
+     },
+     "end": {
+      "p50": 0.286233333,
+      "p95": 0.759306668,
+      "p99": 0.888799332,
+      "max": 1.046466668,
+      "n": 3575
+     },
+     "baseline_start": {
+      "p50": 0.025899999,
+      "p95": 0.065860001,
+      "p99": 0.080026,
+      "max": 0.098800001,
+      "n": 3575
+     },
+     "baseline_end": {
+      "p50": 0.237200002,
+      "p95": 0.628019999,
+      "p99": 0.742906002,
+      "max": 0.816999998,
+      "n": 3575
+     },
+     "idle": {
+      "p50": 8.67,
+      "p95": 9.0261,
+      "p99": 9.076,
+      "min": 8.222,
+      "max": 9.112,
+      "mean": 8.668981106,
+      "n": 3599
+     },
+     "conditions": {
+      "start_p95_ok": true,
+      "end_p95_ok": true,
+      "median_idle_ok": true
+     },
+     "pass": true
+    },
+    "16": {
+     "N": 16,
+     "n_cells": 6,
+     "n_predictions": 3503,
+     "start": {
+      "p50": 0.025859998,
+      "p95": 0.069462002,
+      "p99": 0.083619866,
+      "max": 0.102053333,
+      "n": 3503
+     },
+     "end": {
+      "p50": 0.243720002,
+      "p95": 0.650279334,
+      "p99": 0.769355734,
+      "max": 0.847979998,
+      "n": 3503
+     },
+     "baseline_start": {
+      "p50": 0.025900001,
+      "p95": 0.065789999,
+      "p99": 0.079800002,
+      "max": 0.098800001,
+      "n": 3503
+     },
+     "baseline_end": {
+      "p50": 0.237199998,
+      "p95": 0.628259998,
+      "p99": 0.745134001,
+      "max": 0.816999998,
+      "n": 3503
+     },
+     "idle": {
+      "p50": 8.67,
+      "p95": 9.0261,
+      "p99": 9.076,
+      "min": 8.222,
+      "max": 9.112,
+      "mean": 8.668981106,
+      "n": 3599
+     },
+     "conditions": {
+      "start_p95_ok": true,
+      "end_p95_ok": true,
+      "median_idle_ok": true
+     },
+     "pass": true
+    }
+   }
+  },
+  "solo_decides": true,
+  "ungated": {
+   "primary": {
+    "N": 8,
+    "n_cells": 3,
+    "n_predictions": 1537,
+    "start": {
+     "p50": 2.515214284,
+     "p95": 15.247162857,
+     "p99": 17.652577143,
+     "max": 50.308657141,
+     "n": 1537
+    },
+    "end": {
+     "p50": 2.655857143,
+     "p95": 15.288171427,
+     "p99": 17.847849142,
+     "max": 50.268371428,
+     "n": 1537
+    },
+    "baseline_start": {
+     "p50": 0.030299998,
+     "p95": 17.243779999,
+     "p99": 18.200463999,
+     "max": 52.936899998,
+     "n": 1537
+    },
+    "baseline_end": {
+     "p50": 0.287299999,
+     "p95": 17.2696,
+     "p99": 18.271812001,
+     "max": 52.922899999,
+     "n": 1537
+    },
+    "idle": {
+     "p50": 8.702,
+     "p95": 25.814,
+     "p99": 26.8066,
+     "min": 8.243,
+     "max": 27.272,
+     "mean": 10.975096733,
+     "n": 1561
+    },
+    "conditions": {
+     "start_p95_ok": false,
+     "end_p95_ok": false,
+     "median_idle_ok": true
+    },
+    "pass": false
+   },
+   "sensitivity": {
+    "4": {
+     "N": 4,
+     "n_cells": 3,
+     "n_predictions": 1549,
+     "start": {
+      "p50": 0.086733333,
+      "p95": 16.694233333,
+      "p99": 18.126388001,
+      "max": 46.823133331,
+      "n": 1549
+     },
+     "end": {
+      "p50": 0.799233332,
+      "p95": 16.694293333,
+      "p99": 18.252502668,
+      "max": 46.797466666,
+      "n": 1549
+     },
+     "baseline_start": {
+      "p50": 0.030100002,
+      "p95": 17.221579998,
+      "p99": 18.200451999,
+      "max": 52.936899998,
+      "n": 1549
+     },
+     "baseline_end": {
+      "p50": 0.288699999,
+      "p95": 17.266739999,
+      "p99": 18.271116001,
+      "max": 52.922899999,
+      "n": 1549
+     },
+     "idle": {
+      "p50": 8.702,
+      "p95": 25.814,
+      "p99": 26.8066,
+      "min": 8.243,
+      "max": 27.272,
+      "mean": 10.975096733,
+      "n": 1561
+     },
+     "conditions": {
+      "start_p95_ok": false,
+      "end_p95_ok": false,
+      "median_idle_ok": true
+     },
+     "pass": false
+    },
+    "16": {
+     "N": 16,
+     "n_cells": 3,
+     "n_predictions": 1513,
+     "start": {
+      "p50": 2.400033332,
+      "p95": 14.976654667,
+      "p99": 17.140418667,
+      "max": 50.523779999,
+      "n": 1513
+     },
+     "end": {
+      "p50": 2.703193335,
+      "p95": 15.183942667,
+      "p99": 17.137941601,
+      "max": 50.503646666,
+      "n": 1513
+     },
+     "baseline_start": {
+      "p50": 0.0304,
+      "p95": 17.183179998,
+      "p99": 18.198816,
+      "max": 52.936899998,
+      "n": 1513
+     },
+     "baseline_end": {
+      "p50": 0.288699999,
+      "p95": 17.247619999,
+      "p99": 18.266456,
+      "max": 52.922899999,
+      "n": 1513
+     },
+     "idle": {
+      "p50": 8.702,
+      "p95": 25.814,
+      "p99": 26.8066,
+      "min": 8.243,
+      "max": 27.272,
+      "mean": 10.975096733,
+      "n": 1561
+     },
+     "conditions": {
+      "start_p95_ok": false,
+      "end_p95_ok": false,
+      "median_idle_ok": true
+     },
+     "pass": false
+    }
+   },
+   "informational": true,
+   "note": "supplementary: the cadence under LLM overlap; decides nothing"
+  }
+ },
+ "flags": {
+  "paging": [
+   {
+    "rep": 1,
+    "arm": "DUTY50",
+    "pos": 3,
+    "excess_mb": 100.0
+   }
+  ],
+  "throttling": [],
+  "paging_threshold_mb": 64.0,
+  "note": "paging = shared GPU memory above the rep's SOLO mean by more than 64 MB (bytes/2**20; cells without a reading are not flagged)"
+ },
+ "attempts": {
+  "0": {
+   "final_attempt": 2,
+   "failed_attempts": [
+    1
+   ]
+  },
+  "1": {
+   "final_attempt": 1,
+   "failed_attempts": []
+  },
+  "2": {
+   "final_attempt": 1,
+   "failed_attempts": []
+  }
+ },
+ "decision_notes": "noise drift is reported separately in decision.noise; DUTY50 is reference only; bootstrap/median/worst are for information only; predictability is pooled over the SOLO cells (errors computed within each cell)"
+}

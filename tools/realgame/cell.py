@@ -1,0 +1,645 @@
+"""One measured cell of sprint R1 (docs/R1_PREREG.md): preflight, metadata, the rest rule and run_cell. NEVER changes GPU clocks or power limits.
+
+Everything that needs Windows or hardware (pynvml, winreg, psutil, ctypes libraries, typeperf, the LLM and PresentMon processes) sits behind `Probes` / `Deps` objects whose real
+implementations import lazily, so the flow is tested with fakes on any OS.
+
+Flow of run_cell (the prereg is being amended: the LLM is loaded before the warm-up, GO is sent at the START of the warm-up, so it decodes through the warm-up; tok/s is counted inside the window only):
+  QPC check -> spawn the LLM (not SOLO), wait for READY, check EXEC_MODE (IGPU: 780M/Radeon only) -> (PRIO_IDLE: set + read back) -> 50 ms sampler -> PresentMon capture (not LLM_ALONE) ->
+  [warm-up starts: GO <t_close> to the LLM, PDH shared-memory read 1 (during the warm-up, never after t_open)] -> [t_open: energy read 1 immediately] -> window ->
+  [t_close: energy read 2, PDH read 2, PRIO_IDLE read-back] -> wait DONE -> stop capture -> parse + gap checks + reset check -> result.json.
+LLM_ALONE runs in its own invocation (run.py --llm-alone) with the game process absent.
+The game itself is started by the operator, not by this rig (UNVERIFIED how the benchmark scene is restarted per cell: see docs/R1_SETUP.md once written)."""
+import hashlib
+import json
+import os
+import secrets
+import shutil
+import subprocess
+import sys
+import threading
+import time
+import traceback
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from tools.realgame import gpu_priority, metrics, presentmon
+
+ARMS = ("SOLO", "UNGATED", "PRIO_IDLE", "DUTY50", "IGPU", "LLM_ALONE")
+EXPECTED_LLAMA_COMMIT = "620d2225c"
+PRESENTMON_SHA256_PREREG = "b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af"
+# NVML throttle bits. The raw OR-ed mask is recorded as throttle_mask_or. SwPowerCap (0x4) is a separate boolean (throttle_swpowercap: on a power-limited laptop it is routine).
+# throttle_flag (the "throttling" flag of the list) counts only HwSlowdown 0x8, SwThermalSlowdown 0x20, HwThermalSlowdown 0x40, HwPowerBrakeSlowdown 0x80 (the rig's definition; the prereg
+# names the flag but not the bits). Idle (0x1), AppClocks (0x2), SyncBoost and Display bits are not counted.
+THROTTLE_SWPOWERCAP = 0x4
+THROTTLE_FLAG_MASK = 0x8 | 0x20 | 0x40 | 0x80
+QPC_TOLERANCE_S = 0.001
+
+
+class PreflightError(RuntimeError):
+    def __init__(self, failures):
+        self.failures = list(failures)
+        super().__init__("preflight refused:\n  " + "\n  ".join(self.failures))
+
+
+@dataclass
+class Config:
+    repo_root: Path
+    llm_exe: Path
+    model: Path
+    prompt: Path
+    presentmon_exe: Path
+    game_process: str
+    armoury_mode: "str | None"
+    llama_dir: Path
+    n_prompt: int
+    seed: int = 89770043
+    warmup_s: float = 20.0
+    window_s: float = 60.0
+    pm_settle_s: float = 2.0
+    ready_timeout_s: float = 300.0
+    done_timeout_s: float = 60.0
+    capture_stop_timeout_s: float = 10.0
+    sampler_interval_s: float = 0.05
+    llama_commit: str = EXPECTED_LLAMA_COMMIT
+    llm_exe_vk: "Path | None" = None           # the Vulkan build of the driver, used only for the IGPU arm
+    igpu_vk_index: "int | None" = None         # Vulkan device index of the Radeon 780M (GGML_VK_VISIBLE_DEVICES), required for IGPU
+    allow_pm_hash_mismatch: bool = False       # explicit override of the PresentMon sha256 check; recorded in meta.json
+
+
+def validate_game_process(name):
+    """The game process name must end with '.exe' (case-insensitive), not start with '-' and contain no whitespace or path separators (it is passed to PresentMon on a command line)."""
+    if (not isinstance(name, str) or not name.lower().endswith(".exe") or name.startswith("-") or name != name.strip() or len(name) <= 4
+            or any(ch in name for ch in ' \t\r\n/\\"')):
+        raise ValueError(f"--game-process must be an executable name ending in .exe, not starting with '-' and without spaces or path separators: {name!r}")
+    return name
+
+
+# ------------------------------------------------------------------ hashing
+_SHA_CACHE = {}
+
+
+def _hash_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def sha256_file(path):
+    """sha256 hex, cached by (path, mtime_ns, size)."""
+    st = os.stat(path)
+    key = (str(Path(path).resolve()), st.st_mtime_ns, st.st_size)
+    if key not in _SHA_CACHE:
+        _SHA_CACHE[key] = _hash_file(path)
+    return _SHA_CACHE[key]
+
+
+# ------------------------------------------------------------------ probes (real implementations, lazy)
+_TOOLS = {}
+
+
+def tool_paths():
+    """Full paths of git (shutil.which over the absolute PATH entries, the current directory excluded, resolved once and cached), tasklist and typeperf (%SystemRoot%\\System32).
+    Nothing is looked up through the current working directory."""
+    if not _TOOLS:
+        cwd = os.path.normcase(os.path.abspath(os.getcwd()))
+        safe = os.pathsep.join(d for d in os.environ.get("PATH", "").split(os.pathsep) if d and os.path.isabs(d) and os.path.normcase(os.path.abspath(d)) != cwd)
+        git = shutil.which("git", path=safe)
+        if not git:
+            raise RuntimeError("git not found on PATH (the current directory is never searched)")
+        git = os.path.abspath(git)
+        if os.path.normcase(os.path.dirname(git)) == cwd:
+            raise RuntimeError(f"git resolved to the current working directory ({git}): refusing")
+        sysroot = os.environ.get("SystemRoot") or os.environ.get("SYSTEMROOT")
+        if not sysroot:
+            raise RuntimeError("SystemRoot is not set: cannot resolve tasklist and typeperf")
+        sys32 = Path(sysroot) / "System32"
+        _TOOLS.update(git=git, tasklist=str(sys32 / "tasklist.exe"), typeperf=str(sys32 / "typeperf.exe"))
+    return dict(_TOOLS)
+
+
+def _git(path, *args):
+    return subprocess.run([tool_paths()["git"], "-C", str(path), *args], capture_output=True, text=True, check=True).stdout
+
+
+def _process_table():
+    """[(pid, name)] via psutil if present, else tasklist (Windows)."""
+    try:
+        import psutil
+        return [(p.info["pid"], p.info["name"]) for p in psutil.process_iter(["pid", "name"])]
+    except ImportError:
+        pass
+    out = subprocess.run([tool_paths()["tasklist"], "/FO", "CSV", "/NH"], capture_output=True, text=True, check=True).stdout
+    rows = []
+    for line in out.splitlines():
+        parts = [x.strip('"') for x in line.split('","')]
+        if len(parts) >= 2 and parts[1].isdigit():
+            rows.append((int(parts[1]), parts[0].strip('"')))
+    return rows
+
+
+class SystemProbes:
+    def git_head(self, path):
+        return _git(path, "rev-parse", "HEAD").strip()
+
+    def git_dirty(self, path):
+        return _git(path, "status", "--porcelain").splitlines()
+
+    def process_running(self, name):
+        return self.find_pid(name) is not None
+
+    def find_pid(self, name):
+        pids = sorted(pid for pid, n in _process_table() if n and n.lower() == name.lower())
+        return pids[0] if pids else None
+
+    def on_ac(self):
+        """True on AC, False on battery, None if unknown (non-Windows or the call failed)."""
+        if sys.platform != "win32":
+            return None
+        import ctypes
+        from ctypes import wintypes
+
+        class SPS(ctypes.Structure):
+            _fields_ = [("ACLineStatus", ctypes.c_ubyte), ("BatteryFlag", ctypes.c_ubyte), ("BatteryLifePercent", ctypes.c_ubyte), ("SystemStatusFlag", ctypes.c_ubyte),
+                        ("BatteryLifeTime", wintypes.DWORD), ("BatteryFullLifeTime", wintypes.DWORD)]
+        s = SPS()
+        k32 = ctypes.WinDLL("kernel32")
+        k32.GetSystemPowerStatus.argtypes = [ctypes.POINTER(SPS)]
+        k32.GetSystemPowerStatus.restype = wintypes.BOOL
+        if not k32.GetSystemPowerStatus(ctypes.byref(s)):
+            return None
+        return {0: False, 1: True}.get(s.ACLineStatus)
+
+    def exists(self, path):
+        return Path(path).exists()
+
+    def hags(self):
+        """HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers HwSchMode (2 = on, 1 = off); 'unavailable' if it cannot be read."""
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\GraphicsDrivers") as k:
+                return winreg.QueryValueEx(k, "HwSchMode")[0]
+        except Exception as e:                                                            # noqa: BLE001
+            return f"unavailable ({type(e).__name__})"
+
+    def driver_version(self):
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            v = pynvml.nvmlSystemGetDriverVersion()
+            return v.decode() if isinstance(v, bytes) else v
+        except Exception as e:                                                            # noqa: BLE001
+            return f"unavailable ({type(e).__name__})"
+
+    def sha256(self, path):
+        return sha256_file(path)
+
+    def presentmon_version(self, exe):
+        return presentmon.version(exe)
+
+    def process_snapshot(self):
+        return sorted({n for _, n in _process_table() if n})
+
+    def is_elevated(self):
+        """True if the process runs elevated (ctypes shell32.IsUserAnAdmin, loaded lazily); None if unknown."""
+        if sys.platform != "win32":
+            return None
+        try:
+            import ctypes
+            return bool(ctypes.WinDLL("shell32").IsUserAnAdmin())
+        except Exception:                                                                 # noqa: BLE001
+            return None
+
+
+def pm_hash_problem(cfg, probes):
+    """None if sha256(PresentMon exe) equals the prereg value or the mismatch is explicitly allowed; else the refusal text. Hashing only reads the file (no execution)."""
+    sha = probes.sha256(cfg.presentmon_exe)
+    if sha == PRESENTMON_SHA256_PREREG or cfg.allow_pm_hash_mismatch:
+        return None
+    return f"PresentMon sha256 {sha} does not equal the prereg value {PRESENTMON_SHA256_PREREG} (override: --allow-pm-hash-mismatch, recorded in meta)"
+
+
+def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False):
+    """Raises PreflightError listing every refusal; returns None when the rig may run. game_absent: the game process must NOT be running (LLM_ALONE invocation)."""
+    probes = probes or SystemProbes()
+    bad = []
+    try:
+        dirty = probes.git_dirty(cfg.repo_root)
+        if dirty:
+            bad.append(f"git tree is dirty ({len(dirty)} entries, first: {dirty[0]!r}); commit before measuring")
+    except Exception as e:                                                                # noqa: BLE001
+        bad.append(f"git state of {cfg.repo_root} unavailable: {e}")
+    if not cfg.armoury_mode:
+        bad.append("--armoury-mode not given: the Armoury Crate mode must be stated for every run")
+    try:
+        head = probes.git_head(cfg.llama_dir)
+        if not head.startswith(cfg.llama_commit):
+            bad.append(f"llama.cpp tree {cfg.llama_dir} is at {head[:12]}, not {cfg.llama_commit}")
+        if probes.git_dirty(cfg.llama_dir):
+            bad.append(f"llama.cpp tree is dirty: {cfg.llama_dir}")
+    except Exception as e:                                                                # noqa: BLE001
+        bad.append(f"llama.cpp git state of {cfg.llama_dir} unavailable: {e}")
+    if need_game and not probes.process_running(cfg.game_process):
+        bad.append(f"game process {cfg.game_process} is not running")
+    if game_absent and probes.process_running(cfg.game_process):
+        bad.append(f"game process {cfg.game_process} is running: LLM_ALONE must be measured with the game absent")
+    ac = probes.on_ac()
+    if ac is not True:
+        bad.append("not on AC power" if ac is False else "AC power state unknown: cannot confirm the laptop is on AC")
+    for label, p in (("LLM executable", cfg.llm_exe), ("model", cfg.model), ("prompt", cfg.prompt), ("PresentMon", cfg.presentmon_exe)) + ((("Vulkan LLM executable", cfg.llm_exe_vk),) if need_vk else ()):
+        if p is None or not probes.exists(p):
+            bad.append(f"{label} not found: {p}")
+    if probes.exists(cfg.presentmon_exe):
+        why = pm_hash_problem(cfg, probes)
+        if why:
+            bad.append(why)
+    try:
+        validate_game_process(cfg.game_process)
+    except ValueError as e:
+        bad.append(str(e))
+    if bad:
+        raise PreflightError(bad)
+    el = probes.is_elevated()
+    print("note: this process is " + {True: "ELEVATED (administrator)", False: "not elevated", None: "of unknown elevation"}[el] + " (recorded in meta.json; not a refusal)")
+
+
+def build_meta(cfg, probes=None):
+    probes = probes or SystemProbes()
+    why = pm_hash_problem(cfg, probes)              # BEFORE any execution of PresentMon (the --version call below)
+    if why:
+        raise PreflightError([why])
+    pm_sha = probes.sha256(cfg.presentmon_exe)
+    meta = {"git_head": probes.git_head(cfg.repo_root), "llama_head": probes.git_head(cfg.llama_dir), "hags_hwschmode": probes.hags(),
+            "driver_version": probes.driver_version(), "llm_exe_sha256": probes.sha256(cfg.llm_exe), "model_sha256": probes.sha256(cfg.model),
+            "presentmon_version": probes.presentmon_version(cfg.presentmon_exe), "presentmon_sha256": pm_sha,
+            "presentmon_sha256_matches_prereg": pm_sha == PRESENTMON_SHA256_PREREG, "seed": cfg.seed, "armoury_mode": cfg.armoury_mode,
+            "game_process": cfg.game_process, "process_snapshot": probes.process_snapshot(), "warmup_s": cfg.warmup_s, "window_s": cfg.window_s,
+            "n_prompt": cfg.n_prompt, "python": sys.version.split()[0], "allow_pm_hash_mismatch": bool(cfg.allow_pm_hash_mismatch), "elevated": probes.is_elevated(),
+            "igpu_vk_index": cfg.igpu_vk_index}
+    if cfg.llm_exe_vk is not None:
+        meta["llm_exe_vk_sha256"] = probes.sha256(cfg.llm_exe_vk)
+    return meta
+
+
+# ------------------------------------------------------------------ rest rule
+def rest_until_cool(read_temp, start_temp, tol_c=3.0, min_s=30.0, max_s=180.0, poll_s=1.0, clock=time.monotonic, sleep=time.sleep):
+    """Prereg rest rule: wait until the GPU temperature is within tol_c (above) of the rep's starting temperature, for at least min_s and at most max_s seconds.
+    Cooler than the start counts as within (one-sided reading of 'within 3 C'). -> dict(rest_s, reached, hit_max, start_temp, final_temp, min_s, max_s); the caller logs it."""
+    t0 = clock()
+    while True:
+        elapsed = clock() - t0
+        temp = read_temp()
+        ok = temp - start_temp <= tol_c
+        if elapsed >= max_s or (elapsed >= min_s and ok):
+            return {"rest_s": elapsed, "reached": bool(ok), "hit_max": bool(elapsed >= max_s and not (ok and elapsed >= min_s)), "start_temp": start_temp,
+                    "final_temp": temp, "tol_c": tol_c, "min_s": min_s, "max_s": max_s}
+        sleep(min(poll_s, max_s - elapsed))
+
+
+# ------------------------------------------------------------------ real dependencies (lazy)
+class LlmProc:
+    """The R1 driver process: line reader thread, 'READY' / 'DONE' waits, 'GO' on stdin."""
+
+    def __init__(self, cmd, env, popen=subprocess.Popen):
+        import queue
+        self.p = popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env)
+        self.lines, self._q = [], queue.Queue()
+        threading.Thread(target=self._read, daemon=True).start()
+
+    def _read(self):
+        for line in self.p.stdout:
+            line = line.rstrip("\r\n")
+            self.lines.append(line)
+            self._q.put(line)
+        self._q.put(None)
+
+    @property
+    def pid(self):
+        return self.p.pid
+
+    def wait_for(self, prefix, timeout):
+        import queue
+        end = time.monotonic() + timeout
+        while True:
+            try:
+                line = self._q.get(timeout=max(0.0, end - time.monotonic()))
+            except queue.Empty:
+                raise TimeoutError(f"no {prefix!r} line from the LLM driver within {timeout} s; last lines: {self.lines[-5:]}") from None
+            if line is None:
+                raise RuntimeError(f"LLM driver exited (rc={self.p.poll()}) before {prefix!r}; output: {self.lines[-10:]}")
+            if line.startswith(prefix):
+                return line
+            if line.startswith("FATAL"):
+                raise RuntimeError(f"LLM driver: {line}")
+
+    def send(self, text):
+        self.p.stdin.write(text + "\n")
+        self.p.stdin.flush()
+
+    def poll(self):
+        return self.p.poll()
+
+    def kill(self):
+        self.p.kill()
+
+
+class NvmlReader:
+    """Device 0 (the NVIDIA dGPU, as in the v1/v2 rig). UNVERIFIED on this build: the throttle-reason call name differs between nvidia-ml-py versions, both are tried."""
+
+    def __init__(self):
+        import pynvml
+        pynvml.nvmlInit()
+        self.nv, self.h = pynvml, pynvml.nvmlDeviceGetHandleByIndex(0)
+
+    def energy_mj(self):
+        return float(self.nv.nvmlDeviceGetTotalEnergyConsumption(self.h))
+
+    def temp_c(self):
+        return float(self.nv.nvmlDeviceGetTemperature(self.h, self.nv.NVML_TEMPERATURE_GPU))
+
+    def vram_used_mb(self):
+        return self.nv.nvmlDeviceGetMemoryInfo(self.h).used / 2**20
+
+    def sm_clock(self):
+        return int(self.nv.nvmlDeviceGetClockInfo(self.h, self.nv.NVML_CLOCK_SM))
+
+    def throttle(self):
+        fn = getattr(self.nv, "nvmlDeviceGetCurrentClocksEventReasons", None) or self.nv.nvmlDeviceGetCurrentClocksThrottleReasons
+        return int(fn(self.h))
+
+
+class Sampler50(threading.Thread):
+    """SM clock, throttle-reason bitmask and temperature every sampler_interval_s on the perf_counter clock (runs in every cell, SOLO included)."""
+
+    def __init__(self, nvml, interval_s=0.05):
+        super().__init__(daemon=True)
+        self.nvml, self.interval_s, self.stop_ev = nvml, interval_s, threading.Event()
+        self.t, self.sm, self.throttle, self.temp = [], [], [], []
+
+    def run(self):
+        while not self.stop_ev.is_set():
+            t = time.perf_counter()
+            self.t.append(t); self.sm.append(self.nvml.sm_clock()); self.throttle.append(self.nvml.throttle()); self.temp.append(self.nvml.temp_c())
+            self.stop_ev.wait(self.interval_s)
+
+    def stop(self):
+        self.stop_ev.set()
+        if self.is_alive():
+            self.join(2)
+
+
+def read_shared_gpu_mem(pid):
+    """Best effort: PDH '\\GPU Process Memory(pid_<pid>_*)\\Shared Usage' via typeperf, in bytes (the PDH counter's unit; UNVERIFIED here). Only instances that start with exactly
+    'pid_<pid>_' are summed (pid_12_ never matches pid_123_...): the column headers are checked, not just the wildcard. Returns 'unavailable' on any failure (never guessed).
+    Paging (analyze._flags) uses the END-of-window reading; the start reading is taken during the warm-up and is only recorded."""
+    import csv as _csv
+    import io
+    try:
+        r = subprocess.run([tool_paths()["typeperf"], rf"\GPU Process Memory(pid_{pid}_*)\Shared Usage", "-sc", "1"], capture_output=True, text=True, timeout=20)
+        rows = [line for line in r.stdout.splitlines() if line.startswith('"')]
+        if r.returncode != 0 or len(rows) < 2:
+            return "unavailable"
+        head, vals = next(_csv.reader(io.StringIO(rows[0]))), next(_csv.reader(io.StringIO(rows[1])))
+        total, found = 0.0, False
+        for h, v in zip(head[1:], vals[1:]):
+            inst = h.split("(", 1)[1].split(")", 1)[0] if "(" in h else ""
+            if inst.startswith(f"pid_{pid}_"):
+                total, found = total + float(v), True
+        return int(total) if found else "unavailable"
+    except Exception:                                                                     # noqa: BLE001
+        return "unavailable"
+
+
+def query_qpc_hz():
+    import ctypes
+    f = ctypes.c_int64()
+    if not ctypes.WinDLL("kernel32").QueryPerformanceFrequency(ctypes.byref(f)) or f.value <= 0:
+        raise RuntimeError("QueryPerformanceFrequency failed")
+    return float(f.value)
+
+
+def query_qpc_counter():
+    import ctypes
+    v = ctypes.c_int64()
+    if not ctypes.WinDLL("kernel32").QueryPerformanceCounter(ctypes.byref(v)):
+        raise RuntimeError("QueryPerformanceCounter failed")
+    return int(v.value)
+
+
+@dataclass
+class Deps:
+    probes: object
+    clock: object
+    sleep: object
+    spawn_llm: object          # (cmd, env, out_prefix) -> process-like: pid, lines, wait_for(prefix, timeout), send(text), poll(), kill()
+    make_capture: object       # (cfg, out_csv, session) -> start(), stop(timeout)
+    nvml: object               # energy_mj(), temp_c(), vram_used_mb()
+    make_sampler: object       # (nvml) -> start(), stop(), t, sm, throttle, temp
+    set_and_verify: object     # (pid, cls) -> dict, raises PriorityError
+    get_priority: object       # (pid) -> int
+    shared_mem: object         # (pid) -> bytes or 'unavailable'
+    qpc_hz: float
+    qpc_counter: object        # () -> raw QueryPerformanceCounter value; checked against clock() at cell start
+    extra: dict = field(default_factory=dict)
+
+
+def real_deps(cfg):
+    nvml = NvmlReader()
+    return Deps(probes=SystemProbes(), clock=time.perf_counter, sleep=time.sleep, spawn_llm=lambda cmd, env, out_prefix: LlmProc(cmd, env),
+                make_capture=lambda c, out_csv, session: presentmon.Capture(c.presentmon_exe, c.game_process, str(out_csv), session),
+                nvml=nvml, make_sampler=lambda nv: Sampler50(nv, cfg.sampler_interval_s), set_and_verify=gpu_priority.set_and_verify,
+                get_priority=gpu_priority.get_priority, shared_mem=read_shared_gpu_mem, qpc_hz=query_qpc_hz(), qpc_counter=query_qpc_counter)
+
+
+# ------------------------------------------------------------------ the cell
+def _sleep_until(deps, t):
+    """Sleep in steps of at most 0.25 s, then in 1 ms steps for the last 30 ms so that the caller wakes at t (energy reads at the window edges)."""
+    while True:
+        rem = t - deps.clock()
+        if rem <= 0:
+            return
+        deps.sleep(min(rem - 0.02, 0.25) if rem > 0.03 else min(rem, 0.001))
+
+
+def _sampler_stats(s, t_open, t_close):
+    idx = [i for i, t in enumerate(s.t) if t_open <= t < t_close]
+    if not idx:
+        return {"sampler_n": 0, "sm_clock_mhz_median": None, "throttle_mask_or": None, "throttle_flag_mask_or": None, "throttle_swpowercap": None, "throttle_flag": None,
+                "throttle_nonzero_frac": None, "sampler_temp_max": None}
+    import statistics
+    sm = [s.sm[i] for i in idx]
+    th = [s.throttle[i] for i in idx]
+    mask = 0
+    for x in th:
+        mask |= int(x)
+    return {"sampler_n": len(idx), "sm_clock_mhz_median": statistics.median(sm), "throttle_mask_or": mask, "throttle_flag_mask_or": mask & THROTTLE_FLAG_MASK,
+            "throttle_swpowercap": bool(mask & THROTTLE_SWPOWERCAP), "throttle_flag": bool(mask & THROTTLE_FLAG_MASK),
+            "throttle_nonzero_frac": sum(1 for x in th if x) / len(th), "sampler_temp_max": max(s.temp[i] for i in idx)}
+
+
+def _parse_duty_achieved(lines):
+    for line in lines:
+        if line.startswith("DUTY_ACHIEVED"):
+            return float(line.split()[1])
+    return None
+
+
+def run_cell(arm, rep, out_dir, cfg, deps=None):
+    """Run one cell into out_dir and return the result dict (also written to result.json). Raises on any failure (no result.json is then written)."""
+    if arm not in ARMS:
+        raise ValueError(f"unknown arm {arm!r}; arms are {ARMS}")
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    deps = deps or real_deps(cfg)
+    skew = abs(deps.clock() - deps.qpc_counter() / deps.qpc_hz)
+    if skew > QPC_TOLERANCE_S:
+        raise RuntimeError(f"time.perf_counter() and QueryPerformanceCounter/Frequency disagree by {skew * 1000:.3f} ms (limit {QPC_TOLERANCE_S * 1000:.0f} ms): window times would not match PresentMon's QPC")
+    uses_llm, uses_game = arm != "SOLO", arm != "LLM_ALONE"
+    backend, duty = ("vulkan" if arm == "IGPU" else "cuda"), (1 if arm == "DUTY50" else 0)
+    events = []
+
+    def log(msg):
+        events.append(f"t={deps.clock():.6f} {msg}")
+
+    llm = cap = sampler = None
+    res = {"arm": arm, "rep": rep}
+    try:
+        if arm == "IGPU" and (cfg.llm_exe_vk is None or cfg.igpu_vk_index is None):
+            raise RuntimeError("IGPU needs cfg.llm_exe_vk and cfg.igpu_vk_index (the Vulkan device index of the Radeon 780M, --igpu-vk-index)")
+        meta = build_meta(cfg, deps.probes)
+        meta.update(arm=arm, rep=rep, backend=backend if uses_llm else None, duty=duty if uses_llm else None)
+        (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
+        game_pid = None
+        if uses_game:
+            game_pid = deps.probes.find_pid(cfg.game_process)
+            if game_pid is None:
+                raise RuntimeError(f"game process {cfg.game_process} not running")
+        else:
+            if deps.probes.find_pid(cfg.game_process) is not None:
+                raise RuntimeError(f"game process {cfg.game_process} is running: LLM_ALONE must be measured with the game absent")
+            res["game_absent"] = True
+        res["game_pid"] = game_pid
+        if uses_llm:
+            env = dict(os.environ, RG_BACKEND=backend, RG_DUTY=str(duty))
+            env.setdefault("RG_NCTX", "16384")
+            env.pop("GGML_VK_VISIBLE_DEVICES", None)                  # never inherited: only the IGPU arm selects a Vulkan device
+            exe = cfg.llm_exe
+            if arm == "IGPU":
+                exe = cfg.llm_exe_vk
+                env["GGML_VK_VISIBLE_DEVICES"] = str(cfg.igpu_vk_index)
+            prefix = str(out_dir / "llm")
+            cmd = [str(exe), str(cfg.model), str(cfg.prompt), prefix, str(cfg.n_prompt)]
+            log(f"spawn {cmd} RG_BACKEND={backend} RG_DUTY={duty} RG_NCTX={env['RG_NCTX']} GGML_VK_VISIBLE_DEVICES={env.get('GGML_VK_VISIBLE_DEVICES')}")
+            llm = deps.spawn_llm(cmd, env, prefix)
+            llm.wait_for("READY", cfg.ready_timeout_s)
+            log("LLM READY")
+            exec_line = next((x for x in llm.lines if x.startswith("EXEC_MODE")), None)
+            if exec_line is None or exec_line.split()[1:2] != [backend] or f"duty={duty}" not in exec_line.split():
+                raise RuntimeError(f"EXEC_MODE line does not confirm backend={backend} duty={duty}: {exec_line!r}")
+            if arm == "IGPU":
+                device = exec_line.split("device=", 1)[1].split(" offloaded=", 1)[0] if "device=" in exec_line else ""
+                if "780M" not in device and "Radeon" not in device:
+                    raise RuntimeError(f"IGPU cell refused: the driver's EXEC_MODE device {device!r} does not contain '780M' or 'Radeon' (check --igpu-vk-index)")
+            res["exec_mode"] = exec_line
+        res["prio_readbacks"] = []
+        if arm == "PRIO_IDLE":
+            try:
+                r = deps.set_and_verify(llm.pid, gpu_priority.CLASSES["IDLE"])
+                res["prio_start"] = r
+                res["prio_readbacks"].append(r["readback"])
+            except gpu_priority.PriorityError as e:
+                if e.set_status != 0 or e.readback is None:
+                    raise                                           # a failed priority call fails the cell (the rep is rerun)
+                res["prio_start"] = {"set_status": e.set_status, "readback": e.readback, "ok": False, "error": str(e)}
+                res["prio_readbacks"].append(e.readback)           # a mismatching read-back voids PRIO_IDLE, the cell still completes
+            log(f"PRIO_IDLE start {res['prio_start']}")
+        res["temp_c"] = {"start": deps.nvml.temp_c()}
+        res["vram_mb"] = {"start": deps.nvml.vram_used_mb()}
+        sampler = deps.make_sampler(deps.nvml)
+        sampler.start()
+        if uses_game:
+            cap = deps.make_capture(cfg, out_dir / "frames.csv", f"R1_{arm}_{rep}_{secrets.token_hex(4)}")      # unique session per cell
+            cap.start()
+            deps.sleep(cfg.pm_settle_s)
+        t_open = deps.clock() + cfg.warmup_s
+        t_close = t_open + cfg.window_s
+        res.update(t_open=t_open, t_close=t_close, qpc_hz=deps.qpc_hz, warmup_s=cfg.warmup_s, window_s=cfg.window_s)
+        log(f"warm-up until {t_open}")
+        if uses_llm:
+            llm.send(f"GO {t_close!r}")                              # GO at the START of the warm-up: the LLM decodes from here, t_stop = window end
+            log(f"GO {t_close!r}")
+        shared0 = deps.shared_mem(game_pid) if uses_game else None    # PDH start reading: during the warm-up, never after t_open
+        if deps.clock() >= t_open:
+            raise RuntimeError("the PDH shared-memory read overran the warm-up (it must finish before t_open)")
+        _sleep_until(deps, t_open)
+        e0 = deps.nvml.energy_mj()                                    # first energy read immediately at t_open
+        te0 = deps.clock()
+        _sleep_until(deps, t_close)
+        e1 = deps.nvml.energy_mj()                                    # second read immediately at t_close: the energy window is [t_open, t_close)
+        te1 = deps.clock()
+        shared1 = deps.shared_mem(game_pid) if uses_game else None    # end-of-window reading: the one paging uses
+        res["temp_c"]["end"] = deps.nvml.temp_c()
+        res["vram_mb"]["end"] = deps.nvml.vram_used_mb()
+        res["energy_j"] = (e1 - e0) / 1000.0
+        res["energy_read_t"] = [te0, te1]
+        res["power_w"] = res["energy_j"] / (te1 - te0)
+        res["shared_gpu_mem_bytes"] = {"start": shared0, "end": shared1} if uses_game else None
+        if arm == "PRIO_IDLE":
+            # a PriorityError here (the call itself failed) propagates: the cell fails and the rep is rerun. Only a SUCCESSFUL read-back of the wrong class voids PRIO_IDLE.
+            res["prio_readbacks"].append(deps.get_priority(llm.pid))
+            res["prio_valid"] = all(x == gpu_priority.CLASSES["IDLE"] for x in res["prio_readbacks"])
+            log(f"PRIO_IDLE read-backs {res['prio_readbacks']}")
+        if uses_llm:
+            res["driver_done"] = llm.wait_for("DONE", cfg.done_timeout_s)
+            res["duty_achieved"] = None
+            if arm == "DUTY50":
+                res["duty_line"] = llm.wait_for("DUTY_ACHIEVED", cfg.done_timeout_s)
+                res["duty_achieved"] = _parse_duty_achieved([res["duty_line"]])
+        else:
+            res["duty_achieved"] = None
+        sampler.stop()
+        res.update(_sampler_stats(sampler, t_open, t_close))
+        res["temp_c"]["sampler_max"] = res.pop("sampler_temp_max")
+        if cap is not None:
+            cap.stop(timeout=cfg.capture_stop_timeout_s)
+            frames = presentmon.parse_csv(out_dir / "frames.csv")
+            cm = metrics.cell_frame_metrics(frames, t_open, t_close, deps.qpc_hz)
+            presentmon.check_window_continuity(cm["frames"], t_open, t_close, deps.qpc_hz, min_fps=60.0)      # raises PresentMonGapError: the whole rep reruns
+            res.update(frame=cm["frame"], gpu_busy_ms_median=cm["gpu_busy_ms_median"], n_dropped=cm["n_dropped"], swapchain=cm["swapchain"])
+        else:
+            res.update(frame=None, gpu_busy_ms_median=None, n_dropped=None, swapchain=None)
+        if uses_llm:
+            tok = out_dir / "llm_tokens.csv"
+            n_reset = metrics.count_resets(tok, t_open, t_close)
+            if n_reset:
+                raise RuntimeError(f"{n_reset} context reset row(s) of the token CSV fall inside the window: the cell fails (the rep reruns)")
+            res["n_tokens"] = metrics.count_tokens(tok, t_open, t_close)
+            res["tok_s"] = metrics.token_rate(tok, t_open, t_close)
+        else:
+            res["n_tokens"], res["tok_s"] = None, None
+        res["flags"] = {"throttling": bool(res.get("throttle_flag"))}
+        (out_dir / "result.json").write_text(json.dumps(res, indent=1, default=str))
+        log("result.json written")
+        return res
+    except BaseException:
+        log("FAILED\n" + traceback.format_exc())
+        raise
+    finally:
+        if llm is not None:
+            try:
+                if llm.poll() is None:
+                    llm.kill()
+            except Exception as e:                                                        # noqa: BLE001
+                events.append(f"kill failed: {e}")
+        if cap is not None:
+            try:
+                cap.stop(timeout=cfg.capture_stop_timeout_s)
+            except Exception as e:                                                        # noqa: BLE001
+                events.append(f"capture stop failed: {e}")
+        if sampler is not None:
+            try:
+                sampler.stop()
+            except Exception as e:                                                        # noqa: BLE001
+                events.append(f"sampler stop failed: {e}")
+        (out_dir / "driver.log").write_text("\n".join(events + ["--- LLM driver output ---"] + (list(llm.lines) if llm is not None else [])) + "\n")
