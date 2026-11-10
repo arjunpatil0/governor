@@ -22,7 +22,7 @@ import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from tools.realgame import gpu_priority, metrics, presentmon
+from tools.realgame import clockcheck, gpu_priority, metrics, presentmon
 
 ARMS = ("SOLO", "UNGATED", "PRIO_IDLE", "DUTY50", "IGPU", "LLM_ALONE")
 EXPECTED_LLAMA_COMMIT = "620d2225c"
@@ -201,6 +201,14 @@ class SystemProbes:
     def process_snapshot(self):
         return sorted({n for _, n in _process_table() if n})
 
+    def admin_helper_present(self):
+        """Reasons the admin clock helper looks present (named pipe or a process command line); empty list = absent. Read only."""
+        return clockcheck.helper_present()
+
+    def clock_idle_probe(self):
+        """The 3 s idle probe of the SM clock (read only); the caller has checked that the game is absent."""
+        return clockcheck.probe_idle()
+
     def is_elevated(self):
         """True if the process runs elevated (ctypes shell32.IsUserAnAdmin, loaded lazily); None if unknown."""
         if sys.platform != "win32":
@@ -218,6 +226,24 @@ def pm_hash_problem(cfg, probes):
     if sha == PRESENTMON_SHA256_PREREG or cfg.allow_pm_hash_mismatch:
         return None
     return f"PresentMon sha256 {sha} does not equal the prereg value {PRESENTMON_SHA256_PREREG} (override: --allow-pm-hash-mismatch, recorded in meta)"
+
+
+def clock_state_check(probes, game_process):
+    """Amendment 15 checks, read only. -> (problems, state): (a) the admin clock helper is absent, (b) with the game process absent the idle probe does not say 'locked' (and is
+    conclusive). With the game running the idle probe does not apply (utilization is not zero) and is recorded as skipped."""
+    problems = []
+    helper = list(probes.admin_helper_present())
+    for h in helper:
+        problems.append(f"admin clock helper is present ({h}): the sweep runs with unlocked clocks and no helper")
+    if probes.process_running(game_process):
+        idle = {"skipped": f"game process {game_process} is running; the idle probe applies only with the game absent"}
+    else:
+        idle = probes.clock_idle_probe()
+        if idle.get("status") == "locked" or idle.get("locked"):
+            problems.append(f"SM clock looks locked: idle with the game absent it stayed above {clockcheck.IDLE_SM_MHZ_ABOVE} MHz in P0 for {clockcheck.PROBE_S} s (run the clock reset first)")
+        elif idle.get("status") == "inconclusive":
+            problems.append(f"cannot confirm the SM clock is unlocked: the idle probe was inconclusive ({idle.get('error')})")
+    return problems, {"heuristic": dict(clockcheck.HEURISTIC), "helper_present": helper, "idle_probe": idle, "loaded_constant_check": None}
 
 
 def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False):
@@ -258,6 +284,7 @@ def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False
         validate_game_process(cfg.game_process)
     except ValueError as e:
         bad.append(str(e))
+    bad += clock_state_check(probes, cfg.game_process)[0]
     if bad:
         raise PreflightError(bad)
     el = probes.is_elevated()
@@ -520,6 +547,11 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
                 raise RuntimeError(f"game process {cfg.game_process} is running: LLM_ALONE must be measured with the game absent")
             res["game_absent"] = True
         res["game_pid"] = game_pid
+        clock_problems, clock_state = clock_state_check(deps.probes, cfg.game_process)
+        meta["clock_state"] = clock_state
+        (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
+        if clock_problems:
+            raise RuntimeError("clock state refused: " + "; ".join(clock_problems))
         if uses_llm:
             env = dict(os.environ, RG_BACKEND=backend, RG_DUTY=str(duty))
             env.setdefault("RG_NCTX", "16384")
@@ -600,15 +632,24 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
             res["duty_achieved"] = None
         sampler.stop()
         res.update(_sampler_stats(sampler, t_open, t_close))
+        sm_window = [v for t, v in zip(sampler.t, sampler.sm) if t_open <= t < t_close]
+        const = clockcheck.constant_clock(sm_window)
+        clock_state["loaded_constant_check"] = const
+        meta["clock_state"] = clock_state
+        (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
+        if const["constant"]:
+            raise RuntimeError(f"SM clock constant ({const['distinct']} distinct value over {const['n']} samples, at least {const['min_samples']}) for the whole window: the clock looks locked; "
+                               "the cell fails and the rep reruns")
         res["temp_c"]["sampler_max"] = res.pop("sampler_temp_max")
         if cap is not None:
             cap.stop(timeout=cfg.capture_stop_timeout_s)
             frames = presentmon.parse_csv(out_dir / "frames.csv")
             cm = metrics.cell_frame_metrics(frames, t_open, t_close, deps.qpc_hz)
             presentmon.check_window_continuity(cm["frames"], t_open, t_close, deps.qpc_hz, min_fps=60.0)      # raises PresentMonGapError: the whole rep reruns
-            res.update(frame=cm["frame"], gpu_busy_ms_median=cm["gpu_busy_ms_median"], n_dropped=cm["n_dropped"], swapchain=cm["swapchain"])
+            res.update(frame=cm["frame"], gpu_busy_ms_median=cm["gpu_busy_ms_median"], n_dropped=cm["n_dropped"], swapchain=cm["swapchain"],
+                       present_modes=sorted({f.present_mode for f in cm["frames"] if f.present_mode}))     # recorded only (hybrid display path, amendment 17); decides nothing
         else:
-            res.update(frame=None, gpu_busy_ms_median=None, n_dropped=None, swapchain=None)
+            res.update(frame=None, gpu_busy_ms_median=None, n_dropped=None, swapchain=None, present_modes=None)
         if uses_llm:
             tok = out_dir / "llm_tokens.csv"
             n_reset = metrics.count_resets(tok, t_open, t_close)

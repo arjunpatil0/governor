@@ -138,3 +138,20 @@ def test_missing_cell_result_fails_loudly(tree, tmp_path):
     (rg_run.cell_dir(root, 2, 1, 0, "SOLO") / "result.json").unlink()
     with pytest.raises(ValueError, match="rep 2"):
         a.run_analysis(root, tmp_path / "o", plots=False)
+
+
+def test_igpu_dropped_summary_states_igpu_not_tested(tmp_path):
+    root = tmp_path / "run"
+    rg_synth.build_tree(root, arms=("UNGATED", "PRIO_IDLE", "DUTY50"))
+    out = tmp_path / "out"
+    summ = a.run_analysis(root, out, plots=False)
+    assert summ["decision"]["igpu_tested"] is False
+    assert "IGPU option not tested" in (out / "summary.md").read_text()
+
+
+def test_igpu_measured_summary_has_no_not_tested_sentence(tree, tmp_path):
+    root, _ = tree
+    out = tmp_path / "out"
+    summ = a.run_analysis(root, out, plots=False)
+    assert summ["decision"]["igpu_tested"] is True
+    assert "not tested" not in (out / "summary.md").read_text()

@@ -56,6 +56,12 @@ class FakeProbes:
     def is_elevated(self):
         return False
 
+    def admin_helper_present(self):
+        return []
+
+    def clock_idle_probe(self):
+        return {"status": "unlocked", "locked": False, "n": 12}
+
     def presentmon_version(self, exe):
         return "PresentMon 2.6.0"
 

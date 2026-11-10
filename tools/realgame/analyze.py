@@ -192,6 +192,8 @@ def _markdown(s):
     lines = [f"# R1 analysis", "", f"Branch: **{d['branch']}**", ""] + [f"- {r}" for r in d["reasons"]] + ["", "| arm | mean worsening % | mean hitch pp | within limits | harmful |", "|---|---|---|---|---|"]
     for a, e in d["arms"].items():
         lines.append(f"| {a} | {e['mean_worsening_pct']:.3f} | {e['mean_hitch_pp']:.3f} | {e['within_limits']} | {e['harmful']} |")
+    if not d.get("igpu_tested", True):
+        lines += ["", "IGPU option not tested: the IGPU arm was dropped, so the branches above are evaluated on PRIO_IDLE alone."]
     lines += ["", f"Noise precondition ok: {d['noise']['ok']} (drift p99 {d['noise']['drift_p99_pct_mean']:.3f} %, hitch {d['noise']['drift_hitch_pp_mean']:.3f} pp)",
               f"Predictability (SOLO, N=8) pass: {s['predictability']['solo']['primary']['pass']}"]
     return "\n".join(lines) + "\n"

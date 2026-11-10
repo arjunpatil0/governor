@@ -947,6 +947,7 @@
   "ungated_max_token_gap_s": 0.02444,
   "prio_idle_valid": true,
   "igpu_measured": true,
+  "igpu_tested": true,
   "llm_alone_toks": 99.9,
   "predictability_pass": true,
   "fix": "IGPU",

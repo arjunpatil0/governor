@@ -162,16 +162,70 @@ def test_build_the_gate_requires_every_condition():
     assert decide(base) == "BUILD_THE_GATE"
     assert decide(base, pred=False) == "OPEN"
     assert decide(arms(arm(worsen_pct=8, hitch_pp=1.0), arm(**BAD), arm(**BAD))) == "OPEN"          # UNGATED not harmful
-    assert decide(dict(base, IGPU=None)) == "OPEN"                                                  # IGPU dropped
+    assert decide(dict(base, IGPU=None)) == "BUILD_THE_GATE"                                        # IGPU dropped: evaluated on PRIO_IDLE alone (amendment 11)
     assert decide(base, readbacks=(IDLE, 2)) == "OPEN"                                              # PRIO_IDLE void
     assert decide(arms(arm(**HARM), arm(**GOOD, toks=40.0), arm(**BAD))) != "BUILD_THE_GATE"        # PRIO_IDLE within
     assert decide(arms(arm(**HARM), arm(**BAD), arm(**GOOD, toks=40.0))) != "BUILD_THE_GATE"        # IGPU within
 
 
-def test_igpu_dropped_goes_to_open_unless_prio_decides():
-    assert decide({"UNGATED": arm(**HARM), "PRIO_IDLE": arm(**BAD), "IGPU": None}) == "OPEN"
-    assert decide({"UNGATED": arm(**HARM), "PRIO_IDLE": arm(**GOOD, toks=40.0), "IGPU": None}) == "SIMPLE_FIX"
+def test_igpu_dropped_prio_within_and_fast_is_simple_fix():
+    r = run({"UNGATED": arm(**HARM), "PRIO_IDLE": arm(**GOOD, toks=40.0), "IGPU": None})
+    assert r["branch"] == "SIMPLE_FIX" and r["fix"] == "PRIO_IDLE" and r["igpu_tested"] is False
+
+
+def test_igpu_dropped_prio_within_but_slow_is_fix_too_slow():
     assert decide({"UNGATED": arm(**HARM), "PRIO_IDLE": arm(**GOOD, toks=10.0), "IGPU": None}) == "FIX_TOO_SLOW"
+
+
+def test_igpu_dropped_prio_not_within_harmful_ungated_predictable_is_build_the_gate():
+    r = run({"UNGATED": arm(**HARM), "PRIO_IDLE": arm(**BAD), "IGPU": None})
+    assert r["branch"] == "BUILD_THE_GATE" and r["igpu_tested"] is False
+    assert any("IGPU option not tested" in x for x in r["reasons"])
+    assert decide({"UNGATED": arm(**HARM), "PRIO_IDLE": arm(**BAD)}) == "BUILD_THE_GATE"              # arm key absent altogether
+    assert decide({"UNGATED": arm(**HARM), "PRIO_IDLE": arm(**BAD), "IGPU": None}, pred=False) == "OPEN"
+    assert decide({"UNGATED": arm(worsen_pct=8, hitch_pp=1.0), "PRIO_IDLE": arm(**BAD), "IGPU": None}) == "OPEN"
+
+
+def test_igpu_dropped_prio_void_is_open():
+    r = run({"UNGATED": arm(**HARM), "PRIO_IDLE": arm(**BAD), "IGPU": None}, readbacks=(IDLE, 2))
+    assert r["branch"] == "OPEN" and r["igpu_tested"] is False
+    assert decide({"UNGATED": arm(**HARM), "PRIO_IDLE": arm(**BAD), "IGPU": None}, readbacks=()) == "OPEN"
+
+
+def test_igpu_measured_behaves_as_before():
+    r = run(arms(arm(**HARM), arm(**BAD), arm(**BAD)))
+    assert r["branch"] == "BUILD_THE_GATE" and r["igpu_tested"] is True and not any("not tested" in x for x in r["reasons"])
+    assert decide(arms(arm(**HARM), arm(**BAD), arm(**GOOD, toks=40.0))) != "BUILD_THE_GATE"        # IGPU within blocks the gate
+
+
+# ---- per-rep noise check (amendment 14)
+def solo_pair(p1=100.0, p2=100.0, h1=0.0, h2=0.0):
+    return {"p99": p1, "hitch": h1}, {"p99": p2, "hitch": h2}
+
+
+@pytest.mark.parametrize("rel,ok", [(2.49, True), (2.51, False), (2.5, False)])
+def test_rep_noise_p99_boundary(rel, ok):
+    a, b = 100.0 * (1 - rel / 200.0), 100.0 * (1 + rel / 200.0)
+    good, reasons = d.rep_noise_check(*solo_pair(a, b))
+    assert good is ok and bool(reasons) is (not ok)
+
+
+@pytest.mark.parametrize("hd,ok", [(0.24, True), (0.26, False), (0.25, False)])
+def test_rep_noise_hitch_diff_boundary(hd, ok):
+    good, reasons = d.rep_noise_check(*solo_pair(h1=0.5, h2=0.5 + hd))
+    assert good is ok and bool(reasons) is (not ok)
+
+
+@pytest.mark.parametrize("h,ok", [(0.99, True), (1.0, False)])
+def test_rep_noise_solo_hitch_boundary(h, ok):
+    assert d.rep_noise_check(*solo_pair(h1=h, h2=h))[0] is ok            # equal hitch shares: only the 1% clause can fail
+    assert d.rep_noise_check(*solo_pair(h1=h, h2=h - 0.1))[0] is ok      # either SOLO
+    assert d.rep_noise_check(*solo_pair(h1=h - 0.1, h2=h))[0] is ok
+
+
+def test_rep_noise_accepts_frame_dict_keys_and_lists_all_reasons():
+    ok, reasons = d.rep_noise_check({"p99": 100.0, "hitch_share": 1.5}, {"p99": 110.0, "hitch_share": 0.0})
+    assert ok is False and len(reasons) == 3
 
 
 def test_prio_idle_void_is_not_within_and_cannot_support_gate():

@@ -17,9 +17,16 @@ import sys
 import traceback
 from pathlib import Path
 
+from tools.realgame import decision
+
 DEFAULT_SEED = 89770043
 DEFAULT_REPS = 5
 DEFAULT_ARMS = ("UNGATED", "PRIO_IDLE", "DUTY50", "IGPU")
+MAX_NOISE_REPS = 2          # amendment 14: more than 2 distinct reps failing the noise check at any attempt stops the sweep (never loosened)
+
+
+class NoiseStop(RuntimeError):
+    """More than MAX_NOISE_REPS distinct reps failed the per-rep noise check: the sweep stops and is reported."""
 
 
 def make_order(seed=DEFAULT_SEED, reps=DEFAULT_REPS, arms=DEFAULT_ARMS):
@@ -92,18 +99,38 @@ def _check_or_write_meta(run_dir, seed, order, arms, igpu_dropped_reason):
         write_run_meta(run_dir, seed, reps, arms, order, igpu_dropped_reason)
 
 
-def _write_failed(d, arm, rep, attempt, error, tb=""):
+def _write_failed(d, arm, rep, attempt, error, tb="", reason="error"):
     d.mkdir(parents=True, exist_ok=True)
-    (d / "FAILED.json").write_text(json.dumps({"arm": arm, "rep": rep, "attempt": attempt, "error": error, "traceback": tb}, indent=1))
+    (d / "FAILED.json").write_text(json.dumps({"arm": arm, "rep": rep, "attempt": attempt, "reason": reason, "error": error, "traceback": tb}, indent=1))
+
+
+def noise_failed_reps(run_dir):
+    """The set of distinct reps that failed the per-rep noise check at ANY attempt (read from the FAILED.json files with reason 'noise', so it survives a resume)."""
+    out = set()
+    for f in Path(run_dir).glob("rep*/attempt*/*/FAILED.json"):
+        try:
+            if json.loads(f.read_text()).get("reason") == "noise":
+                out.add(int(f.parents[2].name[len("rep"):]))
+        except (ValueError, OSError):
+            continue
+    return out
+
+
+def rep_noise_from_results(run_dir, rep, attempt, order_rep):
+    """Per-rep noise check from the two SOLO result.json files of the attempt (frame.p99, frame.hitch_share) -> (ok, reasons)."""
+    first, last = (json.loads((cell_dir(run_dir, rep, attempt, pos, "SOLO") / "result.json").read_text())["frame"] for pos in (0, len(order_rep) - 1))
+    return decision.rep_noise_check(first, last)
 
 
 def _any_cell_ran(run_dir):
     return any(Path(run_dir).glob("rep*/attempt*/*/result.json")) or any(Path(run_dir).glob("rep*/attempt*/*/FAILED.json"))
 
 
-def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, rest=None, max_attempts=3, log=print, igpu_dropped_reason=None):
+def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, rest=None, max_attempts=3, log=print, igpu_dropped_reason=None, noise_check=None):
     """runner(arm, rep, out_dir, cfg) must write out_dir/result.json (cell.run_cell does). rest(read_temp, start_temp) -> dict; see cell.rest_until_cool.
-    LLM_ALONE is not part of the sweep (see run_llm_alone)."""
+    LLM_ALONE is not part of the sweep (see run_llm_alone). noise_check(run_dir, rep, attempt, order_rep) -> (ok, reasons) runs after the closing SOLO of each attempt (amendment 14;
+    run.main always passes rep_noise_from_results; None disables it for unit tests of the plumbing). A failing rep is rerun as a new attempt and written to FAILED.json with
+    reason 'noise'; when more than MAX_NOISE_REPS distinct reps have failed it at any attempt, NoiseStop is raised."""
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     arms = tuple(a for a in order[0] if a != "SOLO")
@@ -112,6 +139,8 @@ def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, re
     sweep_ref_temp, prev_label = None, None
     for rep, order_rep in enumerate(order):
         while True:
+            if len(noise_failed_reps(run_dir)) > MAX_NOISE_REPS:
+                raise NoiseStop(f"sweep stopped: reps {sorted(noise_failed_reps(run_dir))} failed the per-rep noise check (more than {MAX_NOISE_REPS} of {len(order)}); the limits are not loosened")
             attempts = _attempts(run_dir, rep)
             for a in attempts:                                            # an unfinished attempt is never continued: it counts as a failed attempt
                 if _attempt_state(run_dir, rep, a, order_rep) == "partial":
@@ -152,6 +181,16 @@ def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, re
                     log(f"  FAILED {pos}_{arm}: {e}; the whole rep will be rerun with the same order")
                     failed = True
                     break
+            if not failed and noise_check is not None:
+                ok, why = noise_check(run_dir, rep, attempt, order_rep)
+                if not ok:
+                    msg = "noise: " + "; ".join(why)
+                    _write_failed(cell_dir(run_dir, rep, attempt, len(order_rep) - 1, order_rep[-1]), order_rep[-1], rep, attempt, msg, reason="noise")
+                    log(f"rep {rep} attempt {attempt} FAILED the noise check ({msg}); the whole rep will be rerun with the same order")
+                    bad_reps = noise_failed_reps(run_dir)
+                    if len(bad_reps) > MAX_NOISE_REPS:
+                        raise NoiseStop(f"sweep stopped: reps {sorted(bad_reps)} failed the per-rep noise check (more than {MAX_NOISE_REPS} of {len(order)}); the limits are not loosened")
+                    continue
             if not failed:
                 break
 
@@ -182,8 +221,9 @@ def _parser():
     p.add_argument("--igpu-vk-index", type=int, help="Vulkan device index of the Radeon 780M (GGML_VK_VISIBLE_DEVICES); required for the IGPU arm")
     p.add_argument("--model")
     p.add_argument("--prompt")
-    p.add_argument("--n-prompt", type=int, required=True)
-    p.add_argument("--presentmon", required=True)
+    p.add_argument("--n-prompt", type=int)
+    p.add_argument("--presentmon")
+    p.add_argument("--check-clocks", action="store_true", help="read-only clock-state check (admin clock helper absent, SM clock not locked by the idle probe); the game process must be ABSENT")
     p.add_argument("--allow-pm-hash-mismatch", action="store_true", help="explicit override of the PresentMon sha256 check (recorded in meta)")
     p.add_argument("--game-process", required=True, help="executable name, must end with .exe")
     p.add_argument("--drop-igpu", metavar="REASON", help="drop the IGPU arm and record the reason")
@@ -192,13 +232,28 @@ def _parser():
 
 
 def main(argv=None, probes=None, runner=None):
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if not args.check_clocks and (args.n_prompt is None or args.presentmon is None):
+        parser.error("--n-prompt and --presentmon are required (except with --check-clocks)")
     from tools.realgame import cell
     try:
         cell.validate_game_process(args.game_process)
     except ValueError as e:
         print(f"--game-process: {e}", file=sys.stderr)
         return 2
+    if args.check_clocks:
+        probes = probes or cell.SystemProbes()
+        if probes.process_running(args.game_process):
+            print(f"--check-clocks: game process {args.game_process} is running; the idle probe needs the game absent", file=sys.stderr)
+            return 2
+        problems, state = cell.clock_state_check(probes, args.game_process)
+        print(json.dumps(state, indent=1, default=str))
+        if problems:
+            print("clock state refused:\n  " + "\n  ".join(problems), file=sys.stderr)
+            return 2
+        print("clock state ok: helper absent, SM clock unlocked (idle probe: " + str(state["idle_probe"].get("status")) + ")")
+        return 0
     root = Path(args.repo_root)
     arms = tuple(a for a in DEFAULT_ARMS if not (args.drop_igpu and a == "IGPU"))
     use_igpu = "IGPU" in arms and not args.llm_alone
@@ -240,8 +295,12 @@ def main(argv=None, probes=None, runner=None):
         run_llm_alone(cfg, Path(args.run_dir), runner)
         return 0
     read_temp = deps.nvml.temp_c if deps is not None else None
-    run_sweep(cfg, Path(args.run_dir), order, runner, seed=args.seed, read_temp=read_temp, rest=cell.rest_until_cool if read_temp else None,
-              max_attempts=args.max_attempts, igpu_dropped_reason=args.drop_igpu)
+    try:
+        run_sweep(cfg, Path(args.run_dir), order, runner, seed=args.seed, read_temp=read_temp, rest=cell.rest_until_cool if read_temp else None,
+                  max_attempts=args.max_attempts, igpu_dropped_reason=args.drop_igpu, noise_check=rep_noise_from_results)
+    except NoiseStop as e:
+        print(str(e), file=sys.stderr)
+        return 3
     return 0
 
 

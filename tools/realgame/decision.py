@@ -13,6 +13,8 @@ Interpretations (the prereg is silent; each is also stated in the reasons or the
   * UNGATED validity: tok/s strictly above 25% of the LLM-alone reference in every rep's cell AND no gap between consecutive token ends inside the window above 1 s
     (window edges included, see metrics.max_token_gap); each UNGATED cell dict must carry tokens_csv (path), t_open and t_close for the gap check, else ValueError.
     Otherwise the result is the pseudo-branch VOID (the prereg says the sweep is voided).
+  * IGPU dropped (arm absent or None; amendment 11): nothing is forced to OPEN; branches 2, 3 and 4 are evaluated on PRIO_IDLE alone, result['igpu_tested'] is False and a reason says
+    'IGPU option not tested'.
   * PRIO_IDLE is valid only if at least one read-back was recorded and all equal the idle class.
 """
 import numpy as np
@@ -72,6 +74,25 @@ def noise_precondition(solo):
             "drift_p99_pct_per_rep": [_r(x) for x in drift_p], "drift_hitch_pp_per_rep": [_r(x) for x in drift_h]}
 
 
+def rep_noise_check(solo1_metrics, solo2_metrics):
+    """Per-rep noise check (amendment 14), applied when a rep's closing SOLO finishes. Each argument is a dict with p99 (ms) and the hitch share in percent under 'hitch' or
+    'hitch_share'. The rep FAILS if |p99a - p99b| / mean(p99) >= 2.5 %, or |hitch_a - hitch_b| >= 0.25 pp, or either SOLO hitch share is >= 1 % (values rounded to 9 decimals
+    first, as elsewhere). -> (ok, reasons); reasons lists every clause that failed."""
+    def hit(m):
+        return m["hitch"] if "hitch" in m else m["hitch_share"]
+    p1, p2, h1, h2 = float(solo1_metrics["p99"]), float(solo2_metrics["p99"]), float(hit(solo1_metrics)), float(hit(solo2_metrics))
+    rel, hd = _r(abs(p1 - p2) / ((p1 + p2) / 2.0) * 100.0), _r(abs(h1 - h2))
+    reasons = []
+    if rel >= NOISE_P99_PCT:
+        reasons.append(f"SOLO p99 difference {rel:.3f} % of the mean is not below {NOISE_P99_PCT} %")
+    if hd >= NOISE_HITCH_PP:
+        reasons.append(f"SOLO hitch-share difference {hd:.3f} pp is not below {NOISE_HITCH_PP} pp")
+    for name, h in (("opening", h1), ("closing", h2)):
+        if _r(h) >= SOLO_HITCH_MAX:
+            reasons.append(f"{name} SOLO hitch share {_r(h):.3f} % is not below {SOLO_HITCH_MAX} %")
+    return (not reasons), reasons
+
+
 def summarize(values, seed=BOOT_SEED, n_boot=BOOT_N):
     """mean, median, worst rep (max) and a seeded percentile bootstrap (2.5 and 97.5 %) of the mean: for information only, it gates nothing."""
     v = np.asarray(values, dtype=float)
@@ -116,7 +137,10 @@ def evaluate(solo, arms, llm_alone_toks, predictability_pass, prio_readbacks, id
         ev["PRIO_IDLE"]["void"] = True
         reasons.append(f"PRIO_IDLE void: read-backs {list(prio_readbacks)} are not all the idle class {idle_class}; it counts as not within limits and cannot support BUILD_THE_GATE")
     igpu_measured = "IGPU" in ev
-    result = {"noise": noise, "arms": ev, "ungated_valid": ung_valid, "ungated_max_token_gap_s": max(gaps), "prio_idle_valid": prio_valid, "igpu_measured": igpu_measured, "llm_alone_toks": llm_alone_toks,
+    if not igpu_measured:
+        reasons.append("IGPU option not tested: the IGPU arm was dropped (amendment 11), the branches are evaluated on PRIO_IDLE alone")
+    result = {"noise": noise, "arms": ev, "ungated_valid": ung_valid, "ungated_max_token_gap_s": max(gaps), "prio_idle_valid": prio_valid, "igpu_measured": igpu_measured,
+              "igpu_tested": igpu_measured, "llm_alone_toks": llm_alone_toks,
               "predictability_pass": bool(predictability_pass), "fix": None, "fixes": []}
 
     def done(branch, why):
@@ -150,10 +174,10 @@ def evaluate(solo, arms, llm_alone_toks, predictability_pass, prio_readbacks, id
     if U["harmful"] and any_within:
         return done("FIX_TOO_SLOW", f"UNGATED is harmful and {' and '.join(any_within)} is within limits but misses its throughput condition")
     nominal_within = [n for n in ("PRIO_IDLE", "IGPU") if n in ev and ev[n]["within_limits"] and not ev[n].get("void")]
-    gate = {"ungated_harmful": U["harmful"], "igpu_measured": igpu_measured, "prio_idle_valid": prio_valid, "neither_within_limits": not nominal_within,
+    gate = {"ungated_harmful": U["harmful"], "prio_idle_valid": prio_valid, "neither_within_limits": not nominal_within,
             "predictability_pass": bool(predictability_pass)}
     if all(gate.values()):
-        return done("BUILD_THE_GATE", "UNGATED harmful, IGPU measured, PRIO_IDLE valid, neither fix within limits, predictability passes")
+        return done("BUILD_THE_GATE", "UNGATED harmful, PRIO_IDLE valid, neither measured fix within limits" + ("" if igpu_measured else " (IGPU option not tested)") + ", predictability passes")
     return done("OPEN", "no earlier branch holds; unmet BUILD_THE_GATE conditions: " + (", ".join(k for k, v in gate.items() if not v) or "none"))
 
 
