@@ -1,0 +1,26 @@
+{
+ "nvidia_smi_processes": "Wed Nov 11 21:14:36 2026       \n+-----------------------------------------------------------------------------------------+\n| NVIDIA-SMI 616.92                 KMD Version: 616.92        CUDA UMD Version: 13.4     |\n+-----------------------------------------+------------------------+----------------------+\n| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n|                                         |                        |               MIG M. |\n|=========================================+========================+======================|\n|   0  NVIDIA GeForce RTX 4070 ...  WDDM  |   00000000:01:00.0  On |                  N/A |\n| N/A   47C    P8              3W /   95W |    1613MiB /   8188MiB |      1%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n\n+-----------------------------------------------------------------------------------------+\n| Processes:                                                                              |\n|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\n|        ID   ID                                                               Usage      |\n|=========================================================================================|\n|    0   N/A  N/A            2156    C+G   C:\\Windows\\System32\\dwm.exe           N/A      |\n|    0   N/A  N/A            3300    C+G   ...nchmark\\bin\\superposition.exe      N/A      |\n|    0   N/A  N/A            6096    C+G   ...on Benchmark\\bin\\launcher.exe      N/A      |\n|    0   N/A  N/A            7560    C+G   C:\\Windows\\explorer.exe               N/A      |\n|    0   N/A  N/A           10184    C+G   ..._pzs8sxrjxfjjc\\app\\claude.exe      N/A      |\n|    0   N/A  N/A           14472    C+G   ..._cw5n1h2txyewy\\SearchHost.exe      N/A      |\n|    0   N/A  N/A           14504    C+G   ...y\\StartMenuExperienceHost.exe      N/A      |\n|    0   N/A  N/A           22060    C+G   ..._pzs8sxrjxfjjc\\app\\claude.exe      N/A      |\n|    0   N/A  N/A           24520    C+G   ...5n1h2txyewy\\TextInputHost.exe      N/A      |\n|    0   N/A  N/A           25780    C+G   ...yb3d8bbwe\\WindowsTerminal.exe      N/A      |\n+-----------------------------------------------------------------------------------------+\n",
+ "power_static": {
+  "default_power_limit_w": 80.0,
+  "min_power_limit_w": 5.0,
+  "max_power_limit_w": 140.0,
+  "current_power_limit_w": 95.0,
+  "raw_lines": [
+   "Current Power Limit                        : 95.00 W",
+   "Default Power Limit                        : 80.00 W",
+   "Min Power Limit                                : 5.00 W",
+   "Max Power Limit                                : 140.00 W",
+   "Current Power Limit                            : N/A",
+   "Default Power Limit                            : N/A",
+   "Min Power Limit                                : N/A",
+   "Max Power Limit                                : N/A"
+  ]
+ },
+ "elevated": true,
+ "display_active": "Enabled",
+ "display_mode": "[Requested functionality has been deprecated]",
+ "nvml_name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+ "nvml_driver_version": "616.92",
+ "vram_total_mib": 8188.0,
+ "records_mode": "smoke"
+}

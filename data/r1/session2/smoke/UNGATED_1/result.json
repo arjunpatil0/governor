@@ -1,0 +1,88 @@
+{
+ "arm": "UNGATED",
+ "rep": 0,
+ "elevated": true,
+ "smoke": true,
+ "game_pid": 3300,
+ "power_static_cell_start": {
+  "default_power_limit_w": 80.0,
+  "min_power_limit_w": 5.0,
+  "max_power_limit_w": 140.0,
+  "current_power_limit_w": 94.57,
+  "raw_lines": [
+   "Current Power Limit                        : 94.57 W",
+   "Default Power Limit                        : 80.00 W",
+   "Min Power Limit                                : 5.00 W",
+   "Max Power Limit                                : 140.00 W",
+   "Current Power Limit                            : N/A",
+   "Default Power Limit                            : N/A",
+   "Min Power Limit                                : N/A",
+   "Max Power Limit                                : N/A"
+  ]
+ },
+ "enforced_limit_w_start": 94.568,
+ "idle_vram_mib": 1852.26953125,
+ "llm_dll_dir": "C:\\Users\\arjun\\governor\\third_party\\llama.cpp\\build\\bin",
+ "rg_nctx": 12288,
+ "exec_mode": "EXEC_MODE cuda device=NVIDIA GeForce RTX 4070 Laptop GPU offloaded=29/29 n_layer=28 duty=0",
+ "prio_readbacks": [],
+ "temp_c": {
+  "start": 55.0,
+  "end": 68.0,
+  "sampler_max": 75.0
+ },
+ "vram_mb": {
+  "start": 5538.984375,
+  "end": 1852.26953125
+ },
+ "t_open": 6167.6714782,
+ "t_close": 6187.6714782,
+ "qpc_hz": 10000000.0,
+ "warmup_s": 5.0,
+ "window_s": 20.0,
+ "enforced_limit_w_end": 95.0,
+ "energy_j": 1896.721,
+ "energy_read_t": [
+  6167.6741239,
+  6187.6732413
+ ],
+ "power_w": 94.84023529958517,
+ "shared_gpu_mem_bytes": {
+  "start": 31887360,
+  "end": 31887360
+ },
+ "driver_done": "DONE tokens=1729 resets=0",
+ "duty_achieved": null,
+ "enforced_limit_w_min": 95.0,
+ "enforced_limit_w_max": 95.0,
+ "sampler_n": 319,
+ "sampled_power_n": 319,
+ "sampled_power_mean_w": 94.62486833855799,
+ "power_rejected": 0,
+ "sm_clock_mhz_median": 2445,
+ "throttle_mask_or": 1028,
+ "throttle_flag_mask_or": 0,
+ "throttle_swpowercap": true,
+ "throttle_flag": false,
+ "throttle_nonzero_frac": 1.0,
+ "frame": {
+  "p50": 16.6663,
+  "p99": 16.748952,
+  "low1_fps": 59.087075145464986,
+  "hitch_share": 0.0,
+  "n": 1200,
+  "hitch_threshold_ms": 25.0,
+  "percentile_method": "linear"
+ },
+ "gpu_busy_ms_median": 4.60765,
+ "n_dropped": 0,
+ "swapchain": "0x2678160D240",
+ "present_modes": [
+  "Composed: Copy with GPU GDI"
+ ],
+ "n_tokens": 1373,
+ "tok_s": 68.65,
+ "flags": {
+  "throttling": false
+ }
+}
