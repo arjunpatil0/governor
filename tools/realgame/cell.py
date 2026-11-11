@@ -363,6 +363,30 @@ def clock_state_check(probes, game_process, run_load=False):
     return problems, clockcheck.state_of(helper, load)
 
 
+DLL_SPEC = {"cuda": ("build", "ggml-cuda.dll"), "vulkan": ("build_vk", "ggml-vulkan.dll")}
+
+
+def llm_dll_dir(cfg, backend):
+    """Absolute resolved llama.cpp DLL directory that must be prepended to the LLM child's PATH."""
+    return Path(cfg.llama_dir, DLL_SPEC[backend][0], "bin").resolve()
+
+
+def dll_dir_problems(cfg, probes, backend):
+    d = llm_dll_dir(cfg, backend)
+    if not probes.exists(d):
+        return [f"{backend} llama.cpp DLL directory does not exist: {d}"]
+    return [f"{backend} llama.cpp DLL directory {d} lacks {n}" for n in ("ggml-base.dll", DLL_SPEC[backend][1]) if not probes.exists(d / n)]
+
+
+def format_rc(rc):
+    if rc is None:
+        return "unknown"
+    if rc < 0 or rc >= 0xC0000000:
+        u = rc & 0xFFFFFFFF
+        return f"{rc} = 0x{u:08X}" + (" 'DLL not found'" if u == 0xC0000135 else "")
+    return str(rc)
+
+
 def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False):
     """Raises PreflightError listing every refusal; returns None when the rig may run. game_absent: the game process must NOT be running (LLM_ALONE invocation)."""
     probes = probes or SystemProbes()
@@ -393,6 +417,9 @@ def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False
     for label, p in (("LLM executable", cfg.llm_exe), ("model", cfg.model), ("prompt", cfg.prompt), ("PresentMon", cfg.presentmon_exe)) + ((("Vulkan LLM executable", cfg.llm_exe_vk),) if need_vk else ()):
         if p is None or not probes.exists(p):
             bad.append(f"{label} not found: {p}")
+    bad += dll_dir_problems(cfg, probes, "cuda")
+    if need_vk:
+        bad += dll_dir_problems(cfg, probes, "vulkan")
     if probes.exists(cfg.presentmon_exe):
         why = pm_hash_problem(cfg, probes)
         if why:
@@ -478,7 +505,11 @@ class LlmProc:
             except queue.Empty:
                 raise TimeoutError(f"no {prefix!r} line from the LLM driver within {timeout} s; last lines: {self.lines[-5:]}") from None
             if line is None:
-                raise RuntimeError(f"LLM driver exited (rc={self.p.poll()}) before {prefix!r}; output: {self.lines[-10:]}")
+                try:
+                    rc_txt = "rc=" + format_rc(self.p.wait(timeout=5))
+                except subprocess.TimeoutExpired:
+                    rc_txt = "process still running after 5 s (no return code)"
+                raise RuntimeError(f"LLM driver exited ({rc_txt}) before {prefix!r}; output: {self.lines[-10:]}")
             if line.startswith(prefix):
                 return line
             if line.startswith("FATAL"):
@@ -732,6 +763,10 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
         res["idle_vram_mib"] = meta["idle_vram_mib"] = deps.nvml.vram_used_mb()          # amendment 21: BEFORE the LLM process is launched
         if uses_llm:
             env = dict(os.environ, RG_BACKEND=backend, RG_DUTY=str(duty))
+            dll_dir = str(llm_dll_dir(cfg, backend))
+            env["PATH"] = dll_dir + os.pathsep + os.environ.get("PATH", "")
+            res["llm_dll_dir"] = meta["llm_dll_dir"] = dll_dir
+            (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
             env.setdefault("RG_NCTX", "16384")
             env.pop("GGML_VK_VISIBLE_DEVICES", None)                  # never inherited: only the IGPU arm selects a Vulkan device
             exe = cfg.llm_exe
