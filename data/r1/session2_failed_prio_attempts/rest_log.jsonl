@@ -1,0 +1,5 @@
+{"rep": 0, "attempt": 1, "after": "rep0/attempt1/0_SOLO", "before": "1_PRIO_IDLE", "rest_s": 300.0, "reached": false, "hit_max": true, "start_temp": 51.0, "final_temp": 75.0, "tol_c": 3.0, "min_s": 30.0, "max_s": 300.0}
+{"rep": 0, "attempt": 2, "after": "rep0/attempt1/1_PRIO_IDLE", "before": "0_SOLO", "rest_s": 300.0, "reached": false, "hit_max": true, "start_temp": 51.0, "final_temp": 75.0, "tol_c": 3.0, "min_s": 30.0, "max_s": 300.0}
+{"rep": 0, "attempt": 2, "after": "rep0/attempt2/0_SOLO", "before": "1_PRIO_IDLE", "rest_s": 30.01599999999962, "reached": true, "hit_max": false, "start_temp": 75.0, "final_temp": 77.0, "tol_c": 3.0, "min_s": 30.0, "max_s": 300.0}
+{"rep": 0, "attempt": 3, "after": "rep0/attempt2/1_PRIO_IDLE", "before": "0_SOLO", "rest_s": 300.0, "reached": false, "hit_max": true, "start_temp": 51.0, "final_temp": 76.0, "tol_c": 3.0, "min_s": 30.0, "max_s": 300.0}
+{"rep": 0, "attempt": 3, "after": "rep0/attempt3/0_SOLO", "before": "1_PRIO_IDLE", "rest_s": 30.0, "reached": true, "hit_max": false, "start_temp": 76.0, "final_temp": 77.0, "tol_c": 3.0, "min_s": 30.0, "max_s": 300.0}

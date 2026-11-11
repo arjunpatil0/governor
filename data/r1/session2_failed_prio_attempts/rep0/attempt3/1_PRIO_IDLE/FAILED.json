@@ -1,0 +1,8 @@
+{
+ "arm": "PRIO_IDLE",
+ "rep": 0,
+ "attempt": 3,
+ "reason": "error",
+ "error": "PriorityError: D3DKMTGetProcessSchedulingPriorityClass failed: NTSTATUS -0x3fffffde",
+ "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\arjun\\governor\\tools\\realgame\\run.py\", line 233, in run_sweep\n    runner(arm, rep, d, cfg)\n  File \"C:\\Users\\arjun\\governor\\tools\\realgame\\run.py\", line 418, in <lambda>\n    runner = runner or (lambda arm, rep, out_dir, c, **kw: cell.run_cell(arm, rep, out_dir, c, deps, **kw))\n                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\arjun\\governor\\tools\\realgame\\cell.py\", line 867, in run_cell\n    r = deps.set_and_verify(llm.pid, gpu_priority.CLASSES[\"IDLE\"])\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\arjun\\governor\\tools\\realgame\\gpu_priority.py\", line 88, in set_and_verify\n    rb = get_priority(pid, gdi32, k32)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\arjun\\governor\\tools\\realgame\\gpu_priority.py\", line 77, in get_priority\n    raise PriorityError(f\"D3DKMTGetProcessSchedulingPriorityClass failed: NTSTATUS {status:#x}\", set_status=None, readback=None)\ntools.realgame.gpu_priority.PriorityError: D3DKMTGetProcessSchedulingPriorityClass failed: NTSTATUS -0x3fffffde\n"
+}

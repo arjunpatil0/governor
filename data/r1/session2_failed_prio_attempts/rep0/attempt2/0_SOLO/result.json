@@ -1,0 +1,73 @@
+{
+ "arm": "SOLO",
+ "rep": 0,
+ "elevated": true,
+ "game_pid": 3300,
+ "power_static_cell_start": {
+  "default_power_limit_w": 80.0,
+  "min_power_limit_w": 5.0,
+  "max_power_limit_w": 140.0,
+  "source": "nvml"
+ },
+ "enforced_limit_w_start": 92.794,
+ "idle_vram_mib": 1893.57421875,
+ "prio_readbacks": [],
+ "temp_c": {
+  "start": 75.0,
+  "end": 76.0,
+  "sampler_max": 77.0
+ },
+ "vram_mb": {
+  "start": 1893.57421875,
+  "end": 1893.57421875
+ },
+ "t_open": 8698.1376424,
+ "t_close": 8758.1376424,
+ "qpc_hz": 10000000.0,
+ "warmup_s": 20.0,
+ "window_s": 60.0,
+ "enforced_limit_w_end": 91.29,
+ "energy_j": 3029.328,
+ "energy_read_t": [
+  8698.1508369,
+  8758.1385167
+ ],
+ "power_w": 50.49916933109948,
+ "shared_gpu_mem_bytes": {
+  "start": 38576128,
+  "end": 38576128
+ },
+ "duty_achieved": null,
+ "enforced_limit_w_min": 85.984,
+ "enforced_limit_w_max": 93.149,
+ "sampler_n": 960,
+ "sampled_power_n": 960,
+ "sampled_power_mean_w": 49.55569791666667,
+ "power_rejected": 0,
+ "sm_clock_mhz_median": 2235.0,
+ "throttle_mask_or": 1,
+ "throttle_flag_mask_or": 0,
+ "throttle_swpowercap": false,
+ "throttle_flag": false,
+ "throttle_nonzero_frac": 1.0,
+ "frame": {
+  "p50": 16.666,
+  "p99": 16.768119,
+  "low1_fps": 58.97147844445035,
+  "hitch_share": 0.0,
+  "n": 3600,
+  "hitch_threshold_ms": 25.0,
+  "percentile_method": "linear"
+ },
+ "gpu_busy_ms_median": 6.4552,
+ "n_dropped": 0,
+ "swapchain": "0x2678160D240",
+ "present_modes": [
+  "Composed: Copy with GPU GDI"
+ ],
+ "n_tokens": null,
+ "tok_s": null,
+ "flags": {
+  "throttling": false
+ }
+}
