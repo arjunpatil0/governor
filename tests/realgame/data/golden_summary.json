@@ -60,6 +60,7 @@
   },
   "prio_readbacks": null,
   "present_modes": null,
+  "elevated": false,
   "n_tokens": 999,
   "tok_s": 99.9
  },
@@ -90,6 +91,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.668,
    "p99": 16.716,
    "low1_fps": 59.821134807,
@@ -127,6 +129,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.677,
    "p99": 34.88098,
    "low1_fps": 28.616397196,
@@ -169,6 +172,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.669,
    "p99": 34.69732,
    "low1_fps": 28.68960241,
@@ -208,6 +212,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.67,
    "p99": 31.10535,
    "low1_fps": 31.628554259,
@@ -247,6 +252,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.665,
    "p99": 16.716,
    "low1_fps": 54.626898285,
@@ -286,6 +292,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.667,
    "p99": 16.71502,
    "low1_fps": 59.821731241,
@@ -323,6 +330,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.6685,
    "p99": 16.716,
    "low1_fps": 59.821134807,
@@ -363,6 +371,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.671,
    "p99": 34.4242,
    "low1_fps": 28.826612729,
@@ -402,6 +411,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.6775,
    "p99": 34.5937,
    "low1_fps": 28.733567991,
@@ -441,6 +451,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.669,
    "p99": 31.09285,
    "low1_fps": 31.744352151,
@@ -480,6 +491,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.667,
    "p99": 16.716,
    "low1_fps": 59.822327687,
@@ -519,6 +531,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.665,
    "p99": 16.716,
    "low1_fps": 59.821134807,
@@ -556,6 +569,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.666,
    "p99": 16.715,
    "low1_fps": 59.823946671,
@@ -593,6 +607,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.676,
    "p99": 34.6193,
    "low1_fps": 28.730128328,
@@ -632,6 +647,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.663,
    "p99": 16.716,
    "low1_fps": 54.203969537,
@@ -671,6 +687,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.669,
    "p99": 30.914,
    "low1_fps": 31.932218544,
@@ -713,6 +730,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.672,
    "p99": 34.63638,
    "low1_fps": 28.741688862,
@@ -752,6 +770,7 @@
    "present_modes": [
     "Flip"
    ],
+   "elevated": false,
    "p50": 16.6665,
    "p99": 16.716,
    "low1_fps": 59.821134807,
@@ -1327,6 +1346,14 @@
   "throttling": [],
   "paging_threshold_mb": 64.0,
   "note": "paging = shared GPU memory above the rep's SOLO mean by more than 64 MB (bytes/2**20; cells without a reading are not flagged)"
+ },
+ "elevation": {
+  "llm_alone": false,
+  "arms": [
+   false
+  ],
+  "same": true,
+  "sentence": "The LLM-alone reference and the sweep arms ran with the same elevation (all not elevated)."
  },
  "attempts": {
   "0": {

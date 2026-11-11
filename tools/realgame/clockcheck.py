@@ -1,25 +1,28 @@
-"""Read-only clock-state checks for sprint R1 (docs/R1_PREREG.md amendment 15). Nothing here changes any GPU state: it only READS the pipe namespace listing (the helper's named pipe is detected by
-listing the pipe namespace and NEVER connected to or opened: a client connection would make the helper reset the clocks on disconnect), the command
-lines of running processes, and the SM clock / performance state / utilization (NVML, or the query interface of the vendor tool). The sweep is run with unlocked clocks;
-these checks refuse to start a cell when the admin clock helper is present or the SM clock looks locked.
+"""Read-only clock-state checks for sprint R1 (docs/R1_PREREG.md amendments 15 and 18). The only GPU action is the short CUDA load of the load test; nothing here changes any clock,
+power limit or other GPU state. The helper's named pipe is detected by listing the pipe namespace and NEVER connected to or opened (a client connection would make the helper reset the
+clocks on disconnect); the command lines of running processes are scanned as well.
 
-Heuristic fixed in the prereg (the thresholds are recorded in meta.json as HEURISTIC):
-  * idle probe (GPU utilization 0 and the game process absent): an SM clock above 1000 MHz in performance state P0 for the whole 3 s probe counts as locked;
-  * loaded cell: an SM clock sampled at least 200 times in the measured window with exactly one distinct value counts as locked and fails the cell.
+Amendment 18 (supersedes the idle-reading lock test): the GPU is loaded for about 5 s with a CUDA kernel while the SM clock is sampled every 50 ms through NVML. PASS only if the maximum
+SM clock is above 1980 MHz AND the clock-helper pipe is absent. Idle SM samples (3 s before the load), the performance state, the enforced power limit and the clocks-event reasons
+mask during the load are information only and decide nothing. The load comes from an injectable load_fn(seconds); the default needs torch with CUDA and fails loudly without it.
+In a loaded cell an SM clock sampled at least 200 times in the measured window with exactly one distinct value still counts as locked and fails the cell.
 """
 import os
 import subprocess
+import threading
 import time
 
 PIPE_NAME = "governor_clock"
 PIPE_DIR = "\\\\.\\pipe\\"
 PIPE_PATH = PIPE_DIR + PIPE_NAME
 HELPER_MARKER = "clock_helper"
-IDLE_SM_MHZ_ABOVE = 1000
-PROBE_S = 3.0
-PROBE_INTERVAL_S = 0.25
+PASS_SM_MHZ_ABOVE = 1980
+LOAD_S = 5.0
+SAMPLE_INTERVAL_S = 0.05
+IDLE_INFO_S = 3.0
+IDLE_INTERVAL_S = 0.25
 CONSTANT_MIN_SAMPLES = 200
-HEURISTIC = {"idle_sm_mhz_above": IDLE_SM_MHZ_ABOVE, "pstate": "P0", "probe_s": PROBE_S, "idle_util_pct": 0, "constant_min_samples": CONSTANT_MIN_SAMPLES}
+THRESHOLDS = {"max_sm_mhz_above": PASS_SM_MHZ_ABOVE, "load_s": LOAD_S, "sample_interval_s": SAMPLE_INTERVAL_S, "idle_info_s": IDLE_INFO_S, "constant_min_samples": CONSTANT_MIN_SAMPLES}
 
 
 def _own_pids():
@@ -84,73 +87,154 @@ def helper_present(list_pipes=default_list_pipes, list_cmdlines=default_list_cmd
     return found
 
 
-def _pstate(x):
-    if isinstance(x, str):
-        x = x.strip().upper()
-        if x.startswith("P"):
-            x = x[1:]
-    return int(x)
+def enforced_power_limit_w(nv, h):
+    """NVML enforced power limit in W (nvmlDeviceGetEnforcedPowerLimit / 1000); falls back to nvmlDeviceGetPowerManagementLimit; raises RuntimeError if neither can be read."""
+    errs = []
+    for name in ("nvmlDeviceGetEnforcedPowerLimit", "nvmlDeviceGetPowerManagementLimit"):
+        try:
+            return float(getattr(nv, name)(h)) / 1000.0
+        except Exception as e:                                                            # noqa: BLE001
+            errs.append(f"{name}: {type(e).__name__}: {e}")
+    raise RuntimeError("cannot read the NVML power limit (" + "; ".join(errs) + ")")
 
 
-def _num(x):
-    if isinstance(x, str):
-        x = x.replace("%", "").replace("MHz", "").strip()
-    return float(x)
+class NvmlClockReader:
+    """Device 0, read only: sm_clock(), pstate(), clock_reasons() (bitmask), enforced_power_limit_w()."""
+
+    def __init__(self):
+        import pynvml
+        pynvml.nvmlInit()
+        self.nv, self.h = pynvml, pynvml.nvmlDeviceGetHandleByIndex(0)
+
+    def sm_clock(self):
+        return int(self.nv.nvmlDeviceGetClockInfo(self.h, self.nv.NVML_CLOCK_SM))
+
+    def pstate(self):
+        return int(self.nv.nvmlDeviceGetPerformanceState(self.h))
+
+    def clock_reasons(self):
+        fn = getattr(self.nv, "nvmlDeviceGetCurrentClocksEventReasons", None) or self.nv.nvmlDeviceGetCurrentClocksThrottleReasons
+        return int(fn(self.h))
+
+    def enforced_power_limit_w(self):
+        return enforced_power_limit_w(self.nv, self.h)
 
 
-def nvml_reader():
-    """One reading from NVML device 0 (read only): dict(sm MHz, pstate int, util %)."""
-    import pynvml
-    pynvml.nvmlInit()
-    h = pynvml.nvmlDeviceGetHandleByIndex(0)
-    return {"sm": int(pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_SM)), "pstate": int(pynvml.nvmlDeviceGetPerformanceState(h)),
-            "util": int(pynvml.nvmlDeviceGetUtilizationRates(h).gpu)}
-
-
-def query_reader():
-    """One reading through the vendor tool's query interface (read only)."""
-    import shutil
-    root = os.environ.get("SystemRoot") or os.environ.get("SYSTEMROOT") or ""
-    exe = next((p for p in (os.path.join(root, "System32", "nvidia-smi.exe"), shutil.which("nvidia-smi")) if p and os.path.exists(p)), None)
-    if exe is None:
-        raise RuntimeError("the vendor query tool was not found")
-    out = subprocess.run([exe, "--query-gpu=clocks.sm,pstate,utilization.gpu", "--format=csv,noheader"], capture_output=True, text=True, timeout=15, check=True).stdout
-    sm, ps, util = [x.strip() for x in out.splitlines()[0].split(",")]
-    return {"sm": sm, "pstate": ps, "util": util}
-
-
-def default_reader():
+def default_load_fn(seconds, torch_module=None, clock=time.perf_counter):
+    """Load the GPU for `seconds` with fp16 matmuls on a large tensor (torch, CUDA). No CPU fallback: without torch.cuda this raises RuntimeError. Always ends with
+    torch.cuda.synchronize() and torch.cuda.empty_cache(), also after a failure."""
+    torch = torch_module
+    if torch is None:
+        try:
+            import torch
+        except Exception as e:                                                            # noqa: BLE001
+            raise RuntimeError(f"the clock load test needs torch with CUDA (import failed: {type(e).__name__}: {e}); there is no CPU fallback") from e
+    if not torch.cuda.is_available():
+        raise RuntimeError("the clock load test needs torch.cuda, which is not available; there is no CPU fallback")
     try:
-        return nvml_reader()
-    except Exception:                                                                     # noqa: BLE001
-        return query_reader()
+        x = torch.randn(8192, 8192, device="cuda", dtype=torch.float16)
+        y = torch.randn(8192, 8192, device="cuda", dtype=torch.float16)
+        end = clock() + seconds
+        while clock() < end:
+            for _ in range(4):
+                x @ y
+            torch.cuda.synchronize()
+    finally:
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
 
 
-def probe_idle(reader=default_reader, clock=time.monotonic, sleep=time.sleep, duration_s=PROBE_S, interval_s=PROBE_INTERVAL_S):
-    """The idle probe. Samples reader() for duration_s. status: 'locked' (every sample idle, P0 and above the SM threshold), 'unlocked', or 'inconclusive' (a reading failed or the
-    GPU was not idle: the heuristic cannot be applied, which the callers treat as a refusal). The caller must have checked that the game process is absent."""
-    base = {"thresholds": dict(HEURISTIC), "duration_s": duration_s}
-    samples = []
-    t0 = clock()
+def _try(fn):
     try:
-        while True:
-            r = reader()
-            samples.append({"sm": _num(r["sm"]), "pstate": _pstate(r["pstate"]), "util": _num(r["util"])})
-            if clock() - t0 >= duration_s:
-                break
-            sleep(interval_s)
+        return fn(), None
     except Exception as e:                                                                # noqa: BLE001
-        return dict(base, status="inconclusive", locked=False, n=len(samples), error=f"{type(e).__name__}: {e}")
-    util_max = max(x["util"] for x in samples)
-    sm_min, sm_max = min(x["sm"] for x in samples), max(x["sm"] for x in samples)
-    info = dict(base, n=len(samples), sm_min=sm_min, sm_max=sm_max, util_max=util_max, pstates=sorted({x["pstate"] for x in samples}))
-    if util_max > 0:
-        return dict(info, status="inconclusive", locked=False, error=f"GPU utilization {util_max} % during the probe: not idle")
-    locked = sm_min > IDLE_SM_MHZ_ABOVE and all(x["pstate"] == 0 for x in samples)
-    return dict(info, status="locked" if locked else "unlocked", locked=bool(locked))
+        return None, f"{type(e).__name__}: {e}"
+
+
+def load_test(reader, load_fn, clock=time.monotonic, sleep=time.sleep, load_s=LOAD_S, idle_s=IDLE_INFO_S, interval_s=SAMPLE_INTERVAL_S):
+    """Idle samples (information), then load_fn(load_s) in a thread while the SM clock is sampled every interval_s for load_s seconds.
+    -> dict(max_sm_mhz (None if nothing could be read), n_load_samples, load_error (None or text), read_error, info{...}). It decides nothing; see verdict()."""
+    info = {"idle_sm_mhz": [], "pstate_idle": [], "idle_error": None, "pstate_load": [], "clock_reasons_mask_or": 0, "power_limit_w": None, "power_limit_error": None}
+    t0 = clock()
+    while True:
+        sm, err = _try(reader.sm_clock)
+        ps, _ = _try(reader.pstate)
+        if err:
+            info["idle_error"] = err
+        else:
+            info["idle_sm_mhz"].append(sm)
+        if ps is not None and ps not in info["pstate_idle"]:
+            info["pstate_idle"].append(ps)
+        if clock() - t0 >= idle_s:
+            break
+        sleep(min(IDLE_INTERVAL_S, idle_s))
+    box = {"error": None}
+
+    def work():
+        try:
+            load_fn(load_s)
+        except BaseException as e:                                                        # noqa: BLE001
+            box["error"] = f"{type(e).__name__}: {e}"
+    th = threading.Thread(target=work, daemon=True)
+    th.start()
+    sms, read_error = [], None
+    t0 = clock()
+    while True:
+        sm, err = _try(reader.sm_clock)
+        if err:
+            read_error = err
+        else:
+            sms.append(sm)
+        rs, _ = _try(reader.clock_reasons)
+        if rs is not None:
+            info["clock_reasons_mask_or"] |= int(rs)
+        ps, _ = _try(reader.pstate)
+        if ps is not None and ps not in info["pstate_load"]:
+            info["pstate_load"].append(ps)
+        if clock() - t0 >= load_s or box["error"]:
+            break
+        sleep(interval_s)
+    th.join(timeout=load_s + 30.0)
+    if th.is_alive() and box["error"] is None:
+        box["error"] = "load_fn did not return in time"
+    info["power_limit_w"], info["power_limit_error"] = _try(reader.enforced_power_limit_w)
+    info["clock_reasons_hex"] = hex(info["clock_reasons_mask_or"])
+    return {"max_sm_mhz": max(sms) if sms else None, "n_load_samples": len(sms), "load_error": box["error"], "read_error": read_error, "load_s": load_s, "info": info}
+
+
+def verdict(helper, load):
+    """-> list of problems (empty = PASS): the helper is present, the load test failed or could not read the clock, or the maximum SM clock under load is not above 1980 MHz."""
+    problems = [f"admin clock helper is present ({h}): the sweep runs with unlocked clocks and no helper" for h in helper]
+    if load.get("load_error"):
+        problems.append(f"clock load test failed: {load['load_error']}")
+    elif load.get("max_sm_mhz") is None:
+        problems.append(f"clock load test failed: the SM clock could not be read ({load.get('read_error')})")
+    elif load["max_sm_mhz"] <= PASS_SM_MHZ_ABOVE:
+        problems.append(f"max SM clock under load is {load['max_sm_mhz']} MHz, not above {PASS_SM_MHZ_ABOVE} MHz: the clocks look limited or locked")
+    return problems
+
+
+def state_of(helper, load):
+    return {"thresholds": dict(THRESHOLDS), "helper_present": list(helper), "load_test": load, "max_sm_mhz": (load or {}).get("max_sm_mhz"), "loaded_constant_check": None}
+
+
+def default_load_test():
+    """The real load test (NVML reader + torch load). A reader that cannot be built is reported as a load error (the check then fails loudly)."""
+    try:
+        reader = NvmlClockReader()
+    except Exception as e:                                                                # noqa: BLE001
+        return {"max_sm_mhz": None, "n_load_samples": 0, "load_error": f"NVML reader unavailable: {type(e).__name__}: {e}", "info": {}}
+    return load_test(reader, default_load_fn)
+
+
+def run_check(reader, load_fn, helper_fn=helper_present, clock=time.monotonic, sleep=time.sleep, **kw):
+    """The whole clock check with injected reader and load_fn -> (problems, state)."""
+    helper = list(helper_fn())
+    load = load_test(reader, load_fn, clock=clock, sleep=sleep, **kw)
+    return verdict(helper, load), state_of(helper, load)
 
 
 def constant_clock(sm_samples, min_samples=CONSTANT_MIN_SAMPLES):
-    """Loaded-cell check: constant = at least min_samples samples with exactly one distinct value."""
+    """Loaded-cell check (unchanged by amendment 18): constant = at least min_samples samples with exactly one distinct value."""
     n, distinct = len(sm_samples), len(set(sm_samples))
     return {"n": n, "distinct": distinct, "min_samples": min_samples, "constant": bool(n >= min_samples and distinct == 1)}

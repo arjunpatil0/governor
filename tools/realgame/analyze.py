@@ -53,7 +53,7 @@ def cell_summary(cell_dir):
     out = {"arm": res["arm"], "rep": res["rep"], "t_open": res["t_open"], "t_close": res["t_close"], "power_w": res.get("power_w"), "energy_j": res.get("energy_j"),
            "sm_clock_mhz_median": res.get("sm_clock_mhz_median"), "throttle_mask_or": res.get("throttle_mask_or"), "throttle_flag_mask_or": res.get("throttle_flag_mask_or"),
            "temp_c": res.get("temp_c"), "vram_mb": res.get("vram_mb"), "shared_gpu_mem_bytes": res.get("shared_gpu_mem_bytes"), "prio_readbacks": res.get("prio_readbacks"),
-           "present_modes": res.get("present_modes")}
+           "present_modes": res.get("present_modes"), "elevated": res.get("elevated")}
     if (d / "frames.csv").exists():
         cm = metrics.cell_frame_metrics(presentmon.parse_csv(d / "frames.csv"), res["t_open"], res["t_close"], res["qpc_hz"])
         fm = cm["frame"]
@@ -123,6 +123,25 @@ def _load_llm_alone(run_dir):
     return alone
 
 
+def _elev_text(x):
+    return {True: "elevated", False: "not elevated", None: "of unknown elevation"}[x]
+
+
+def elevation_summary(alone_elevated, cells):
+    """Amendment 22: did the LLM-alone reference and the sweep arms (every cell of the tree) run with the same elevation? A missing flag is 'unknown' and is never called the same."""
+    arms = sorted({c.get("elevated") for c in cells}, key=str)
+    same = alone_elevated is not None and arms == [alone_elevated]
+    if None in arms or alone_elevated is None:
+        sentence = ("Elevation is unknown for at least one cell (no elevated flag in its result.json): the LLM-alone reference and the sweep arms cannot be said to have "
+                    "the same elevation.")
+    elif same:
+        sentence = f"The LLM-alone reference and the sweep arms ran with the same elevation (all {_elev_text(alone_elevated)})."
+    else:
+        sentence = (f"The LLM-alone reference and the sweep arms differ in elevation: the reference was {_elev_text(alone_elevated)}, the arms were "
+                    + " and ".join(_elev_text(x) for x in arms) + ".")
+    return {"llm_alone": alone_elevated, "arms": arms, "same": bool(same), "sentence": sentence}
+
+
 def analyze(run_dir):
     run_dir = Path(run_dir)
     meta = json.loads((run_dir / "run_meta.json").read_text())
@@ -160,7 +179,7 @@ def analyze(run_dir):
     for c in cells:
         c.pop("_frames", None)
     summary = {"run_meta": {k: meta[k] for k in ("seed", "reps", "arms", "order", "igpu_dropped_reason")}, "llm_alone": alone,
-               "cells": cells, "decision": ev, "predictability": pred, "flags": _flags(cells),
+               "cells": cells, "decision": ev, "predictability": pred, "flags": _flags(cells), "elevation": elevation_summary(alone.get("elevated"), cells),
                "attempts": {str(r): {"final_attempt": finals[r], "failed_attempts": rg_run.failed_attempts(run_dir, order)[r]} for r in range(len(order))}}
     summary["decision_notes"] = ("noise drift is reported separately in decision.noise; DUTY50 is reference only; bootstrap/median/worst are for information only; "
                                  "predictability is pooled over the SOLO cells (errors computed within each cell)")
@@ -199,6 +218,7 @@ def _markdown(s):
     lines += ["", "Present modes (recorded only, decides nothing):"] + [f"- {arm}: {', '.join(sorted(m)) or 'none recorded'}" for arm, m in modes.items()]
     if not d.get("igpu_tested", True):
         lines += ["", "IGPU option not tested: the IGPU arm was dropped, so the branches above are evaluated on PRIO_IDLE alone."]
+    lines += ["", s["elevation"]["sentence"]]
     lines += ["", f"Noise precondition ok: {d['noise']['ok']} (drift p99 {d['noise']['drift_p99_pct_mean']:.3f} %, hitch {d['noise']['drift_hitch_pp_mean']:.3f} pp)",
               f"Predictability (SOLO, N=8) pass: {s['predictability']['solo']['primary']['pass']}"]
     return "\n".join(lines) + "\n"
@@ -208,6 +228,8 @@ def run_analysis(run_dir, out, plots=True):
     out = Path(out)
     _check_out(out, [out / t for t in TARGETS])
     summ = analyze(run_dir)
+    if not summ["elevation"]["same"]:
+        print(summ["elevation"]["sentence"])
     out.mkdir(parents=True, exist_ok=True)
     (out / "summary.json").write_text(json.dumps(summ, indent=1))
     (out / "summary.md").write_text(_markdown(summ))

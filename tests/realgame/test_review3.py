@@ -26,7 +26,7 @@ def sweep_args(tmp_path, *extra):
 def write_check(tmp_path, status="passed", age_s=10.0, **kw):
     run = tmp_path / "run"
     run.mkdir(parents=True, exist_ok=True)
-    doc = {"status": status, "timestamp": time.time() - age_s, "helper_present": [], "idle_probe": {"status": "unlocked", "n": 12}, "thresholds": {"idle_sm_mhz_above": 1000}, **kw}
+    doc = {"status": status, "timestamp": time.time() - age_s, "helper_present": [], "max_sm_mhz": 2100, "info": {"idle_sm_mhz": [210]}, "thresholds": {"max_sm_mhz_above": 1980}, **kw}
     (run / "clock_check.json").write_text(json.dumps(doc))
     return doc
 
@@ -43,8 +43,8 @@ def test_check_clocks_writes_passed_file(tmp_path):
     doc = json.loads((tmp_path / "run" / "clock_check.json").read_text())
     assert doc["status"] == "passed" and doc["helper_present"] == []
     assert abs(doc["timestamp"] - time.time()) < 60
-    assert doc["idle_probe"]["status"] == "unlocked" and doc["idle_probe"]["n"] == 12
-    assert doc["thresholds"]["idle_sm_mhz_above"] == cc.IDLE_SM_MHZ_ABOVE
+    assert doc["max_sm_mhz"] == 2100 and doc["thresholds"]["max_sm_mhz_above"] == cc.PASS_SM_MHZ_ABOVE and "timestamp_iso" in doc
+    assert doc["info"]["power_limit_w"] == 95.0 and doc["problems"] == []
 
 
 def test_check_clocks_writes_refused_file(tmp_path, capsys):
@@ -55,7 +55,7 @@ def test_check_clocks_writes_refused_file(tmp_path, capsys):
 
 def test_check_clocks_refused_overwrites_earlier_passed_file(tmp_path):
     write_check(tmp_path)
-    assert r.main(check_args(tmp_path), probes=ClockProbes(game=False, idle={"status": "locked", "locked": True})) == 2
+    assert r.main(check_args(tmp_path), probes=ClockProbes(game=False, load={"max_sm_mhz": 1500, "load_error": None, "info": {}})) == 2
     assert json.loads((tmp_path / "run" / "clock_check.json").read_text())["status"] == "refused"
 
 

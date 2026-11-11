@@ -30,6 +30,6 @@ def test_no_windows_only_imports_at_module_level():
 
 def test_clockcheck_only_reads_and_names_the_helper_only_in_the_allowed_token():
     src = (PKG / "clockcheck.py").read_text(encoding="utf-8")
-    assert "--query-gpu" in src and "subprocess.run" in src
+    assert "subprocess.run" in src          # the nvidia-smi queries moved to cell.py (amendment 21); the idle reader that used them is gone
     for bad in ("nvmlDeviceSetGpuLockedClocks", "SetApplicationsClocks", "nvmlDeviceSet", "ResetGpuLockedClocks", "os.remove", "os.kill", "terminate", ".kill("):
         assert bad not in src, bad

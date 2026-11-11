@@ -18,7 +18,7 @@ import time
 import traceback
 from pathlib import Path
 
-from tools.realgame import decision
+from tools.realgame import clockcheck, decision
 
 DEFAULT_SEED = 89770043
 DEFAULT_REPS = 5
@@ -26,6 +26,7 @@ DEFAULT_ARMS = ("UNGATED", "PRIO_IDLE", "DUTY50", "IGPU")
 NOISE_OK = "NOISE_OK.json"  # marker in the attempt directory, written only after the per-rep noise check passed
 CLOCK_CHECK = "clock_check.json"
 DEFAULT_MAX_CLOCK_CHECK_AGE_S = 21600
+RECORD_KEYS = ("nvidia_smi_processes", "display_active", "display_mode", "nvml_name", "nvml_driver_version", "vram_total_mib", "records_mode")
 MAX_NOISE_REPS = 2         # amendment 14: more than 2 distinct reps failing the noise check at any attempt stops the sweep (never loosened)
 
 
@@ -57,12 +58,14 @@ def llm_alone_dir(run_dir):
     return Path(run_dir) / "llm_alone"
 
 
-def write_run_meta(run_dir, seed, reps, arms, order, igpu_dropped_reason=None, clock_check=None):
+def write_run_meta(run_dir, seed, reps, arms, order, igpu_dropped_reason=None, clock_check=None, records=None):
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"seed": seed, "reps": reps, "arms": list(arms), "order": order, "igpu_dropped_reason": igpu_dropped_reason}
     if clock_check is not None:
         meta["clock_check"] = clock_check
+    if records is not None:
+        meta.update(records)
     (run_dir / "run_meta.json").write_text(json.dumps(meta, indent=1))
 
 
@@ -106,18 +109,23 @@ def failed_attempts(run_dir, order):
     return {rep: [a for a in _attempts(run_dir, rep) if _attempt_state(run_dir, rep, a, o) == "failed"] for rep, o in enumerate(order)}
 
 
-def _check_or_write_meta(run_dir, seed, order, arms, igpu_dropped_reason, clock_check=None):
+def _check_or_write_meta(run_dir, seed, order, arms, igpu_dropped_reason, clock_check=None, records=None):
     p = Path(run_dir) / "run_meta.json"
     reps = len(order)
     if p.exists():
         old = json.loads(p.read_text())
         if old["seed"] != seed or old["reps"] != reps or old["order"] != order:
             raise ValueError(f"run_meta.json in {run_dir} disagrees with the requested seed/reps/order (stored seed={old['seed']}, reps={old['reps']}): refusing to resume")
-        if clock_check is not None:                                           # the clock check that gated THIS invocation replaces an earlier one
-            old["clock_check"] = clock_check
+        if clock_check is not None or records is not None:
+            if clock_check is not None:                                       # the clock check that gated THIS invocation replaces an earlier one
+                old["clock_check"] = clock_check
+            if records is not None:                                           # the records of THIS invocation replace the top-level ones; the earlier ones are kept in a list
+                if "nvidia_smi_processes" in old:
+                    old.setdefault("earlier_start_records", []).append({k: old[k] for k in RECORD_KEYS if k in old})
+                old.update(records)
             p.write_text(json.dumps(old, indent=1))
     else:
-        write_run_meta(run_dir, seed, reps, arms, order, igpu_dropped_reason, clock_check)
+        write_run_meta(run_dir, seed, reps, arms, order, igpu_dropped_reason, clock_check, records)
 
 
 def _write_failed(d, arm, rep, attempt, error, tb="", reason="error"):
@@ -166,7 +174,7 @@ def _any_cell_ran(run_dir):
     return any(Path(run_dir).glob("rep*/attempt*/*/result.json")) or any(Path(run_dir).glob("rep*/attempt*/*/FAILED.json"))
 
 
-def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, rest=None, max_attempts=3, log=print, igpu_dropped_reason=None, noise_check=None, clock_check=None):
+def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, rest=None, max_attempts=3, log=print, igpu_dropped_reason=None, noise_check=None, clock_check=None, records=None):
     """runner(arm, rep, out_dir, cfg) must write out_dir/result.json (cell.run_cell does). rest(read_temp, start_temp) -> dict; see cell.rest_until_cool.
     LLM_ALONE is not part of the sweep (see run_llm_alone). noise_check(run_dir, rep, attempt, order_rep) -> (ok, reasons) runs after the closing SOLO of each attempt (amendment 14;
     run.main always passes rep_noise_from_results; None disables it for unit tests of the plumbing). A failing rep is rerun as a new attempt and written to FAILED.json with
@@ -174,7 +182,7 @@ def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, re
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     arms = tuple(a for a in order[0] if a != "SOLO")
-    _check_or_write_meta(run_dir, seed, order, arms, igpu_dropped_reason, clock_check)
+    _check_or_write_meta(run_dir, seed, order, arms, igpu_dropped_reason, clock_check, records)
     ran_before = _any_cell_ran(run_dir)                                   # the very first cell of the sweep does not rest
     sweep_ref_temp, prev_label = None, None
     for rep, order_rep in enumerate(order):
@@ -243,10 +251,14 @@ def run_llm_alone(cfg, run_dir, runner, log=print):
 
 
 def write_clock_check(run_dir, status, state, problems, now=None):
-    """--check-clocks result: run_dir/clock_check.json (status passed/refused, epoch + ISO timestamp, helper_present, idle probe summary, thresholds, problems)."""
+    """--check-clocks result: run_dir/clock_check.json (status passed/refused, epoch + ISO timestamp, max_sm_mhz under load, thresholds, the information block (idle SM samples, pstate,
+    enforced power limit, clocks-event reasons mask), helper_present, load error, problems)."""
     now = time.time() if now is None else now
-    doc = {"status": status, "timestamp": now, "timestamp_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(now)), "helper_present": list((state or {}).get("helper_present") or []),
-           "idle_probe": (state or {}).get("idle_probe"), "thresholds": (state or {}).get("heuristic"), "problems": list(problems)}
+    state = state or {}
+    load = state.get("load_test") or {}
+    doc = {"status": status, "timestamp": now, "timestamp_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(now)), "max_sm_mhz": state.get("max_sm_mhz"),
+           "thresholds": state.get("thresholds"), "info": load.get("info"), "helper_present": list(state.get("helper_present") or []), "n_load_samples": load.get("n_load_samples"),
+           "load_error": load.get("load_error"), "problems": list(problems)}
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / CLOCK_CHECK).write_text(json.dumps(doc, indent=1, default=str))
@@ -288,7 +300,9 @@ def _parser():
     p.add_argument("--prompt")
     p.add_argument("--n-prompt", type=int)
     p.add_argument("--presentmon")
-    p.add_argument("--check-clocks", action="store_true", help="read-only clock-state check (admin clock helper absent, SM clock not locked by the idle probe); the game process must be ABSENT")
+    p.add_argument("--check-clocks", action="store_true", help="clock check (amendment 18): admin clock helper absent and max SM clock above 1980 MHz in a ~5 s CUDA load test; the game process must be ABSENT")
+    p.add_argument("--power-limit-w", type=float, default=95.0, help="target NVML enforced power limit in W (amendment 19)")
+    p.add_argument("--power-limit-tol-w", type=float, default=1.0, help="tolerance around --power-limit-w in W; a cell is refused outside it")
     p.add_argument("--allow-pm-hash-mismatch", action="store_true", help="explicit override of the PresentMon sha256 check (recorded in meta)")
     p.add_argument("--game-process", required=True, help="executable name, must end with .exe")
     p.add_argument("--drop-igpu", metavar="REASON", help="drop the IGPU arm and record the reason")
@@ -311,11 +325,11 @@ def main(argv=None, probes=None, runner=None):
     if args.check_clocks:
         probes = probes or cell.SystemProbes()
         if probes.process_running(args.game_process):
-            print(f"--check-clocks: game process {args.game_process} is running; the idle probe needs the game absent", file=sys.stderr)
+            print(f"--check-clocks: game process {args.game_process} is running; the load test needs the game absent", file=sys.stderr)
             if args.run_dir:
-                write_clock_check(args.run_dir, "refused", None, [f"game process {args.game_process} is running; the idle probe needs the game absent"])
+                write_clock_check(args.run_dir, "refused", None, [f"game process {args.game_process} is running; the load test needs the game absent"])
             return 2
-        problems, state = cell.clock_state_check(probes, args.game_process)
+        problems, state = cell.clock_state_check(probes, args.game_process, run_load=True)
         print(json.dumps(state, indent=1, default=str))
         if args.run_dir:
             write_clock_check(args.run_dir, "refused" if problems else "passed", state, problems)
@@ -324,7 +338,7 @@ def main(argv=None, probes=None, runner=None):
         if problems:
             print("clock state refused:\n  " + "\n  ".join(problems), file=sys.stderr)
             return 2
-        print("clock state ok: helper absent, SM clock unlocked (idle probe: " + str(state["idle_probe"].get("status")) + ")")
+        print(f"clock state ok: helper absent, max SM clock under load {state['max_sm_mhz']} MHz (above {clockcheck.PASS_SM_MHZ_ABOVE})")
         return 0
     root = Path(args.repo_root)
     arms = tuple(a for a in DEFAULT_ARMS if not (args.drop_igpu and a == "IGPU"))
@@ -337,7 +351,8 @@ def main(argv=None, probes=None, runner=None):
                       presentmon_exe=Path(args.presentmon), game_process=args.game_process, armoury_mode=args.armoury_mode,
                       llama_dir=Path(args.llama_dir or root / "third_party" / "llama.cpp"), n_prompt=args.n_prompt, seed=args.seed,
                       llm_exe_vk=Path(args.llm_exe_vk or root / "workloads" / "background" / "llama_realgame_bench_vk.exe") if use_igpu else None,
-                      igpu_vk_index=args.igpu_vk_index if use_igpu else None, allow_pm_hash_mismatch=args.allow_pm_hash_mismatch)
+                      igpu_vk_index=args.igpu_vk_index if use_igpu else None, allow_pm_hash_mismatch=args.allow_pm_hash_mismatch,
+                      power_limit_w=args.power_limit_w, power_limit_tol_w=args.power_limit_tol_w)
     order = make_order(args.seed, args.reps, arms)
     print(f"seed {args.seed}  reps {args.reps}  arms {list(arms)}" + (f"  IGPU dropped: {args.drop_igpu}" if args.drop_igpu else ""))
     if args.llm_alone:
@@ -365,16 +380,17 @@ def main(argv=None, probes=None, runner=None):
     if clock_check is None:
         print(f"clock check refused: {why}", file=sys.stderr)
         return 2
+    records = dict(cell.sweep_start_records(probes), records_mode="llm_alone" if args.llm_alone else "sweep")      # amendment 21
     deps = cell.real_deps(cfg) if runner is None else None
     runner = runner or (lambda arm, rep, out_dir, c: cell.run_cell(arm, rep, out_dir, c, deps))
     if args.llm_alone:
-        _check_or_write_meta(Path(args.run_dir), args.seed, order, arms, args.drop_igpu, clock_check)
+        _check_or_write_meta(Path(args.run_dir), args.seed, order, arms, args.drop_igpu, clock_check, records)
         run_llm_alone(cfg, Path(args.run_dir), runner)
         return 0
     read_temp = deps.nvml.temp_c if deps is not None else None
     try:
         run_sweep(cfg, Path(args.run_dir), order, runner, seed=args.seed, read_temp=read_temp, rest=cell.rest_until_cool if read_temp else None,
-                  max_attempts=args.max_attempts, igpu_dropped_reason=args.drop_igpu, noise_check=rep_noise_from_results, clock_check=clock_check)
+                  max_attempts=args.max_attempts, igpu_dropped_reason=args.drop_igpu, noise_check=rep_noise_from_results, clock_check=clock_check, records=records)
     except NoiseStop as e:
         print(str(e), file=sys.stderr)
         return 3

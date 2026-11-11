@@ -64,6 +64,8 @@ class Config:
     llm_exe_vk: "Path | None" = None           # the Vulkan build of the driver, used only for the IGPU arm
     igpu_vk_index: "int | None" = None         # Vulkan device index of the Radeon 780M (GGML_VK_VISIBLE_DEVICES), required for IGPU
     allow_pm_hash_mismatch: bool = False       # explicit override of the PresentMon sha256 check; recorded in meta.json
+    power_limit_w: float = 95.0                # amendment 19: the enforced NVML power limit must be within power_limit_tol_w of this
+    power_limit_tol_w: float = 1.0
 
 
 def validate_game_process(name):
@@ -139,6 +141,55 @@ def _process_table():
     return rows
 
 
+_NVSMI_EXTRA = (r"C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe",)
+
+
+def nvidia_smi_exe():
+    """Full path of nvidia-smi: %SystemRoot%\\System32 first, then the NVSMI install folder. PATH and the current directory are never searched."""
+    root = os.environ.get("SystemRoot") or os.environ.get("SYSTEMROOT")
+    cands = ([str(Path(root) / "System32" / "nvidia-smi.exe")] if root else []) + list(_NVSMI_EXTRA)
+    for c in cands:
+        if os.path.isfile(c):
+            return c
+    raise RuntimeError(f"nvidia-smi was not found at any of {cands}")
+
+
+def nvml_power_limit_w(nv, h):
+    """Enforced power limit in W: nvmlDeviceGetEnforcedPowerLimit / 1000, else nvmlDeviceGetPowerManagementLimit / 1000, else RuntimeError."""
+    return clockcheck.enforced_power_limit_w(nv, h)
+
+
+def check_power_limit(read_w, target_w, tol_w):
+    """Amendment 19. read_w() -> W. -> (value or None, problem or None). Within tolerance (inclusive, 1e-9 slack for float noise) passes; anything else, and a failing reader, is a refusal
+    whose message shows the value that was read and the target."""
+    try:
+        v = float(read_w())
+    except Exception as e:                                                                # noqa: BLE001
+        return None, f"cannot read the enforced power limit from NVML ({type(e).__name__}: {e}); target {target_w} W +- {tol_w} W"
+    if abs(v - target_w) > tol_w + 1e-9:
+        return v, f"enforced power limit read from NVML is {v} W, target {target_w} W +- {tol_w} W: refusing (the harness never changes the limit)"
+    return v, None
+
+
+def sweep_start_records(probes):
+    """Amendment 21, at sweep start (also --llm-alone): the full nvidia-smi text, display_active / display_mode and the NVML name, driver version and VRAM total. A failing source is
+    recorded as 'unavailable (...)' (a record, not a refusal)."""
+    def get(fn, keys):
+        try:
+            got = fn()
+            return {k: got[k] for k in keys}
+        except Exception as e:                                                            # noqa: BLE001
+            return {k: f"unavailable ({type(e).__name__}: {e})" for k in keys}
+    try:
+        text = probes.nvidia_smi_text()
+    except Exception as e:                                                                # noqa: BLE001
+        text = f"unavailable ({type(e).__name__}: {e})"
+    rec = {"nvidia_smi_processes": text}
+    rec.update(get(probes.nvidia_smi_display, ("display_active", "display_mode")))
+    rec.update(get(probes.nvml_identity, ("nvml_name", "nvml_driver_version", "vram_total_mib")))
+    return rec
+
+
 class SystemProbes:
     def git_head(self, path):
         return _git(path, "rev-parse", "HEAD").strip()
@@ -205,9 +256,34 @@ class SystemProbes:
         """Reasons the admin clock helper looks present (named pipe or a process command line); empty list = absent. Read only."""
         return clockcheck.helper_present()
 
-    def clock_idle_probe(self):
-        """The 3 s idle probe of the SM clock (read only); the caller has checked that the game is absent."""
-        return clockcheck.probe_idle()
+    def clock_load_test(self):
+        """The amendment 18 load test (about 3 s idle samples + 5 s CUDA load, SM clock sampled through NVML). Used by --check-clocks only, with the game absent."""
+        return clockcheck.default_load_test()
+
+    def power_limit_w(self):
+        """NVML enforced power limit in W (falls back to the power management limit); raises if neither can be read. nvidia-smi power.limit is N/A on this driver and is not used."""
+        import pynvml
+        pynvml.nvmlInit()
+        return clockcheck.enforced_power_limit_w(pynvml, pynvml.nvmlDeviceGetHandleByIndex(0))
+
+    def nvidia_smi_text(self):
+        """The full text of nvidia-smi (resolved by full path, fixed argv, no shell)."""
+        return subprocess.run([nvidia_smi_exe()], capture_output=True, text=True, timeout=60, check=True, shell=False).stdout
+
+    def nvidia_smi_display(self):
+        """display_active and display_mode from the query interface (fixed argv, full path, no shell)."""
+        out = subprocess.run([nvidia_smi_exe(), "--query-gpu=display_active,display_mode", "--format=csv,noheader"], capture_output=True, text=True, timeout=30, check=True,
+                             shell=False).stdout
+        active, _, mode = out.splitlines()[0].partition(",")
+        return {"display_active": active.strip(), "display_mode": mode.strip()}
+
+    def nvml_identity(self):
+        import pynvml
+        pynvml.nvmlInit()
+        h = pynvml.nvmlDeviceGetHandleByIndex(0)
+        name, drv = pynvml.nvmlDeviceGetName(h), pynvml.nvmlSystemGetDriverVersion()
+        return {"nvml_name": name.decode() if isinstance(name, bytes) else name, "nvml_driver_version": drv.decode() if isinstance(drv, bytes) else drv,
+                "vram_total_mib": pynvml.nvmlDeviceGetMemoryInfo(h).total / 2**20}
 
     def is_elevated(self):
         """True if the process runs elevated (ctypes shell32.IsUserAnAdmin, loaded lazily); None if unknown."""
@@ -228,22 +304,17 @@ def pm_hash_problem(cfg, probes):
     return f"PresentMon sha256 {sha} does not equal the prereg value {PRESENTMON_SHA256_PREREG} (override: --allow-pm-hash-mismatch, recorded in meta)"
 
 
-def clock_state_check(probes, game_process):
-    """Amendment 15 checks, read only. -> (problems, state): (a) the admin clock helper is absent, (b) with the game process absent the idle probe does not say 'locked' (and is
-    conclusive). With the game running the idle probe does not apply (utilization is not zero) and is recorded as skipped."""
-    problems = []
+def clock_state_check(probes, game_process, run_load=False):
+    """Amendment 15/18 checks. -> (problems, state). The admin clock helper must be absent (pipe listing and process command lines, read only). With run_load=True (--check-clocks, game
+    absent) the load test also runs and its verdict applies: PASS needs a max SM clock above 1980 MHz under load. In preflight and in every cell run_load is False: the gate is the
+    clock_check.json file, and a 5 s load inside a measured sweep would disturb it. state['load_test'] is None then."""
     helper = list(probes.admin_helper_present())
-    for h in helper:
-        problems.append(f"admin clock helper is present ({h}): the sweep runs with unlocked clocks and no helper")
-    if probes.process_running(game_process):
-        idle = {"skipped": f"game process {game_process} is running; the idle probe applies only with the game absent"}
+    load = probes.clock_load_test() if run_load else None
+    if load is None:
+        problems = clockcheck.verdict(helper, {"max_sm_mhz": clockcheck.PASS_SM_MHZ_ABOVE + 1, "load_error": None})
     else:
-        idle = probes.clock_idle_probe()
-        if idle.get("status") == "locked" or idle.get("locked"):
-            problems.append(f"SM clock looks locked: idle with the game absent it stayed above {clockcheck.IDLE_SM_MHZ_ABOVE} MHz in P0 for {clockcheck.PROBE_S} s (run the clock reset first)")
-        elif idle.get("status") == "inconclusive":
-            problems.append(f"cannot confirm the SM clock is unlocked: the idle probe was inconclusive ({idle.get('error')})")
-    return problems, {"heuristic": dict(clockcheck.HEURISTIC), "helper_present": helper, "idle_probe": idle, "loaded_constant_check": None}
+        problems = clockcheck.verdict(helper, load)
+    return problems, clockcheck.state_of(helper, load)
 
 
 def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False):
@@ -285,6 +356,9 @@ def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False
     except ValueError as e:
         bad.append(str(e))
     bad += clock_state_check(probes, cfg.game_process)[0]
+    _, why = check_power_limit(probes.power_limit_w, cfg.power_limit_w, cfg.power_limit_tol_w)
+    if why:
+        bad.append("power limit: " + why)
     if bad:
         raise PreflightError(bad)
     el = probes.is_elevated()
@@ -391,23 +465,49 @@ class NvmlReader:
     def sm_clock(self):
         return int(self.nv.nvmlDeviceGetClockInfo(self.h, self.nv.NVML_CLOCK_SM))
 
+    def power_w(self):
+        """SAMPLED NVML power (information only, guarded by the sampler; never used in a metric)."""
+        return float(self.nv.nvmlDeviceGetPowerUsage(self.h)) / 1000.0
+
+    def power_limit_w(self):
+        return nvml_power_limit_w(self.nv, self.h)
+
     def throttle(self):
         fn = getattr(self.nv, "nvmlDeviceGetCurrentClocksEventReasons", None) or self.nv.nvmlDeviceGetCurrentClocksThrottleReasons
         return int(fn(self.h))
 
 
 class Sampler50(threading.Thread):
-    """SM clock, throttle-reason bitmask and temperature every sampler_interval_s on the perf_counter clock (runs in every cell, SOLO included)."""
+    """SM clock, throttle-reason bitmask, temperature and (amendment 20, information only) guarded sampled power every sampler_interval_s on the perf_counter clock (runs in every cell,
+    SOLO included). Sampled power: a reading the guard rejects (above 1.5 x the NVML maximum power limit, 210 W here; negative) is stored as None and flagged in power_rejected; a failed
+    read is stored as None and counted in power_errors. Cell power never comes from here: it comes from the energy counter only (two reads per window)."""
 
-    def __init__(self, nvml, interval_s=0.05):
+    def __init__(self, nvml, interval_s=0.05, guard=None):
         super().__init__(daemon=True)
-        self.nvml, self.interval_s, self.stop_ev = nvml, interval_s, threading.Event()
+        if guard is None:
+            from telemetry.power_guard import PowerGuard
+            guard = PowerGuard.default()
+        self.nvml, self.interval_s, self.guard, self.stop_ev = nvml, interval_s, guard, threading.Event()
         self.t, self.sm, self.throttle, self.temp = [], [], [], []
+        self.power, self.power_rejected, self.power_errors = [], [], 0
+
+    def sample_once(self):
+        t = time.perf_counter()
+        self.t.append(t); self.sm.append(self.nvml.sm_clock()); self.throttle.append(self.nvml.throttle()); self.temp.append(self.nvml.temp_c())
+        try:
+            w = self.nvml.power_w()
+        except Exception:                                                                 # noqa: BLE001
+            self.power_errors += 1
+            self.power.append(None); self.power_rejected.append(False)
+            return
+        if self.guard.ok(w):
+            self.power.append(w); self.power_rejected.append(False)
+        else:
+            self.power.append(None); self.power_rejected.append(True)
 
     def run(self):
         while not self.stop_ev.is_set():
-            t = time.perf_counter()
-            self.t.append(t); self.sm.append(self.nvml.sm_clock()); self.throttle.append(self.nvml.throttle()); self.temp.append(self.nvml.temp_c())
+            self.sample_once()
             self.stop_ev.wait(self.interval_s)
 
     def stop(self):
@@ -492,7 +592,7 @@ def _sleep_until(deps, t):
 def _sampler_stats(s, t_open, t_close):
     idx = [i for i, t in enumerate(s.t) if t_open <= t < t_close]
     if not idx:
-        return {"sampler_n": 0, "sm_clock_mhz_median": None, "throttle_mask_or": None, "throttle_flag_mask_or": None, "throttle_swpowercap": None, "throttle_flag": None,
+        return {"sampler_n": 0, "sampled_power_n": 0, "sampled_power_mean_w": None, "power_rejected": 0, "sm_clock_mhz_median": None, "throttle_mask_or": None, "throttle_flag_mask_or": None, "throttle_swpowercap": None, "throttle_flag": None,
                 "throttle_nonzero_frac": None, "sampler_temp_max": None}
     import statistics
     sm = [s.sm[i] for i in idx]
@@ -500,7 +600,11 @@ def _sampler_stats(s, t_open, t_close):
     mask = 0
     for x in th:
         mask |= int(x)
-    return {"sampler_n": len(idx), "sm_clock_mhz_median": statistics.median(sm), "throttle_mask_or": mask, "throttle_flag_mask_or": mask & THROTTLE_FLAG_MASK,
+    pw_all, rj_all = getattr(s, "power", None) or [], getattr(s, "power_rejected", None) or []
+    pw = [pw_all[i] for i in idx if i < len(pw_all) and pw_all[i] is not None]
+    rejected = sum(1 for i in idx if i < len(rj_all) and rj_all[i])
+    return {"sampler_n": len(idx), "sampled_power_n": len(pw), "sampled_power_mean_w": (sum(pw) / len(pw)) if pw else None, "power_rejected": rejected,
+            "sm_clock_mhz_median": statistics.median(sm), "throttle_mask_or": mask, "throttle_flag_mask_or": mask & THROTTLE_FLAG_MASK,
             "throttle_swpowercap": bool(mask & THROTTLE_SWPOWERCAP), "throttle_flag": bool(mask & THROTTLE_FLAG_MASK),
             "throttle_nonzero_frac": sum(1 for x in th if x) / len(th), "sampler_temp_max": max(s.temp[i] for i in idx)}
 
@@ -530,11 +634,12 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
         events.append(f"t={deps.clock():.6f} {msg}")
 
     llm = cap = sampler = None
-    res = {"arm": arm, "rep": rep}
+    res = {"arm": arm, "rep": rep, "elevated": None}
     try:
         if arm == "IGPU" and (cfg.llm_exe_vk is None or cfg.igpu_vk_index is None):
             raise RuntimeError("IGPU needs cfg.llm_exe_vk and cfg.igpu_vk_index (the Vulkan device index of the Radeon 780M, --igpu-vk-index)")
         meta = build_meta(cfg, deps.probes)
+        res["elevated"] = meta["elevated"]
         meta.update(arm=arm, rep=rep, backend=backend if uses_llm else None, duty=duty if uses_llm else None)
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         game_pid = None
@@ -552,6 +657,14 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         if clock_problems:
             raise RuntimeError("clock state refused: " + "; ".join(clock_problems))
+        limit_start, limit_why = check_power_limit(deps.nvml.power_limit_w, cfg.power_limit_w, cfg.power_limit_tol_w)
+        limits = {"power_limit_w_start": limit_start, "power_limit_target_w": cfg.power_limit_w, "power_limit_tol_w": cfg.power_limit_tol_w}
+        meta.update(limits)
+        res.update(limits)
+        (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
+        if limit_why:
+            raise RuntimeError("power limit refused: " + limit_why)
+        res["idle_vram_mib"] = meta["idle_vram_mib"] = deps.nvml.vram_used_mb()          # amendment 21: BEFORE the LLM process is launched
         if uses_llm:
             env = dict(os.environ, RG_BACKEND=backend, RG_DUTY=str(duty))
             env.setdefault("RG_NCTX", "16384")
@@ -613,6 +726,7 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
         shared1 = deps.shared_mem(game_pid) if uses_game else None    # end-of-window reading: the one paging uses
         res["temp_c"]["end"] = deps.nvml.temp_c()
         res["vram_mb"]["end"] = deps.nvml.vram_used_mb()
+        res["power_limit_w_end"] = deps.nvml.power_limit_w()
         res["energy_j"] = (e1 - e0) / 1000.0
         res["energy_read_t"] = [te0, te1]
         res["power_w"] = res["energy_j"] / (te1 - te0)
@@ -636,6 +750,7 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
         const = clockcheck.constant_clock(sm_window)
         clock_state["loaded_constant_check"] = const
         meta["clock_state"] = clock_state
+        meta["power_limit_w_end"] = res["power_limit_w_end"]
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         if const["constant"]:
             raise RuntimeError(f"SM clock constant ({const['distinct']} distinct value over {const['n']} samples, at least {const['min_samples']}) for the whole window: the clock looks locked; "

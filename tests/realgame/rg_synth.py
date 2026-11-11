@@ -17,7 +17,7 @@ def write_fresh_clock_check(run_dir):
     import time
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "clock_check.json").write_text(json.dumps({"status": "passed", "timestamp": time.time(), "helper_present": [], "idle_probe": {"status": "unlocked"}, "thresholds": {}}))
+    (run_dir / "clock_check.json").write_text(json.dumps({"status": "passed", "timestamp": time.time(), "helper_present": [], "max_sm_mhz": 2100, "info": {}, "thresholds": {}, "problems": []}))
 
 
 def _frames_csv(rng, arm, t_open, swap_extra=True):
@@ -52,7 +52,7 @@ def _tokens_csv(rng, tok_s, t_open):
 def write_cell(d: Path, arm, rep, seed, t_open, prio_readbacks=None):
     d.mkdir(parents=True, exist_ok=True)
     rng = random.Random(seed)
-    res = {"arm": arm, "rep": rep, "t_open": t_open, "t_close": t_open + WINDOW_S, "qpc_hz": float(HZ), "power_w": 80.0 + rng.random(), "sm_clock_mhz_median": 1500,
+    res = {"arm": arm, "rep": rep, "t_open": t_open, "t_close": t_open + WINDOW_S, "qpc_hz": float(HZ), "power_w": 80.0 + rng.random(), "elevated": False, "sm_clock_mhz_median": 1500,
            "throttle_mask_or": 0, "temp_c": {"start": 60.0, "end": 66.0}, "vram_mb": {"start": 1000.0, "end": 1100.0},
            "shared_gpu_mem_bytes": {"start": 10 * 2**20, "end": 10 * 2**20 + (100 * 2**20 if (arm == "DUTY50" and rep == 1) else 0)}}
     if arm == "LLM_ALONE":

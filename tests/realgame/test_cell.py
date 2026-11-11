@@ -59,8 +59,20 @@ class FakeProbes:
     def admin_helper_present(self):
         return []
 
-    def clock_idle_probe(self):
-        return {"status": "unlocked", "locked": False, "n": 12}
+    def clock_load_test(self):
+        return {"max_sm_mhz": 2100, "load_error": None, "n_load_samples": 100, "info": {}}
+
+    def power_limit_w(self):
+        return 95.0
+
+    def nvidia_smi_text(self):
+        return "NVSMI FAKE TABLE\nProcesses: none\n"
+
+    def nvidia_smi_display(self):
+        return {"display_active": "Disabled", "display_mode": "Disabled"}
+
+    def nvml_identity(self):
+        return {"nvml_name": "FAKE RTX 4070 Laptop GPU", "nvml_driver_version": "999.99", "vram_total_mib": 8188.0}
 
     def presentmon_version(self, exe):
         return "PresentMon 2.6.0"
@@ -244,6 +256,9 @@ class FakeNvml:
 
     def vram_used_mb(self):
         return 2048.0
+
+    def power_limit_w(self):
+        return 95.0
 
 
 class FakeSampler:

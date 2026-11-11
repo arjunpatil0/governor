@@ -1,4 +1,4 @@
-"""Amendments 14 (per-rep noise rerun), 15 (clock-state preflight), 17 (PresentMode recorded). All with fakes."""
+"""Amendments 14 (per-rep noise rerun), 15/18 (clock state: helper absent, load test), 17 (PresentMode recorded). All with fakes."""
 import json
 
 import pytest
@@ -95,32 +95,6 @@ def test_main_wires_the_real_noise_check(tmp_path, monkeypatch):
 
 
 # ================================================================= amendment 15: clock state
-class FakeTimeSrc:
-    def __init__(self):
-        self.t = 0.0
-
-    def now(self):
-        return self.t
-
-    def sleep(self, s):
-        self.t += s
-
-
-def probe(samples, **kw):
-    it = iter(samples)
-    ts = FakeTimeSrc()
-    last = []
-
-    def reader():
-        last.append(next(it, last[-1] if last else None))
-        return last[-1]
-    return cc.probe_idle(reader, clock=ts.now, sleep=ts.sleep, **kw), ts
-
-
-def s(sm, pstate="P0", util=0):
-    return {"sm": sm, "pstate": pstate, "util": util}
-
-
 def test_helper_pipe_present_refuses():
     assert cc.helper_present(list_pipes=lambda: ["governor_clock"], list_cmdlines=lambda: []) != []
     assert cc.PIPE_PATH == r"\\.\pipe\governor_clock"
@@ -141,38 +115,6 @@ def test_helper_lister_failure_is_best_effort_not_a_crash():
     assert cc.helper_present(list_pipes=lambda: [], list_cmdlines=boom) == []
 
 
-def test_idle_probe_locked_when_sm_above_1000_in_p0_for_3s():
-    res, ts = probe([s(1800)] * 100)
-    assert res["status"] == "locked" and res["locked"] is True and ts.t >= 3.0 and res["n"] >= 5
-    assert res["thresholds"]["idle_sm_mhz_above"] == 1000 and res["thresholds"]["probe_s"] == 3.0
-
-
-@pytest.mark.parametrize("samples", [[s(210, "P8")] * 100, [s(1000)] * 100, [s(1800, "P8")] * 100, [s(1800)] * 5 + [s(900)] * 100])
-def test_idle_probe_not_locked(samples):
-    res, _ = probe(samples)
-    assert res["status"] == "unlocked" and res["locked"] is False
-
-
-def test_idle_probe_boundary_1001_is_locked_1000_is_not():
-    assert probe([s(1001)] * 100)[0]["locked"] is True
-    assert probe([s(1000)] * 100)[0]["locked"] is False
-
-
-def test_idle_probe_inconclusive_if_gpu_not_idle_or_reader_fails():
-    res, _ = probe([s(1800, util=35)] * 100)
-    assert res["status"] == "inconclusive" and res["locked"] is False
-
-    def broken():
-        raise RuntimeError("no nvml")
-    res = cc.probe_idle(broken, clock=FakeTimeSrc().now, sleep=lambda x: None)
-    assert res["status"] == "inconclusive" and "no nvml" in res["error"]
-
-
-def test_pstate_formats_normalised():
-    assert probe([{"sm": 1800, "pstate": 0, "util": 0}] * 100)[0]["locked"] is True
-    assert probe([{"sm": 1800, "pstate": " P0", "util": "0 %"}] * 100)[0]["locked"] is True
-
-
 def test_constant_clock_check_boundaries():
     assert cc.constant_clock([1500] * 200)["constant"] is True
     assert cc.constant_clock([1500] * 199)["constant"] is False          # fewer than 200 samples: no verdict
@@ -183,16 +125,18 @@ def test_constant_clock_check_boundaries():
 
 
 class ClockProbes(FakeProbes):
-    def __init__(self, helper=(), idle=None, **kw):
+    """load: the dict clock_load_test() returns (the load test is only run by --check-clocks)."""
+
+    def __init__(self, helper=(), load=None, **kw):
         super().__init__(**kw)
-        self.helper, self.idle, self.idle_calls = list(helper), idle, 0
+        self.helper, self.load, self.load_calls = list(helper), load, 0
 
     def admin_helper_present(self):
         return self.helper
 
-    def clock_idle_probe(self):
-        self.idle_calls += 1
-        return self.idle or {"status": "unlocked", "locked": False, "n": 12}
+    def clock_load_test(self):
+        self.load_calls += 1
+        return self.load or {"max_sm_mhz": 2100, "load_error": None, "n_load_samples": 100, "info": {"idle_sm_mhz": [210, 1980], "pstate_idle": [8], "power_limit_w": 95.0}}
 
 
 def test_preflight_refuses_when_admin_helper_present(tmp_path):
@@ -200,18 +144,9 @@ def test_preflight_refuses_when_admin_helper_present(tmp_path):
         c.preflight(make_cfg(tmp_path), ClockProbes(helper=["pipe exists"]))
 
 
-def test_preflight_refuses_when_idle_probe_says_locked_game_absent(tmp_path):
-    with pytest.raises(c.PreflightError, match="(?i)locked"):
-        c.preflight(make_cfg(tmp_path), ClockProbes(game=False, idle={"status": "locked", "locked": True, "n": 12}), need_game=False, game_absent=True)
-    with pytest.raises(c.PreflightError, match="(?i)cannot confirm"):
-        c.preflight(make_cfg(tmp_path), ClockProbes(game=False, idle={"status": "inconclusive", "locked": False, "error": "gpu busy"}), need_game=False, game_absent=True)
-
-
-def test_preflight_idle_probe_only_runs_when_game_absent(tmp_path):
-    p = ClockProbes(game=True, idle={"status": "locked", "locked": True})
-    assert c.preflight(make_cfg(tmp_path), p) is None and p.idle_calls == 0          # game running: the idle heuristic does not apply
+def test_preflight_never_runs_the_load_test(tmp_path):
     p = ClockProbes(game=False)
-    assert c.preflight(make_cfg(tmp_path), p, need_game=False, game_absent=True) is None and p.idle_calls == 1
+    assert c.preflight(make_cfg(tmp_path), p, need_game=False, game_absent=True) is None and p.load_calls == 0          # the load test belongs to --check-clocks (the gate file)
 
 
 def test_run_cell_refuses_with_helper_present_and_writes_no_result(tmp_path):
@@ -224,35 +159,17 @@ def test_run_cell_refuses_with_helper_present_and_writes_no_result(tmp_path):
     assert not (tmp_path / "cell" / "result.json").exists()
 
 
-def test_run_cell_refuses_when_idle_probe_locked_llm_alone(tmp_path):
+def test_meta_records_clock_state_thresholds_and_elevation(tmp_path):
     clock = Clock()
     cfg = make_cfg(tmp_path)
     d, _ = make_deps(cfg, clock)
-    d.probes = ClockProbes(game=False, idle={"status": "locked", "locked": True})
-    with pytest.raises(RuntimeError, match="(?i)locked"):
-        c.run_cell("LLM_ALONE", 0, tmp_path / "cell", cfg, d)
-
-
-def test_meta_records_clock_state_probe_thresholds_and_elevation(tmp_path):
-    clock = Clock()
-    cfg = make_cfg(tmp_path)
-    d, _ = make_deps(cfg, clock)
-    d.probes = ClockProbes(game=False, idle={"status": "unlocked", "locked": False, "n": 12})
+    d.probes = ClockProbes(game=False)
     c.run_cell("LLM_ALONE", 0, tmp_path / "cell", cfg, d)
     meta = json.loads((tmp_path / "cell" / "meta.json").read_text())
     cs = meta["clock_state"]
-    assert cs["idle_probe"]["status"] == "unlocked" and cs["helper_present"] == []
-    assert cs["heuristic"] == {"idle_sm_mhz_above": 1000, "pstate": "P0", "probe_s": 3.0, "idle_util_pct": 0, "constant_min_samples": 200}
+    assert cs["helper_present"] == [] and cs["thresholds"] == cc.THRESHOLDS and d.probes.load_calls == 0
+    assert cs["thresholds"]["max_sm_mhz_above"] == 1980 and cs["thresholds"]["constant_min_samples"] == 200
     assert cs["loaded_constant_check"]["constant"] is False and meta["elevated"] is False
-
-
-def test_meta_idle_probe_skipped_with_game_present(tmp_path):
-    clock = Clock()
-    cfg = make_cfg(tmp_path)
-    d, _ = make_deps(cfg, clock)
-    d.probes = ClockProbes(game=True)
-    c.run_cell("SOLO", 0, tmp_path / "cell", cfg, d)
-    assert "skipped" in json.loads((tmp_path / "cell" / "meta.json").read_text())["clock_state"]["idle_probe"]
 
 
 class ConstSampler(FakeSampler):
@@ -309,12 +226,12 @@ def test_check_clocks_mode(tmp_path, capsys):
     from test_review2 import main_args
     argv = main_args(tmp_path, "--check-clocks")
     assert r.main(argv, probes=ClockProbes(game=False)) == 0
-    assert "unlocked" in capsys.readouterr().out
-    assert r.main(argv, probes=ClockProbes(game=False, idle={"status": "locked", "locked": True})) == 2
-    assert "locked" in capsys.readouterr().err
+    assert "max SM clock" in capsys.readouterr().out
+    assert r.main(argv, probes=ClockProbes(game=False, load={"max_sm_mhz": 1980, "load_error": None, "info": {}})) == 2
+    assert "1980" in capsys.readouterr().err
     assert r.main(argv, probes=ClockProbes(game=False, helper=["pipe"])) == 2
     capsys.readouterr()
-    assert r.main(argv, probes=ClockProbes(game=True)) == 2          # the idle probe needs the game absent
+    assert r.main(argv, probes=ClockProbes(game=True)) == 2          # the load test needs the game absent
     assert "absent" in capsys.readouterr().err
 
 

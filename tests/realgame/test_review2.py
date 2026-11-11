@@ -154,7 +154,7 @@ def test_c_pdh_during_warmup_energy_at_t_open_go_at_warmup_start(tmp_path):
     dp.shared_mem = lambda pid: (log.append(("pdh", clock.now())), 5)[1]
     nv = FakeNvml(clock)
     dp.nvml = type("N", (), {"energy_mj": lambda s: (log.append(("energy", clock.now(), len([x for x in log if x[0] == "pdh"]))), nv.energy_mj())[1],
-                             "temp_c": lambda s: 61.0, "vram_used_mb": lambda s: 1.0})()
+                             "temp_c": lambda s: 61.0, "vram_used_mb": lambda s: 1.0, "power_limit_w": lambda s: 95.0})()
     t_start = clock.now()
     res = c.run_cell("UNGATED", 0, tmp_path / "cell", cfg, dp)
     pdh = [x for x in log if x[0] == "pdh"]
