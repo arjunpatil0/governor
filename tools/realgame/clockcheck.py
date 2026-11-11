@@ -7,6 +7,7 @@ SM clock is above 1980 MHz AND the clock-helper pipe is absent. Idle SM samples 
 mask during the load are information only and decide nothing. The load comes from an injectable load_fn(seconds); the default needs torch with CUDA and fails loudly without it.
 In a loaded cell an SM clock sampled at least 200 times in the measured window with exactly one distinct value still counts as locked and fails the cell.
 """
+import inspect
 import os
 import subprocess
 import threading
@@ -18,6 +19,7 @@ PIPE_PATH = PIPE_DIR + PIPE_NAME
 HELPER_MARKER = "clock_helper"
 PASS_SM_MHZ_ABOVE = 1980
 LOAD_S = 5.0
+READY_TIMEOUT_S = 120.0
 SAMPLE_INTERVAL_S = 0.05
 IDLE_INFO_S = 3.0
 IDLE_INTERVAL_S = 0.25
@@ -120,8 +122,8 @@ class NvmlClockReader:
         return enforced_power_limit_w(self.nv, self.h)
 
 
-def default_load_fn(seconds, torch_module=None, clock=time.perf_counter):
-    """Load the GPU for `seconds` with fp16 matmuls on a large tensor (torch, CUDA). No CPU fallback: without torch.cuda this raises RuntimeError. Always ends with
+def default_load_fn(seconds, torch_module=None, clock=time.perf_counter, ready=None):
+    """Warm up (import, CUDA init, allocations, one synchronised matmul), then ready.set() if given, then load the GPU for `seconds` with fp16 matmuls on a large tensor (torch, CUDA). No CPU fallback: without torch.cuda this raises RuntimeError. Always ends with
     torch.cuda.synchronize() and torch.cuda.empty_cache(), also after a failure."""
     torch = torch_module
     if torch is None:
@@ -134,7 +136,11 @@ def default_load_fn(seconds, torch_module=None, clock=time.perf_counter):
     try:
         x = torch.randn(8192, 8192, device="cuda", dtype=torch.float16)
         y = torch.randn(8192, 8192, device="cuda", dtype=torch.float16)
-        end = clock() + seconds
+        x @ y
+        torch.cuda.synchronize()
+        if ready is not None:
+            ready.set()
+        end = clock() + seconds                                                           # taken AFTER the ready signal
         while clock() < end:
             for _ in range(4):
                 x @ y
@@ -144,6 +150,14 @@ def default_load_fn(seconds, torch_module=None, clock=time.perf_counter):
         torch.cuda.empty_cache()
 
 
+def _accepts_ready(fn):
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(p.name == "ready" or p.kind is inspect.Parameter.VAR_KEYWORD for p in params)
+
+
 def _try(fn):
     try:
         return fn(), None
@@ -151,7 +165,7 @@ def _try(fn):
         return None, f"{type(e).__name__}: {e}"
 
 
-def load_test(reader, load_fn, clock=time.monotonic, sleep=time.sleep, load_s=LOAD_S, idle_s=IDLE_INFO_S, interval_s=SAMPLE_INTERVAL_S):
+def load_test(reader, load_fn, clock=time.monotonic, sleep=time.sleep, load_s=LOAD_S, idle_s=IDLE_INFO_S, interval_s=SAMPLE_INTERVAL_S, ready_timeout_s=READY_TIMEOUT_S):
     """Idle samples (information), then load_fn(load_s) in a thread while the SM clock is sampled every interval_s for load_s seconds.
     -> dict(max_sm_mhz (None if nothing could be read), n_load_samples, load_error (None or text), read_error, info{...}). It decides nothing; see verdict()."""
     info = {"idle_sm_mhz": [], "pstate_idle": [], "idle_error": None, "pstate_load": [], "clock_reasons_mask_or": 0, "power_limit_w": None, "power_limit_error": None}
@@ -169,14 +183,31 @@ def load_test(reader, load_fn, clock=time.monotonic, sleep=time.sleep, load_s=LO
             break
         sleep(min(IDLE_INTERVAL_S, idle_s))
     box = {"error": None}
+    use_ready = _accepts_ready(load_fn)
+    ready = threading.Event()
 
     def work():
         try:
-            load_fn(load_s)
+            if use_ready:
+                load_fn(load_s + 1.0, ready=ready)                                        # the load outlasts the sampling window
+            else:
+                load_fn(load_s)
         except BaseException as e:                                                        # noqa: BLE001
             box["error"] = f"{type(e).__name__}: {e}"
     th = threading.Thread(target=work, daemon=True)
     th.start()
+    if use_ready:
+        deadline = time.monotonic() + ready_timeout_s                                     # real time: the warm-up runs in a real thread
+        while not ready.wait(0.01):
+            if box["error"] or not th.is_alive():
+                break
+            if time.monotonic() >= deadline:
+                box["error"] = "load warm-up did not finish in time"
+                break
+        if box["error"]:
+            info["power_limit_w"], info["power_limit_error"] = _try(reader.enforced_power_limit_w)
+            info["clock_reasons_hex"] = hex(info["clock_reasons_mask_or"])
+            return {"max_sm_mhz": None, "n_load_samples": 0, "load_error": box["error"], "read_error": None, "load_s": load_s, "info": info}
     sms, read_error = [], None
     t0 = clock()
     while True:
@@ -202,6 +233,11 @@ def load_test(reader, load_fn, clock=time.monotonic, sleep=time.sleep, load_s=LO
     return {"max_sm_mhz": max(sms) if sms else None, "n_load_samples": len(sms), "load_error": box["error"], "read_error": read_error, "load_s": load_s, "info": info}
 
 
+def _idle_looking(info):
+    ps = info.get("pstate_load") or []
+    return bool(ps) and all(p == 8 for p in ps) and info.get("clock_reasons_mask_or") == 0x1
+
+
 def verdict(helper, load):
     """-> list of problems (empty = PASS): the helper is present, the load test failed or could not read the clock, or the maximum SM clock under load is not above 1980 MHz."""
     problems = [f"admin clock helper is present ({h}): the sweep runs with unlocked clocks and no helper" for h in helper]
@@ -209,6 +245,8 @@ def verdict(helper, load):
         problems.append(f"clock load test failed: {load['load_error']}")
     elif load.get("max_sm_mhz") is None:
         problems.append(f"clock load test failed: the SM clock could not be read ({load.get('read_error')})")
+    elif load["max_sm_mhz"] <= PASS_SM_MHZ_ABOVE and _idle_looking(load.get("info") or {}):
+        problems.append(f"max SM clock under load is {load['max_sm_mhz']} MHz, not above {PASS_SM_MHZ_ABOVE} MHz: the load did not reach the GPU (still P8 and idle during the load); this is not a clock lock")
     elif load["max_sm_mhz"] <= PASS_SM_MHZ_ABOVE:
         problems.append(f"max SM clock under load is {load['max_sm_mhz']} MHz, not above {PASS_SM_MHZ_ABOVE} MHz: the clocks look limited or locked")
     return problems
