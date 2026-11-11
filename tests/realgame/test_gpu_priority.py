@@ -87,3 +87,19 @@ def test_set_and_verify_readback_mismatch_raises():
 
 def test_import_does_not_load_windows_libs():
     assert not hasattr(gp, "windll") and not hasattr(gp, "_LIBS_LOADED")
+
+
+def test_get_priority_opens_the_process_with_set_information_access():
+    """Verified on hardware (2026-11-11): D3DKMTGetProcessSchedulingPriorityClass answers STATUS_ACCESS_DENIED (0xC0000022) for a handle opened with PROCESS_QUERY_INFORMATION (0x400) or
+    PROCESS_QUERY_LIMITED_INFORMATION (0x1000) alone, and succeeds when the handle includes PROCESS_SET_INFORMATION (0x200). The read-back must open with that right."""
+    k = FakeK32()
+    assert gp.get_priority(123, FakeGdi(), k) == 0
+    (access, _inherit, pid), = k.opened
+    assert pid == 123 and access & gp.PROCESS_SET_INFORMATION == gp.PROCESS_SET_INFORMATION
+
+
+def test_set_and_verify_uses_set_information_access_for_both_calls():
+    k = FakeK32()
+    gp.set_and_verify(55, "IDLE", FakeGdi(), k)
+    assert len(k.opened) == 2 and all(a & gp.PROCESS_SET_INFORMATION for a, _i, _p in k.opened)
+    assert k.closed == [77, 77]

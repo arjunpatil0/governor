@@ -67,7 +67,7 @@ def set_priority(pid, cls, gdi32=None, k32=None):
 def get_priority(pid, gdi32=None, k32=None):
     """-> the class value read back. Raises PriorityError on a nonzero NTSTATUS."""
     gdi32, k32 = _libs(gdi32, k32)
-    h = _open(k32, PROCESS_QUERY_INFORMATION, pid)
+    h = _open(k32, PROCESS_SET_INFORMATION | PROCESS_QUERY_INFORMATION, pid)     # verified on hardware: the Get call needs the SET right; QUERY alone gives STATUS_ACCESS_DENIED (0xC0000022)
     try:
         out = ctypes.c_int(-1)
         status = int(gdi32.D3DKMTGetProcessSchedulingPriorityClass(h, ctypes.byref(out)))

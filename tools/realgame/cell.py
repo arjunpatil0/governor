@@ -517,6 +517,7 @@ def build_meta(cfg, probes=None):
 
 
 # ------------------------------------------------------------------ rest rule
+PRIO_END_READBACK_BEFORE_CLOSE_S = 1.0                                              # PRIO_IDLE end read-back at t_close - 1 s: the driver stops and exits at t_close
 REST_TOL_C = 3.0
 REST_MIN_S = 30.0
 REST_MAX_S = 300.0                                                                  # amendment 27 (was 180 s)
@@ -894,6 +895,11 @@ def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, sm
         _sleep_until(deps, t_open)
         e0 = deps.nvml.energy_mj()                                    # first energy read immediately at t_open
         te0 = deps.clock()
+        if arm == "PRIO_IDLE":
+            # the driver stops decoding and exits at t_close, so read the class back while it is certainly alive (microseconds, the energy window is unaffected).
+            # a PriorityError here propagates: the cell fails and the rep is rerun. Only a SUCCESSFUL read-back of the wrong class voids PRIO_IDLE.
+            _sleep_until(deps, max(t_open, t_close - PRIO_END_READBACK_BEFORE_CLOSE_S))
+            res["prio_readbacks"].append(deps.get_priority(llm.pid))
         _sleep_until(deps, t_close)
         e1 = deps.nvml.energy_mj()                                    # second read immediately at t_close: the energy window is [t_open, t_close)
         te1 = deps.clock()
@@ -909,8 +915,6 @@ def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, sm
         res["power_w"] = res["energy_j"] / (te1 - te0)
         res["shared_gpu_mem_bytes"] = {"start": shared0, "end": shared1} if uses_game else None
         if arm == "PRIO_IDLE":
-            # a PriorityError here (the call itself failed) propagates: the cell fails and the rep is rerun. Only a SUCCESSFUL read-back of the wrong class voids PRIO_IDLE.
-            res["prio_readbacks"].append(deps.get_priority(llm.pid))
             res["prio_valid"] = all(x == gpu_priority.CLASSES["IDLE"] for x in res["prio_readbacks"])
             log(f"PRIO_IDLE read-backs {res['prio_readbacks']}")
         if uses_llm:

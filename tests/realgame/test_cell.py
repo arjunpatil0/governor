@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from pathlib import Path
 
@@ -256,7 +257,7 @@ class FakeCapture:
         if not self.started:
             return
         rows = [SAMPLE_HEADER]
-        for i in range(1000):                      # 60 fps over 16.7 s from the start of capture; busy 8.0, 16.667 ms frame, alternate swapchains are not used
+        for i in range(max(1000, int((self.clock.now() - self.t0) * 60) + 1)):                      # 60 fps over 16.7 s from the start of capture; busy 8.0, 16.667 ms frame, alternate swapchains are not used
             t = self.t0 + i / 60.0
             rows.append(f"G.exe,1,0xA,D3D11,1,0,0,Flip,Application,{int(t * 1e7)},40.0,3,13,1.0,8.2,8.0,1,0,20,16.7,0,0,0,NA,NA,NA")
         Path(self.out_csv).write_text("\n".join(rows) + "\n")
@@ -422,3 +423,84 @@ def test_run_cell_unknown_arm(tmp_path):
 
 def test_arms_constant():
     assert c.ARMS == ("SOLO", "UNGATED", "PRIO_IDLE", "DUTY50", "IGPU", "LLM_ALONE")
+
+
+# ---- PRIO_IDLE end read-back is taken while the driver is certainly alive (t_close - 1 s)
+def _prio_trace(tmp_path, window_s=None, get_prio=None, llm_factory=None):
+    clock, trace = Clock(), {}
+    cfg = make_cfg(tmp_path)
+
+    class Nv(FakeNvml):
+        def energy_mj(self):
+            trace.setdefault("energy", []).append(self.clock.now())
+            return super().energy_mj()
+
+    def gp(pid):
+        trace.setdefault("get", []).append(clock.now())
+        return get_prio(pid) if get_prio else CLASSES["IDLE"]
+    d, box = make_deps(cfg, clock, get_prio=gp, llm=llm_factory(clock) if llm_factory else None)
+
+    def mk_sampler(nv):
+        sm = FakeSampler(clock)
+        sm.sm = [1500 + (i % 7) * 15 for i in range(2000)]      # a non-constant clock so long windows pass the locked-clock check
+        return sm
+    d = dataclasses.replace(d, nvml=Nv(clock), make_sampler=mk_sampler)
+    kw = {} if window_s is None else {"window_s": window_s}
+    res = c.run_cell("PRIO_IDLE", 0, tmp_path / "p", cfg, d, **kw)
+    return res, trace
+
+
+def test_prio_end_readback_constant():
+    assert c.PRIO_END_READBACK_BEFORE_CLOSE_S == 1.0
+
+
+@pytest.mark.parametrize("window_s", [None, 20.0, 60.0])
+def test_prio_end_readback_one_second_before_close(tmp_path, window_s):
+    res, tr = _prio_trace(tmp_path, window_s)
+    t_open, t_close = res["t_open"], res["t_close"]
+    assert len(tr["get"]) == 1
+    assert t_close - c.PRIO_END_READBACK_BEFORE_CLOSE_S <= tr["get"][0] < t_close - 0.9
+    e0, e1 = tr["energy"][:2]
+    assert abs(e0 - t_open) < 0.01 and abs(e1 - t_close) < 0.01 and tr["get"][0] < e1
+    assert res["energy_read_t"][1] - res["energy_read_t"][0] == pytest.approx(t_close - t_open, abs=0.01)
+    assert res["prio_readbacks"] == [0, 0] and res["prio_valid"] is True
+
+
+def test_prio_end_readback_error_fails_cell(tmp_path):
+    def boom(pid):
+        raise PriorityError("OpenProcess failed", set_status=0, readback=None)
+    with pytest.raises(PriorityError):
+        _prio_trace(tmp_path, get_prio=boom)
+
+
+def test_prio_end_readback_wrong_class_voids_only(tmp_path):
+    res, _ = _prio_trace(tmp_path, get_prio=lambda pid: 2)
+    assert res["prio_valid"] is False and res["prio_readbacks"] == [0, 2]
+
+
+def test_prio_end_readback_before_driver_exit(tmp_path):
+    state = {}
+
+    class ExitingLlm(FakeLlm):
+        def poll(self):
+            return 0 if self.clock.now() >= state["t_close"] else None
+
+        def send(self, text):
+            state["t_close"] = float(text.split()[1])
+            super().send(text)
+
+    def gp(pid):
+        assert box["l"].poll() is None, "driver already exited at read-back"
+        return CLASSES["IDLE"]
+    box = {}
+    clock = Clock()
+    cfg = make_cfg(tmp_path)
+    d, box = make_deps(cfg, clock, get_prio=gp, llm=ExitingLlm(clock, str(tmp_path / "p" / "llm")))
+    (tmp_path / "p").mkdir(exist_ok=True)
+    res = c.run_cell("PRIO_IDLE", 0, tmp_path / "p", cfg, d)
+    assert res["prio_valid"] is True
+
+
+def test_prio_end_readback_short_window_clamped_to_t_open(tmp_path):
+    res, tr = _prio_trace(tmp_path, window_s=0.5)
+    assert res["t_open"] - 0.01 <= tr["get"][0] <= res["t_open"] + 0.01 and tr["get"][0] < res["t_close"]
