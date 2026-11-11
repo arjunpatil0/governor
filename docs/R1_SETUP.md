@@ -47,3 +47,14 @@ The owner's description of the display and of the power cap does not match these
 | nvidia-smi power cap | 90 W in the table, `power.limit` reads N/A, `power.max_limit` 140 W |
 | NVML enforced power limit | 92.77 W (default limit 80 W; constraints 5 to 140 W); the owner stated 95 W, so a cell started now would be refused by the power-cap rule |
 | NVML clocks event reasons at idle | 0x1 (GPU idle) |
+
+## IGPU arm build record (2026-11-11)
+
+| Item | Value |
+|---|---|
+| Source | the pinned llama.cpp tree `third_party/llama.cpp` at 620d2225c, unpatched, `git status --porcelain` empty after the build; build directory `build_vk` (git-ignored) |
+| Build | `workloads/background/build_llama_vulkan.bat`: CMake with Ninja, `-DGGML_VULKAN=ON -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON`; Vulkan SDK 1.4.363.1 |
+| Timebox | started 14:38 UTC, succeeded on the third attempt at 14:43 UTC, inside the 1 hour. Attempts 1 and 2 failed at the CMake CPU-feature probe (`HAS_AVX_1`: the test executable could not be removed, another process was using it). The third attempt skipped that probe with `GGML_NATIVE=OFF` and explicit AVX2, FMA and F16C flags; these flags affect only the CPU backend, and the iGPU arm offloads all layers to Vulkan. The CUDA build used by the other arms was configured with the default flags. |
+| Devices (`llama-cli --list-devices`) | Vulkan0: AMD Radeon 780M Graphics (8049 MiB); Vulkan1: NVIDIA GeForce RTX 4070 Laptop GPU |
+| IGPU selection | `GGML_VK_VISIBLE_DEVICES=0`, passed as `--igpu-vk-index 0` |
+| Driver check (load only, no decoding) | `EXEC_MODE vulkan device=AMD Radeon 780M Graphics offloaded=29/29 n_layer=28 duty=0` |
