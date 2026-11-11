@@ -134,9 +134,13 @@ class PsProbes(FakeProbes):
         self.text = text if text is not None else smi()
 
     def nvidia_smi_power_text(self):
+        return smi() if isinstance(self.text, Exception) else self.text
+
+    def nvml_power_static(self):                      # the NVML reader stands in: same numbers as the text, errors raise
         if isinstance(self.text, Exception):
             raise self.text
-        return self.text
+        p = c.parse_power_static(self.text)
+        return {k: p[k] for k in ("default_power_limit_w", "min_power_limit_w", "max_power_limit_w")} | {"source": "nvml"}
 
 
 REF = c.parse_power_static(smi())
@@ -216,7 +220,7 @@ def test_run_cell_refuses_before_launch_on_static_change_or_unparseable(tmp_path
 
 def test_run_cell_current_limit_change_alone_passes(tmp_path):
     cfg, d, _ = make_cell(tmp_path, smi(cur="95.00"))
-    assert c.run_cell("SOLO", 0, tmp_path / "cell", cfg, d)["power_static_cell_start"]["current_power_limit_w"] == 95.0
+    assert c.run_cell("SOLO", 0, tmp_path / "cell", cfg, d)["power_static_cell_start"]["default_power_limit_w"] == 80.0
 
 
 # ------------------------------------------------------------------ per-cell enforced limit covariates
@@ -322,7 +326,7 @@ def test_run_meta_records_power_static_and_elevated(tmp_path, alone):
     finally:
         rr.run_sweep = orig
     rec = json.loads((tmp_path / "run" / "run_meta.json").read_text()) if alone else seen["records"]
-    assert rec["power_static"]["default_power_limit_w"] == 80.0 and rec["power_static"]["current_power_limit_w"] == 80.0 and rec["power_static"]["raw_lines"]
+    assert rec["power_static"]["default_power_limit_w"] == 80.0 and rec["power_static"]["source"] == "nvml" and rec["nvidia_smi_power"]["current_power_limit_w"] == 80.0 and rec["nvidia_smi_power"]["raw_lines"]
     assert rec["elevated"] is False
     if not alone:
         assert seen["cfg"].power_static_ref["max_power_limit_w"] == 140.0

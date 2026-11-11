@@ -29,7 +29,10 @@ def is_tracked(path):
     while not anchor.exists():
         anchor = anchor.parent
     cwd = anchor if anchor.is_dir() else anchor.parent
-    r = subprocess.run([rg_cell.tool_paths()["git"], "-C", str(cwd), "ls-files", "--error-unmatch", "--", str(path)], capture_output=True, text=True)
+    try:
+        r = subprocess.run([rg_cell.tool_paths()["git"], "-C", str(cwd), "ls-files", "--error-unmatch", "--", str(path)], capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired as e:
+        raise OutputRefused(f"git ls-files for {path} timed out after 30 s: refusing") from e
     return r.returncode == 0
 
 

@@ -122,8 +122,22 @@ def tool_paths():
     return dict(_TOOLS)
 
 
+GIT_TIMEOUT_S = 30
+SMI_INFO_TIMEOUT_S = 20
+
+
 def _git(path, *args):
-    return subprocess.run([tool_paths()["git"], "-C", str(path), *args], capture_output=True, text=True, check=True).stdout
+    try:
+        return subprocess.run([tool_paths()["git"], "-C", str(path), *args], capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_S).stdout
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"git {' '.join(args[:2])} in {path} timed out after {GIT_TIMEOUT_S} s: refusing") from e
+
+
+def info_timeout_text(e):
+    """The record text of a failed information-only subprocess: 'unavailable (TimeoutExpired after 20 s)' or 'unavailable (<Type>: <text>)'."""
+    if isinstance(e, subprocess.TimeoutExpired):
+        return f"unavailable (TimeoutExpired after {SMI_INFO_TIMEOUT_S} s)"
+    return f"unavailable ({type(e).__name__}: {e})"
 
 
 def _process_table():
@@ -133,7 +147,7 @@ def _process_table():
         return [(p.info["pid"], p.info["name"]) for p in psutil.process_iter(["pid", "name"])]
     except ImportError:
         pass
-    out = subprocess.run([tool_paths()["tasklist"], "/FO", "CSV", "/NH"], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run([tool_paths()["tasklist"], "/FO", "CSV", "/NH"], capture_output=True, text=True, check=True, timeout=30).stdout
     rows = []
     for line in out.splitlines():
         parts = [x.strip('"') for x in line.split('","')]
@@ -195,12 +209,44 @@ def parse_power_static(text):
     return out
 
 
+class NvmlPowerStaticReader:
+    """Default, min and max power limit from NVML (no process is spawned): nvmlDeviceGetPowerManagementDefaultLimit and nvmlDeviceGetPowerManagementLimitConstraints, mW -> W. Device 0."""
+
+    def __init__(self, nv=None):
+        if nv is None:
+            import pynvml as nv
+        nv.nvmlInit()
+        self.nv, self.h = nv, nv.nvmlDeviceGetHandleByIndex(0)
+
+    def read(self):
+        mn, mx = self.nv.nvmlDeviceGetPowerManagementLimitConstraints(self.h)
+        return {"default_power_limit_w": float(self.nv.nvmlDeviceGetPowerManagementDefaultLimit(self.h)) / 1000.0, "min_power_limit_w": float(mn) / 1000.0,
+                "max_power_limit_w": float(mx) / 1000.0, "source": "nvml"}
+
+
 def read_power_static(probes):
+    """The static power fields through probes.nvml_power_static() (NVML). Any failure -> PowerStaticError (refusal)."""
     try:
-        text = probes.nvidia_smi_power_text()
+        got = probes.nvml_power_static()
+        out = {k: float(got[k]) for k, _, _ in POWER_STATIC_FIELDS}
     except Exception as e:                                                                # noqa: BLE001
-        raise PowerStaticError(f"cannot run the nvidia-smi POWER query (-q -d POWER) to read the static power fields ({type(e).__name__}: {e}): refusing") from e
-    return parse_power_static(text)
+        raise PowerStaticError(f"cannot read the static power fields (default, min, max power limit) from NVML ({type(e).__name__}: {e}): refusing") from e
+    out["source"] = "nvml"
+    return out
+
+
+def parse_power_static_info(text):
+    """Information only: the raw Default/Min/Max/Current Power Limit lines of the nvidia-smi POWER text and the dynamic current limit (None if absent)."""
+    raw, cur = [], None
+    for line in str(text or "").splitlines():
+        m = _POWER_LINE.match(line)
+        if not m:
+            continue
+        raw.append(line.strip())
+        n = re.match(r"^([-+]?\d+(?:\.\d+)?)\s*W?$", m.group(2), re.I)
+        if m.group(1).lower() == "current power limit" and n and cur is None:
+            cur = float(n.group(1))
+    return {"current_power_limit_w": cur, "raw_lines": raw}
 
 
 def power_static_problems(ref, now, tol_w=POWER_STATIC_TOL_W):
@@ -220,12 +266,17 @@ def sweep_start_records(probes):
             got = fn()
             return {k: got[k] for k in keys}
         except Exception as e:                                                            # noqa: BLE001
-            return {k: f"unavailable ({type(e).__name__}: {e})" for k in keys}
+            return {k: info_timeout_text(e) for k in keys}
     try:
         text = probes.nvidia_smi_text()
     except Exception as e:                                                                # noqa: BLE001
-        text = f"unavailable ({type(e).__name__}: {e})"
+        text = info_timeout_text(e)
     rec = {"nvidia_smi_processes": text}
+    try:                                                                                  # information only (raw lines, dynamic current limit): never used in a check
+        info = parse_power_static_info(probes.nvidia_smi_power_text())
+    except Exception as e:                                                                # noqa: BLE001
+        info = info_timeout_text(e)
+    rec["nvidia_smi_power"] = info
     try:
         rec["power_static"] = read_power_static(probes)
     except Exception as e:                                                                # noqa: BLE001
@@ -309,17 +360,21 @@ class SystemProbes:
         """The amendment 18 load test (about 3 s idle samples + 5 s CUDA load, SM clock sampled through NVML). Used by --check-clocks only, with the game absent."""
         return clockcheck.default_load_test()
 
+    def nvml_power_static(self):
+        """Default, min, max power limit (W) from NVML; no process is spawned (used at sweep start and at every cell start)."""
+        return NvmlPowerStaticReader().read()
+
     def nvidia_smi_power_text(self):
-        """The text of the nvidia-smi POWER query (-q -d POWER) (read only; full path, fixed argv, no shell)."""
-        return subprocess.run([nvidia_smi_exe(), "-q", "-d", "POWER"], capture_output=True, text=True, timeout=60, check=True, shell=False).stdout
+        """INFORMATION ONLY, sweep start only: the text of the nvidia-smi POWER query (-q -d POWER) (read only; full path, fixed argv, no shell; 20 s timeout)."""
+        return subprocess.run([nvidia_smi_exe(), "-q", "-d", "POWER"], capture_output=True, text=True, timeout=SMI_INFO_TIMEOUT_S, check=True, shell=False).stdout
 
     def nvidia_smi_text(self):
         """The full text of nvidia-smi (resolved by full path, fixed argv, no shell)."""
-        return subprocess.run([nvidia_smi_exe()], capture_output=True, text=True, timeout=60, check=True, shell=False).stdout
+        return subprocess.run([nvidia_smi_exe()], capture_output=True, text=True, timeout=SMI_INFO_TIMEOUT_S, check=True, shell=False).stdout
 
     def nvidia_smi_display(self):
         """display_active and display_mode from the query interface (fixed argv, full path, no shell)."""
-        out = subprocess.run([nvidia_smi_exe(), "--query-gpu=display_active,display_mode", "--format=csv,noheader"], capture_output=True, text=True, timeout=30, check=True,
+        out = subprocess.run([nvidia_smi_exe(), "--query-gpu=display_active,display_mode", "--format=csv,noheader"], capture_output=True, text=True, timeout=SMI_INFO_TIMEOUT_S, check=True,
                              shell=False).stdout
         active, _, mode = out.splitlines()[0].partition(",")
         return {"display_active": active.strip(), "display_mode": mode.strip()}

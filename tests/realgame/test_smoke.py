@@ -232,8 +232,8 @@ def test_power_static_mismatch_refuses_the_smoke_cell(tmp_path):
     d, _ = smoke_deps(clock)
 
     class Drift(FakeProbes):                  # the cell-start read differs from the sweep-start reference taken from the main probes
-        def nvidia_smi_power_text(self):
-            return super().nvidia_smi_power_text().replace("140.00", "150.00")
+        def nvml_power_static(self):
+            return dict(super().nvml_power_static(), max_power_limit_w=150.0)
     d.probes = Drift()
     with pytest.raises(RuntimeError, match="power refused"):
         r.main(argv(tmp_path, "SOLO"), probes=FakeProbes(), deps=d)
