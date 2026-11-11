@@ -9,6 +9,7 @@ Flow of run_cell (the prereg is being amended: the LLM is loaded before the warm
   [t_close: energy read 2, PDH read 2, PRIO_IDLE read-back] -> wait DONE -> stop capture -> parse + gap checks + reset check -> result.json.
 LLM_ALONE runs in its own invocation (run.py --llm-alone) with the game process absent.
 The game itself is started by the operator, not by this rig (UNVERIFIED how the benchmark scene is restarted per cell: see docs/R1_SETUP.md once written)."""
+import dataclasses
 import hashlib
 import json
 import os
@@ -711,10 +712,13 @@ def _parse_duty_achieved(lines):
     return None
 
 
-def run_cell(arm, rep, out_dir, cfg, deps=None):
-    """Run one cell into out_dir and return the result dict (also written to result.json). Raises on any failure (no result.json is then written)."""
+def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, smoke=False):
+    """Run one cell into out_dir and return the result dict (also written to result.json). Raises on any failure (no result.json is then written).
+    warmup_s / window_s (the --smoke mode) override cfg explicitly; the gap, frame-count and window rules scale with the window. smoke=True marks meta.json and result.json."""
     if arm not in ARMS:
         raise ValueError(f"unknown arm {arm!r}; arms are {ARMS}")
+    if warmup_s is not None or window_s is not None:
+        cfg = dataclasses.replace(cfg, warmup_s=cfg.warmup_s if warmup_s is None else warmup_s, window_s=cfg.window_s if window_s is None else window_s)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     deps = deps or real_deps(cfg)
@@ -730,12 +734,16 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
 
     llm = cap = sampler = None
     res = {"arm": arm, "rep": rep, "elevated": None}
+    if smoke:
+        res["smoke"] = True
     try:
         if arm == "IGPU" and (cfg.llm_exe_vk is None or cfg.igpu_vk_index is None):
             raise RuntimeError("IGPU needs cfg.llm_exe_vk and cfg.igpu_vk_index (the Vulkan device index of the Radeon 780M, --igpu-vk-index)")
         meta = build_meta(cfg, deps.probes)
         res["elevated"] = meta["elevated"]
         meta.update(arm=arm, rep=rep, backend=backend if uses_llm else None, duty=duty if uses_llm else None)
+        if smoke:
+            meta["smoke"] = True
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         game_pid = None
         if uses_game:

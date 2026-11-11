@@ -27,6 +27,9 @@ NOISE_OK = "NOISE_OK.json"  # marker in the attempt directory, written only afte
 CLOCK_CHECK = "clock_check.json"
 DEFAULT_MAX_CLOCK_CHECK_AGE_S = 21600
 RECORD_KEYS = ("nvidia_smi_processes", "display_active", "display_mode", "nvml_name", "nvml_driver_version", "vram_total_mib", "records_mode", "power_static", "elevated")
+SMOKE_ARMS = ("SOLO", "UNGATED")
+SMOKE_WARM_S = 5.0         # Step-5 smoke: one short cell (5 s warm-up, 20 s window), not part of the sweep
+SMOKE_WINDOW_S = 20.0
 MAX_NOISE_REPS = 2         # amendment 14: more than 2 distinct reps failing the noise check at any attempt stops the sweep (never loosened)
 
 
@@ -283,11 +286,35 @@ def load_clock_check(run_dir, max_age_s, now=None):
     return doc, None
 
 
+def next_smoke_dir(run_dir, arm):
+    """<run_dir>/smoke/<arm>_<n>, n above every existing one (never reused); the directory is created here, so nothing is overwritten."""
+    base = Path(run_dir) / "smoke"
+    base.mkdir(parents=True, exist_ok=True)
+    nums = [int(p.name[len(arm) + 1:]) for p in base.glob(f"{arm}_*") if p.name[len(arm) + 1:].isdigit()]
+    d = base / f"{arm}_{max(nums, default=0) + 1}"
+    d.mkdir()
+    return d
+
+
+def run_smoke(cfg, run_dir, arm, runner, records, log=print):
+    """ONE cell of `arm` through the normal run_cell (via runner) with the smoke warm-up and window passed explicitly, into run_dir/smoke/<arm>_<n>/. No rest, no NOISE_OK, no reps,
+    no run_meta.json (analyze never looks at run_dir/smoke). Prints the summary block, writes smoke_summary.txt and real_header.csv. Returns 0."""
+    from tools.realgame import smoke
+    d = next_smoke_dir(run_dir, arm)
+    (d / "start_records.json").write_text(json.dumps(records, indent=1, default=str))
+    log(f"smoke {arm} -> {d}")
+    runner(arm, 0, d, cfg, warmup_s=SMOKE_WARM_S, window_s=SMOKE_WINDOW_S, smoke=True)
+    if (d / "frames.csv").exists() and (d / "result.json").exists():
+        log(smoke.write_outputs(d))
+    return 0
+
+
 def _parser():
     p = argparse.ArgumentParser(description="R1 sweep: game + LLM co-location on one GPU, unlocked clocks")
     p.add_argument("--run-dir")
     p.add_argument("--reps", type=int, default=DEFAULT_REPS)
     p.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    p.add_argument("--smoke", choices=SMOKE_ARMS, metavar="ARM", help="Step-5 smoke: run ONE cell of this arm (SOLO or UNGATED; 5 s warm-up, 20 s window) into run-dir/smoke/<ARM>_<n>/ and print a summary; same preflight")
     p.add_argument("--dry-run", action="store_true", help="print the order and run preflight only")
     p.add_argument("--llm-alone", action="store_true", help="measure only the LLM-alone reference; the game process must be ABSENT (refused if it is running)")
     p.add_argument("--armoury-mode", help="Armoury Crate mode in force (required)")
@@ -309,7 +336,7 @@ def _parser():
     return p
 
 
-def main(argv=None, probes=None, runner=None):
+def main(argv=None, probes=None, runner=None, deps=None):
     parser = _parser()
     args = parser.parse_args(argv)
     if not args.check_clocks and (args.n_prompt is None or args.presentmon is None):
@@ -338,9 +365,11 @@ def main(argv=None, probes=None, runner=None):
             return 2
         print(f"clock state ok: helper absent, max SM clock under load {state['max_sm_mhz']} MHz (above {clockcheck.PASS_SM_MHZ_ABOVE})")
         return 0
+    if args.smoke and args.llm_alone:
+        parser.error("--smoke cannot be combined with --llm-alone")
     root = Path(args.repo_root)
     arms = tuple(a for a in DEFAULT_ARMS if not (args.drop_igpu and a == "IGPU"))
-    use_igpu = "IGPU" in arms and not args.llm_alone
+    use_igpu = "IGPU" in arms and not args.llm_alone and not args.smoke
     if use_igpu and args.igpu_vk_index is None:
         print("--igpu-vk-index is required for the IGPU arm (the Vulkan device index of the Radeon 780M); or drop the arm with --drop-igpu REASON", file=sys.stderr)
         return 2
@@ -351,8 +380,13 @@ def main(argv=None, probes=None, runner=None):
                       llm_exe_vk=Path(args.llm_exe_vk or root / "workloads" / "background" / "llama_realgame_bench_vk.exe") if use_igpu else None,
                       igpu_vk_index=args.igpu_vk_index if use_igpu else None, allow_pm_hash_mismatch=args.allow_pm_hash_mismatch)
     order = make_order(args.seed, args.reps, arms)
-    print(f"seed {args.seed}  reps {args.reps}  arms {list(arms)}" + (f"  IGPU dropped: {args.drop_igpu}" if args.drop_igpu else ""))
-    if args.llm_alone:
+    if args.smoke:
+        print(f"mode: SMOKE {args.smoke} (one cell, warm-up {SMOKE_WARM_S} s, window {SMOKE_WINDOW_S} s; not part of the sweep)")
+    else:
+        print(f"seed {args.seed}  reps {args.reps}  arms {list(arms)}" + (f"  IGPU dropped: {args.drop_igpu}" if args.drop_igpu else ""))
+    if args.smoke:
+        pass
+    elif args.llm_alone:
         print("mode: LLM_ALONE only (own invocation, game process must be absent)")
     else:
         print("LLM_ALONE is NOT part of this sweep: run it separately with --llm-alone while the game is not running")
@@ -377,11 +411,13 @@ def main(argv=None, probes=None, runner=None):
     if clock_check is None:
         print(f"clock check refused: {why}", file=sys.stderr)
         return 2
-    records = dict(cell.sweep_start_records(probes), records_mode="llm_alone" if args.llm_alone else "sweep")      # amendment 21
+    records = dict(cell.sweep_start_records(probes), records_mode="smoke" if args.smoke else "llm_alone" if args.llm_alone else "sweep")      # amendment 21
     if isinstance(records.get("power_static"), dict):
         cfg.power_static_ref = records["power_static"]               # amendment 19 (replaced): every cell start must match these static fields
-    deps = cell.real_deps(cfg) if runner is None else None
-    runner = runner or (lambda arm, rep, out_dir, c: cell.run_cell(arm, rep, out_dir, c, deps))
+    deps = deps if deps is not None else (cell.real_deps(cfg) if runner is None else None)
+    runner = runner or (lambda arm, rep, out_dir, c, **kw: cell.run_cell(arm, rep, out_dir, c, deps, **kw))
+    if args.smoke:
+        return run_smoke(cfg, Path(args.run_dir), args.smoke, runner, records)
     if args.llm_alone:
         _check_or_write_meta(Path(args.run_dir), args.seed, order, arms, args.drop_igpu, clock_check, records)
         run_llm_alone(cfg, Path(args.run_dir), runner)
