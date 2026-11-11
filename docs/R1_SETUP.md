@@ -27,12 +27,12 @@ Committed before the first cell, as `docs/R1_PREREG.md` requires. A change to an
 
 | Setting | Value |
 |---|---|
-| Superposition install path and version | (to be recorded) |
-| Preset (resolution, quality) | (to be chosen from SOLO data so that GPU busy per frame is 6 to 10 ms at 60 fps with a hitch share below 1%) |
-| How the scene is started | (benchmark sequence or static camera, restarted every cell) |
-| Executable PresentMon targets | (to be recorded) |
-| Number of smoke runs before the freeze | (to be recorded) |
-| Real PresentMon header | (committed with the freeze, replacing the synthetic sample) |
+| Superposition install path and version | `C:\Program Files\Unigine\Superposition Benchmark\bin\superposition.exe`, version 1.1 (ProductVersion and FileVersion of the executable, sha256 34a0792670445f9f6a576f47a859b9a53af932c5ac69a1cdfc60433778b0f55d) |
+| Preset (resolution, quality) | frozen on 2026-11-11 from the SOLO smoke `SOLO_2` (confirmed by the owner): GAME mode, Custom preset, DirectX, Fullscreen off (windowed), 1920x1080, Textures Medium, Shaders Medium, Depth of Field off, Motion Blur off. Measured on that preset: 60.00 fps, frame time p50 16.67 ms and p99 16.73 ms, hitch share 0.00%, GPU busy per frame 6.49 ms median (p95 6.94 ms), so the acceptance rule (GPU busy 6 to 10 ms, hitch share below 1%) holds, at the low end of the range; my forecast assumed about 8 ms, so the UNGATED effect may be smaller than forecast. Not tuned further, by the owner's choice. |
+| How the scene is started | GAME mode with the camera left still and no input, one running process (the free edition has no command-line tool and no looped benchmark; the benchmark camera path changes load over time). Departure from the prereg wording "restarted every cell": the game is NOT restarted between cells, because about 35 manual restarts are impractical. Scene drift is checked after the sweep from the GPU busy per frame of the SOLO cells across reps and is reported. |
+| Executable PresentMon targets | `superposition.exe` only; `launcher.exe` is the menu and is never captured. The swapchain address changes per run and is not frozen. |
+| Number of smoke runs before the freeze | 2 SOLO smoke runs, 0 loaded-arm runs. `SOLO_1` failed the window-continuity check (1,110 of 1,200 frames, one 329 ms stall in the window) and was discarded by the rig; `SOLO_2` passed. |
+| Real PresentMon header | committed as `tests/realgame/data/pm_sample_real.csv` (the real header and the first 40 rows of `SOLO_2`, 23 columns, with a test): this build emits the gold-style names `FrameTime`, `GPUBusy`, `GPULatency`, `CPUStartQPC` and has no `FrameType` or `VideoBusy`; PresentMode is `Composed: Copy with GPU GDI` (windowed, composed copy). |
 
 ## Observed at setup time (2026-11-11, about 19:50, before any cell, read-only)
 
@@ -71,3 +71,12 @@ One LLM-alone cell run from the assistant's shell only to find crashes in the ha
 | Throttle reasons | SwPowerCap and a software thermal slowdown (0x20) flagged |
 | Throughput and power in the 60 s window | 83.7 tok/s; 93.67 W from the energy counter; `power_rejected` 0 |
 | Enforced power limit during the cell | minimum 72.7 W, maximum 95.0 W |
+
+## Readings from the first sessions (2026-11-11)
+
+| Observation | Value |
+|---|---|
+| VRAM with the game loaded and idle (`SOLO_2`) | 1835 MiB used, against 460 MiB for the idle desktop, so the game takes about 1.4 GB. With the LLM at n_ctx 12288 (3687 MiB) about 2.6 GB of the 8188 MiB remain: no paging is expected |
+| nvidia-smi process list, `--llm-alone` run | `dwm.exe` listed on the RTX (type C+G) together with explorer.exe and claude.exe; `display_active` still Disabled. The earlier read at setup showed no `dwm.exe`; the owner's second description of the display (compositor on the RTX) is closer to this reading |
+| LLM alone, elevated, game absent (`session2/llm_alone`) | 83.85 tok/s, 95.33 W (energy counter), `power_rejected` 0, 50 to 84 C, enforced limit 84.4 to 95.0 W, SM median 2385 MHz, no context reset |
+| SOLO smoke (`SOLO_2`) | 60.00 fps, p50 16.67 ms, p99 16.73 ms, hitch share 0.00%, GPU busy 6.49 ms, 46.6 W, 56 to 62 C, enforced limit 86.4 to 95.0 W |
