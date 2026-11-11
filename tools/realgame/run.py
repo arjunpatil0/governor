@@ -26,7 +26,7 @@ DEFAULT_ARMS = ("UNGATED", "PRIO_IDLE", "DUTY50", "IGPU")
 NOISE_OK = "NOISE_OK.json"  # marker in the attempt directory, written only after the per-rep noise check passed
 CLOCK_CHECK = "clock_check.json"
 DEFAULT_MAX_CLOCK_CHECK_AGE_S = 21600
-RECORD_KEYS = ("nvidia_smi_processes", "display_active", "display_mode", "nvml_name", "nvml_driver_version", "vram_total_mib", "records_mode")
+RECORD_KEYS = ("nvidia_smi_processes", "display_active", "display_mode", "nvml_name", "nvml_driver_version", "vram_total_mib", "records_mode", "power_static", "elevated")
 MAX_NOISE_REPS = 2         # amendment 14: more than 2 distinct reps failing the noise check at any attempt stops the sweep (never loosened)
 
 
@@ -257,7 +257,7 @@ def write_clock_check(run_dir, status, state, problems, now=None):
     state = state or {}
     load = state.get("load_test") or {}
     doc = {"status": status, "timestamp": now, "timestamp_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(now)), "max_sm_mhz": state.get("max_sm_mhz"),
-           "thresholds": state.get("thresholds"), "info": load.get("info"), "helper_present": list(state.get("helper_present") or []), "n_load_samples": load.get("n_load_samples"),
+           "thresholds": state.get("thresholds"), "power_limit_max_w": load.get("power_limit_max_w"), "info": load.get("info"), "helper_present": list(state.get("helper_present") or []), "n_load_samples": load.get("n_load_samples"),
            "load_error": load.get("load_error"), "problems": list(problems)}
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -301,8 +301,6 @@ def _parser():
     p.add_argument("--n-prompt", type=int)
     p.add_argument("--presentmon")
     p.add_argument("--check-clocks", action="store_true", help="clock check (amendment 18): admin clock helper absent and max SM clock above 1980 MHz in a ~5 s CUDA load test; the game process must be ABSENT")
-    p.add_argument("--power-limit-w", type=float, default=95.0, help="target NVML enforced power limit in W (amendment 19)")
-    p.add_argument("--power-limit-tol-w", type=float, default=1.0, help="tolerance around --power-limit-w in W; a cell is refused outside it")
     p.add_argument("--allow-pm-hash-mismatch", action="store_true", help="explicit override of the PresentMon sha256 check (recorded in meta)")
     p.add_argument("--game-process", required=True, help="executable name, must end with .exe")
     p.add_argument("--drop-igpu", metavar="REASON", help="drop the IGPU arm and record the reason")
@@ -351,8 +349,7 @@ def main(argv=None, probes=None, runner=None):
                       presentmon_exe=Path(args.presentmon), game_process=args.game_process, armoury_mode=args.armoury_mode,
                       llama_dir=Path(args.llama_dir or root / "third_party" / "llama.cpp"), n_prompt=args.n_prompt, seed=args.seed,
                       llm_exe_vk=Path(args.llm_exe_vk or root / "workloads" / "background" / "llama_realgame_bench_vk.exe") if use_igpu else None,
-                      igpu_vk_index=args.igpu_vk_index if use_igpu else None, allow_pm_hash_mismatch=args.allow_pm_hash_mismatch,
-                      power_limit_w=args.power_limit_w, power_limit_tol_w=args.power_limit_tol_w)
+                      igpu_vk_index=args.igpu_vk_index if use_igpu else None, allow_pm_hash_mismatch=args.allow_pm_hash_mismatch)
     order = make_order(args.seed, args.reps, arms)
     print(f"seed {args.seed}  reps {args.reps}  arms {list(arms)}" + (f"  IGPU dropped: {args.drop_igpu}" if args.drop_igpu else ""))
     if args.llm_alone:
@@ -381,6 +378,8 @@ def main(argv=None, probes=None, runner=None):
         print(f"clock check refused: {why}", file=sys.stderr)
         return 2
     records = dict(cell.sweep_start_records(probes), records_mode="llm_alone" if args.llm_alone else "sweep")      # amendment 21
+    if isinstance(records.get("power_static"), dict):
+        cfg.power_static_ref = records["power_static"]               # amendment 19 (replaced): every cell start must match these static fields
     deps = cell.real_deps(cfg) if runner is None else None
     runner = runner or (lambda arm, rep, out_dir, c: cell.run_cell(arm, rep, out_dir, c, deps))
     if args.llm_alone:

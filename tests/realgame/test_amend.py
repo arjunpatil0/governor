@@ -136,7 +136,7 @@ class ClockProbes(FakeProbes):
 
     def clock_load_test(self):
         self.load_calls += 1
-        return self.load or {"max_sm_mhz": 2100, "load_error": None, "n_load_samples": 100, "info": {"idle_sm_mhz": [210, 1980], "pstate_idle": [8], "power_limit_w": 95.0}}
+        return self.load or {"max_sm_mhz": 2100, "load_error": None, "n_load_samples": 100, "power_limit_max_w": 95.0, "info": {"idle_sm_mhz": [210, 1980], "pstate_idle": [8], "power_limit_w": 95.0}}
 
 
 def test_preflight_refuses_when_admin_helper_present(tmp_path):
@@ -227,7 +227,7 @@ def test_check_clocks_mode(tmp_path, capsys):
     argv = main_args(tmp_path, "--check-clocks")
     assert r.main(argv, probes=ClockProbes(game=False)) == 0
     assert "max SM clock" in capsys.readouterr().out
-    assert r.main(argv, probes=ClockProbes(game=False, load={"max_sm_mhz": 1980, "load_error": None, "info": {}})) == 2
+    assert r.main(argv, probes=ClockProbes(game=False, load={"max_sm_mhz": 1980, "load_error": None, "power_limit_max_w": 95.0, "info": {}})) == 2
     assert "1980" in capsys.readouterr().err
     assert r.main(argv, probes=ClockProbes(game=False, helper=["pipe"])) == 2
     capsys.readouterr()

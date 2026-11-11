@@ -62,8 +62,8 @@ class FakeProbes:
     def clock_load_test(self):
         return {"max_sm_mhz": 2100, "load_error": None, "n_load_samples": 100, "info": {}}
 
-    def power_limit_w(self):
-        return 95.0
+    def nvidia_smi_power_text(self):
+        return "GPU Power Readings\n    Current Power Limit : 80.00 W\n    Default Power Limit : 80.00 W\n    Min Power Limit : 5.00 W\n    Max Power Limit : 140.00 W\n"
 
     def nvidia_smi_text(self):
         return "NVSMI FAKE TABLE\nProcesses: none\n"

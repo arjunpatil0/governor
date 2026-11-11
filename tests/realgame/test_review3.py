@@ -55,7 +55,7 @@ def test_check_clocks_writes_refused_file(tmp_path, capsys):
 
 def test_check_clocks_refused_overwrites_earlier_passed_file(tmp_path):
     write_check(tmp_path)
-    assert r.main(check_args(tmp_path), probes=ClockProbes(game=False, load={"max_sm_mhz": 1500, "load_error": None, "info": {}})) == 2
+    assert r.main(check_args(tmp_path), probes=ClockProbes(game=False, load={"max_sm_mhz": 1500, "load_error": None, "power_limit_max_w": 95.0, "info": {}})) == 2
     assert json.loads((tmp_path / "run" / "clock_check.json").read_text())["status"] == "refused"
 
 

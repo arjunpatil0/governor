@@ -12,6 +12,7 @@ The game itself is started by the operator, not by this rig (UNVERIFIED how the 
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -64,8 +65,7 @@ class Config:
     llm_exe_vk: "Path | None" = None           # the Vulkan build of the driver, used only for the IGPU arm
     igpu_vk_index: "int | None" = None         # Vulkan device index of the Radeon 780M (GGML_VK_VISIBLE_DEVICES), required for IGPU
     allow_pm_hash_mismatch: bool = False       # explicit override of the PresentMon sha256 check; recorded in meta.json
-    power_limit_w: float = 95.0                # amendment 19: the enforced NVML power limit must be within power_limit_tol_w of this
-    power_limit_tol_w: float = 1.0
+    power_static_ref: "dict | None" = None     # amendment 19 (replaced): the sweep-start nvidia-smi static power fields; every cell start must match them (set by run.py)
 
 
 def validate_game_process(name):
@@ -159,16 +159,56 @@ def nvml_power_limit_w(nv, h):
     return clockcheck.enforced_power_limit_w(nv, h)
 
 
-def check_power_limit(read_w, target_w, tol_w):
-    """Amendment 19. read_w() -> W. -> (value or None, problem or None). Within tolerance (inclusive, 1e-9 slack for float noise) passes; anything else, and a failing reader, is a refusal
-    whose message shows the value that was read and the target."""
+POWER_STATIC_TOL_W = 0.5
+POWER_STATIC_FIELDS = (("default_power_limit_w", "Default Power Limit", "default"), ("min_power_limit_w", "Min Power Limit", "min"), ("max_power_limit_w", "Max Power Limit", "max"))
+_POWER_LINE = re.compile(r"^\s*(Default Power Limit|Min Power Limit|Max Power Limit|Current Power Limit)\s*:\s*(.*?)\s*$", re.I)
+
+
+class PowerStaticError(RuntimeError):
+    pass
+
+
+def parse_power_static(text):
+    """Parse the nvidia-smi POWER query (-q -d POWER) text -> dict(default_power_limit_w, min_power_limit_w, max_power_limit_w, current_power_limit_w (information, may be None), raw_lines).
+    For each label the first numeric value ('80.00 W') is used; every matching line is kept in raw_lines. Default, min and max must be present and numeric, else PowerStaticError."""
+    raw, vals = [], {}
+    for line in str(text or "").splitlines():
+        m = _POWER_LINE.match(line)
+        if not m:
+            continue
+        raw.append(line.strip())
+        label = m.group(1).lower()
+        n = re.match(r"^([-+]?\d+(?:\.\d+)?)\s*W?$", m.group(2), re.I)
+        if n and label not in vals:
+            vals[label] = float(n.group(1))
+    out, missing = {}, []
+    for key, label, _ in POWER_STATIC_FIELDS:
+        if label.lower() in vals:
+            out[key] = vals[label.lower()]
+        else:
+            missing.append(label)
+    if missing:
+        raise PowerStaticError(f"cannot parse the static power fields from the nvidia-smi POWER query (-q -d POWER) (no numeric value for: {', '.join(missing)}): refusing")
+    out["current_power_limit_w"] = vals.get("current power limit")
+    out["raw_lines"] = raw
+    return out
+
+
+def read_power_static(probes):
     try:
-        v = float(read_w())
+        text = probes.nvidia_smi_power_text()
     except Exception as e:                                                                # noqa: BLE001
-        return None, f"cannot read the enforced power limit from NVML ({type(e).__name__}: {e}); target {target_w} W +- {tol_w} W"
-    if abs(v - target_w) > tol_w + 1e-9:
-        return v, f"enforced power limit read from NVML is {v} W, target {target_w} W +- {tol_w} W: refusing (the harness never changes the limit)"
-    return v, None
+        raise PowerStaticError(f"cannot run the nvidia-smi POWER query (-q -d POWER) to read the static power fields ({type(e).__name__}: {e}): refusing") from e
+    return parse_power_static(text)
+
+
+def power_static_problems(ref, now, tol_w=POWER_STATIC_TOL_W):
+    """Default, min and max power limit must equal the sweep-start values within tol_w. The dynamic current limit is excluded. -> list of texts (empty = unchanged)."""
+    bad = []
+    for key, label, short in POWER_STATIC_FIELDS:
+        if abs(float(now[key]) - float(ref[key])) > tol_w + 1e-9:
+            bad.append(f"static power field changed since sweep start: {short} power limit is {now[key]} W, was {ref[key]} W (more than {tol_w} W)")
+    return bad
 
 
 def sweep_start_records(probes):
@@ -185,6 +225,14 @@ def sweep_start_records(probes):
     except Exception as e:                                                                # noqa: BLE001
         text = f"unavailable ({type(e).__name__}: {e})"
     rec = {"nvidia_smi_processes": text}
+    try:
+        rec["power_static"] = read_power_static(probes)
+    except Exception as e:                                                                # noqa: BLE001
+        rec["power_static"] = f"unavailable ({type(e).__name__}: {e})"
+    try:
+        rec["elevated"] = probes.is_elevated()
+    except Exception:                                                                     # noqa: BLE001
+        rec["elevated"] = None
     rec.update(get(probes.nvidia_smi_display, ("display_active", "display_mode")))
     rec.update(get(probes.nvml_identity, ("nvml_name", "nvml_driver_version", "vram_total_mib")))
     return rec
@@ -260,11 +308,9 @@ class SystemProbes:
         """The amendment 18 load test (about 3 s idle samples + 5 s CUDA load, SM clock sampled through NVML). Used by --check-clocks only, with the game absent."""
         return clockcheck.default_load_test()
 
-    def power_limit_w(self):
-        """NVML enforced power limit in W (falls back to the power management limit); raises if neither can be read. nvidia-smi power.limit is N/A on this driver and is not used."""
-        import pynvml
-        pynvml.nvmlInit()
-        return clockcheck.enforced_power_limit_w(pynvml, pynvml.nvmlDeviceGetHandleByIndex(0))
+    def nvidia_smi_power_text(self):
+        """The text of the nvidia-smi POWER query (-q -d POWER) (read only; full path, fixed argv, no shell)."""
+        return subprocess.run([nvidia_smi_exe(), "-q", "-d", "POWER"], capture_output=True, text=True, timeout=60, check=True, shell=False).stdout
 
     def nvidia_smi_text(self):
         """The full text of nvidia-smi (resolved by full path, fixed argv, no shell)."""
@@ -311,7 +357,7 @@ def clock_state_check(probes, game_process, run_load=False):
     helper = list(probes.admin_helper_present())
     load = probes.clock_load_test() if run_load else None
     if load is None:
-        problems = clockcheck.verdict(helper, {"max_sm_mhz": clockcheck.PASS_SM_MHZ_ABOVE + 1, "load_error": None})
+        problems = clockcheck.verdict(helper, {"max_sm_mhz": clockcheck.PASS_SM_MHZ_ABOVE + 1, "load_error": None}, check_power=False)
     else:
         problems = clockcheck.verdict(helper, load)
     return problems, clockcheck.state_of(helper, load)
@@ -356,12 +402,16 @@ def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False
     except ValueError as e:
         bad.append(str(e))
     bad += clock_state_check(probes, cfg.game_process)[0]
-    _, why = check_power_limit(probes.power_limit_w, cfg.power_limit_w, cfg.power_limit_tol_w)
-    if why:
-        bad.append("power limit: " + why)
+    try:
+        ps = read_power_static(probes)
+        if cfg.power_static_ref is not None:
+            bad += ["power: " + w for w in power_static_problems(cfg.power_static_ref, ps)]
+    except PowerStaticError as e:
+        bad.append("power: " + str(e))
     if bad:
         raise PreflightError(bad)
     el = probes.is_elevated()
+    print("elevated: " + {True: "true", False: "false", None: "unknown"}[el])
     print("note: this process is " + {True: "ELEVATED (administrator)", False: "not elevated", None: "of unknown elevation"}[el] + " (recorded in meta.json; not a refusal)")
 
 
@@ -490,10 +540,15 @@ class Sampler50(threading.Thread):
         self.nvml, self.interval_s, self.guard, self.stop_ev = nvml, interval_s, guard, threading.Event()
         self.t, self.sm, self.throttle, self.temp = [], [], [], []
         self.power, self.power_rejected, self.power_errors = [], [], 0
+        self.limit = []                                                                   # enforced power limit (W), a covariate: None when unreadable
 
     def sample_once(self):
         t = time.perf_counter()
         self.t.append(t); self.sm.append(self.nvml.sm_clock()); self.throttle.append(self.nvml.throttle()); self.temp.append(self.nvml.temp_c())
+        try:
+            self.limit.append(float(self.nvml.power_limit_w()))
+        except Exception:                                                                 # noqa: BLE001
+            self.limit.append(None)
         try:
             w = self.nvml.power_w()
         except Exception:                                                                 # noqa: BLE001
@@ -593,7 +648,7 @@ def _sampler_stats(s, t_open, t_close):
     idx = [i for i, t in enumerate(s.t) if t_open <= t < t_close]
     if not idx:
         return {"sampler_n": 0, "sampled_power_n": 0, "sampled_power_mean_w": None, "power_rejected": 0, "sm_clock_mhz_median": None, "throttle_mask_or": None, "throttle_flag_mask_or": None, "throttle_swpowercap": None, "throttle_flag": None,
-                "throttle_nonzero_frac": None, "sampler_temp_max": None}
+                "throttle_nonzero_frac": None, "sampler_temp_max": None, "enforced_limit_w_min": None, "enforced_limit_w_max": None}
     import statistics
     sm = [s.sm[i] for i in idx]
     th = [s.throttle[i] for i in idx]
@@ -603,7 +658,10 @@ def _sampler_stats(s, t_open, t_close):
     pw_all, rj_all = getattr(s, "power", None) or [], getattr(s, "power_rejected", None) or []
     pw = [pw_all[i] for i in idx if i < len(pw_all) and pw_all[i] is not None]
     rejected = sum(1 for i in idx if i < len(rj_all) and rj_all[i])
-    return {"sampler_n": len(idx), "sampled_power_n": len(pw), "sampled_power_mean_w": (sum(pw) / len(pw)) if pw else None, "power_rejected": rejected,
+    lim_all = getattr(s, "limit", None) or []
+    lim = [lim_all[i] for i in idx if i < len(lim_all) and lim_all[i] is not None]
+    return {"enforced_limit_w_min": min(lim) if lim else None, "enforced_limit_w_max": max(lim) if lim else None,
+            "sampler_n": len(idx), "sampled_power_n": len(pw), "sampled_power_mean_w": (sum(pw) / len(pw)) if pw else None, "power_rejected": rejected,
             "sm_clock_mhz_median": statistics.median(sm), "throttle_mask_or": mask, "throttle_flag_mask_or": mask & THROTTLE_FLAG_MASK,
             "throttle_swpowercap": bool(mask & THROTTLE_SWPOWERCAP), "throttle_flag": bool(mask & THROTTLE_FLAG_MASK),
             "throttle_nonzero_frac": sum(1 for x in th if x) / len(th), "sampler_temp_max": max(s.temp[i] for i in idx)}
@@ -657,13 +715,20 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         if clock_problems:
             raise RuntimeError("clock state refused: " + "; ".join(clock_problems))
-        limit_start, limit_why = check_power_limit(deps.nvml.power_limit_w, cfg.power_limit_w, cfg.power_limit_tol_w)
-        limits = {"power_limit_w_start": limit_start, "power_limit_target_w": cfg.power_limit_w, "power_limit_tol_w": cfg.power_limit_tol_w}
-        meta.update(limits)
-        res.update(limits)
+        try:
+            ps = read_power_static(deps.probes)
+        except PowerStaticError as e:
+            raise RuntimeError("power refused: " + str(e)) from e
+        res["power_static_cell_start"] = meta["power_static_cell_start"] = ps
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
-        if limit_why:
-            raise RuntimeError("power limit refused: " + limit_why)
+        if cfg.power_static_ref is not None:
+            why = power_static_problems(cfg.power_static_ref, ps)
+            if why:
+                raise RuntimeError("power refused: " + "; ".join(why))
+        try:
+            res["enforced_limit_w_start"] = float(deps.nvml.power_limit_w())             # covariate, before the LLM spawn; never a refusal
+        except Exception:                                                                 # noqa: BLE001
+            res["enforced_limit_w_start"] = None
         res["idle_vram_mib"] = meta["idle_vram_mib"] = deps.nvml.vram_used_mb()          # amendment 21: BEFORE the LLM process is launched
         if uses_llm:
             env = dict(os.environ, RG_BACKEND=backend, RG_DUTY=str(duty))
@@ -726,7 +791,10 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
         shared1 = deps.shared_mem(game_pid) if uses_game else None    # end-of-window reading: the one paging uses
         res["temp_c"]["end"] = deps.nvml.temp_c()
         res["vram_mb"]["end"] = deps.nvml.vram_used_mb()
-        res["power_limit_w_end"] = deps.nvml.power_limit_w()
+        try:
+            res["enforced_limit_w_end"] = float(deps.nvml.power_limit_w())
+        except Exception:                                                                 # noqa: BLE001
+            res["enforced_limit_w_end"] = None
         res["energy_j"] = (e1 - e0) / 1000.0
         res["energy_read_t"] = [te0, te1]
         res["power_w"] = res["energy_j"] / (te1 - te0)
@@ -750,7 +818,6 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
         const = clockcheck.constant_clock(sm_window)
         clock_state["loaded_constant_check"] = const
         meta["clock_state"] = clock_state
-        meta["power_limit_w_end"] = res["power_limit_w_end"]
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         if const["constant"]:
             raise RuntimeError(f"SM clock constant ({const['distinct']} distinct value over {const['n']} samples, at least {const['min_samples']}) for the whole window: the clock looks locked; "

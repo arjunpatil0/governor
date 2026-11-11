@@ -54,6 +54,7 @@ def cell_summary(cell_dir):
            "sm_clock_mhz_median": res.get("sm_clock_mhz_median"), "throttle_mask_or": res.get("throttle_mask_or"), "throttle_flag_mask_or": res.get("throttle_flag_mask_or"),
            "temp_c": res.get("temp_c"), "vram_mb": res.get("vram_mb"), "shared_gpu_mem_bytes": res.get("shared_gpu_mem_bytes"), "prio_readbacks": res.get("prio_readbacks"),
            "present_modes": res.get("present_modes"), "elevated": res.get("elevated")}
+    out.update(dict(filter(lambda kv: kv[0].startswith("enforced_limit_w_"), res.items())))      # covariate columns only (recorded, never used by a rule)
     if (d / "frames.csv").exists():
         cm = metrics.cell_frame_metrics(presentmon.parse_csv(d / "frames.csv"), res["t_open"], res["t_close"], res["qpc_hz"])
         fm = cm["frame"]

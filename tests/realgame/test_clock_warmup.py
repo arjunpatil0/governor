@@ -119,7 +119,7 @@ def test_load_fn_error_before_ready_does_not_wait_for_timeout():
 
 
 def test_verdict_idle_looking_load_gets_the_did_not_reach_gpu_text():
-    load = {"max_sm_mhz": 210, "load_error": None, "info": {"pstate_load": [8], "clock_reasons_mask_or": 0x1}}
+    load = {"max_sm_mhz": 210, "load_error": None, "power_limit_max_w": 95.0, "info": {"pstate_load": [8], "clock_reasons_mask_or": 0x1}}
     problems = cc.verdict([], load)
     assert len(problems) == 1 and "the load did not reach the GPU (still P8 and idle during the load); this is not a clock lock" in problems[0]
     assert "locked" not in problems[0]
@@ -127,15 +127,15 @@ def test_verdict_idle_looking_load_gets_the_did_not_reach_gpu_text():
 
 @pytest.mark.parametrize("info", [{"pstate_load": [8, 0], "clock_reasons_mask_or": 0x1}, {"pstate_load": [8], "clock_reasons_mask_or": 0x5}, {"pstate_load": [0], "clock_reasons_mask_or": 0x1}])
 def test_verdict_keeps_the_old_text_when_not_idle_looking(info):
-    problems = cc.verdict([], {"max_sm_mhz": 1500, "load_error": None, "info": info})
+    problems = cc.verdict([], {"max_sm_mhz": 1500, "load_error": None, "power_limit_max_w": 95.0, "info": info})
     assert len(problems) == 1 and "clocks look limited or locked" in problems[0]
 
 
 def test_verdict_boundaries_unchanged_even_with_idle_info():
     idle = {"pstate_load": [8], "clock_reasons_mask_or": 0x1}
-    assert cc.verdict([], {"max_sm_mhz": 1980, "load_error": None, "info": idle})
-    assert cc.verdict([], {"max_sm_mhz": 1981, "load_error": None, "info": idle}) == []
-    assert cc.verdict([], {"max_sm_mhz": 1980, "load_error": None, "info": {}})
+    assert cc.verdict([], {"max_sm_mhz": 1980, "load_error": None, "power_limit_max_w": 95.0, "info": idle})
+    assert cc.verdict([], {"max_sm_mhz": 1981, "load_error": None, "power_limit_max_w": 95.0, "info": idle}) == []
+    assert cc.verdict([], {"max_sm_mhz": 1980, "load_error": None, "power_limit_max_w": 95.0, "info": {}})
 
 
 def test_default_load_fn_warms_up_signals_ready_then_runs_timed_loop_after_ready():

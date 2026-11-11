@@ -24,7 +24,8 @@ SAMPLE_INTERVAL_S = 0.05
 IDLE_INFO_S = 3.0
 IDLE_INTERVAL_S = 0.25
 CONSTANT_MIN_SAMPLES = 200
-THRESHOLDS = {"max_sm_mhz_above": PASS_SM_MHZ_ABOVE, "load_s": LOAD_S, "sample_interval_s": SAMPLE_INTERVAL_S, "idle_info_s": IDLE_INFO_S, "constant_min_samples": CONSTANT_MIN_SAMPLES}
+POWER_LIMIT_GATE_W = 94.0                     # amendment 19 (replaced): the maximum enforced power limit seen during the load must be >= this
+THRESHOLDS = {"max_sm_mhz_above": PASS_SM_MHZ_ABOVE, "power_limit_gate_w": POWER_LIMIT_GATE_W, "load_s": LOAD_S, "sample_interval_s": SAMPLE_INTERVAL_S, "idle_info_s": IDLE_INFO_S, "constant_min_samples": CONSTANT_MIN_SAMPLES}
 
 
 def _own_pids():
@@ -168,7 +169,9 @@ def _try(fn):
 def load_test(reader, load_fn, clock=time.monotonic, sleep=time.sleep, load_s=LOAD_S, idle_s=IDLE_INFO_S, interval_s=SAMPLE_INTERVAL_S, ready_timeout_s=READY_TIMEOUT_S):
     """Idle samples (information), then load_fn(load_s) in a thread while the SM clock is sampled every interval_s for load_s seconds.
     -> dict(max_sm_mhz (None if nothing could be read), n_load_samples, load_error (None or text), read_error, info{...}). It decides nothing; see verdict()."""
-    info = {"idle_sm_mhz": [], "pstate_idle": [], "idle_error": None, "pstate_load": [], "clock_reasons_mask_or": 0, "power_limit_w": None, "power_limit_error": None}
+    info = {"idle_sm_mhz": [], "pstate_idle": [], "idle_error": None, "pstate_load": [], "clock_reasons_mask_or": 0, "power_limit_w": None, "power_limit_error": None,
+            "enforced_limit_w_min": None, "enforced_limit_w_max": None, "enforced_limit_w_n": 0, "enforced_limit_error": None}
+    limits = []
     t0 = clock()
     while True:
         sm, err = _try(reader.sm_clock)
@@ -207,7 +210,7 @@ def load_test(reader, load_fn, clock=time.monotonic, sleep=time.sleep, load_s=LO
         if box["error"]:
             info["power_limit_w"], info["power_limit_error"] = _try(reader.enforced_power_limit_w)
             info["clock_reasons_hex"] = hex(info["clock_reasons_mask_or"])
-            return {"max_sm_mhz": None, "n_load_samples": 0, "load_error": box["error"], "read_error": None, "load_s": load_s, "info": info}
+            return {"max_sm_mhz": None, "n_load_samples": 0, "load_error": box["error"], "read_error": None, "load_s": load_s, "power_limit_max_w": None, "info": info}
     sms, read_error = [], None
     t0 = clock()
     while True:
@@ -216,6 +219,11 @@ def load_test(reader, load_fn, clock=time.monotonic, sleep=time.sleep, load_s=LO
             read_error = err
         else:
             sms.append(sm)
+        lim, lerr = _try(reader.enforced_power_limit_w)
+        if lerr:
+            info["enforced_limit_error"] = lerr
+        else:
+            limits.append(float(lim))
         rs, _ = _try(reader.clock_reasons)
         if rs is not None:
             info["clock_reasons_mask_or"] |= int(rs)
@@ -230,7 +238,10 @@ def load_test(reader, load_fn, clock=time.monotonic, sleep=time.sleep, load_s=LO
         box["error"] = "load_fn did not return in time"
     info["power_limit_w"], info["power_limit_error"] = _try(reader.enforced_power_limit_w)
     info["clock_reasons_hex"] = hex(info["clock_reasons_mask_or"])
-    return {"max_sm_mhz": max(sms) if sms else None, "n_load_samples": len(sms), "load_error": box["error"], "read_error": read_error, "load_s": load_s, "info": info}
+    info["enforced_limit_w_n"] = len(limits)
+    info["enforced_limit_w_min"], info["enforced_limit_w_max"] = (min(limits), max(limits)) if limits else (None, None)
+    return {"max_sm_mhz": max(sms) if sms else None, "n_load_samples": len(sms), "load_error": box["error"], "read_error": read_error, "load_s": load_s,
+            "power_limit_max_w": info["enforced_limit_w_max"], "info": info}
 
 
 def _idle_looking(info):
@@ -238,8 +249,9 @@ def _idle_looking(info):
     return bool(ps) and all(p == 8 for p in ps) and info.get("clock_reasons_mask_or") == 0x1
 
 
-def verdict(helper, load):
-    """-> list of problems (empty = PASS): the helper is present, the load test failed or could not read the clock, or the maximum SM clock under load is not above 1980 MHz."""
+def verdict(helper, load, check_power=True):
+    """-> list of problems (empty = PASS): the helper is present, the load test failed or could not read the clock, the maximum SM clock under load is not above 1980 MHz, or (amendment 19,
+    replaced; check_power) the maximum enforced power limit during the load could not be read or is below 94 W."""
     problems = [f"admin clock helper is present ({h}): the sweep runs with unlocked clocks and no helper" for h in helper]
     if load.get("load_error"):
         problems.append(f"clock load test failed: {load['load_error']}")
@@ -249,6 +261,13 @@ def verdict(helper, load):
         problems.append(f"max SM clock under load is {load['max_sm_mhz']} MHz, not above {PASS_SM_MHZ_ABOVE} MHz: the load did not reach the GPU (still P8 and idle during the load); this is not a clock lock")
     elif load["max_sm_mhz"] <= PASS_SM_MHZ_ABOVE:
         problems.append(f"max SM clock under load is {load['max_sm_mhz']} MHz, not above {PASS_SM_MHZ_ABOVE} MHz: the clocks look limited or locked")
+    if check_power and not load.get("load_error"):
+        pmax = load.get("power_limit_max_w")
+        if pmax is None:
+            err = (load.get("info") or {}).get("enforced_limit_error")
+            problems.append(f"the enforced power limit could not be read during the load ({err}): refusing, the {POWER_LIMIT_GATE_W:g} W gate cannot be checked")
+        elif pmax < POWER_LIMIT_GATE_W:
+            problems.append(f"the maximum enforced power limit during the load was {pmax:g} W, below {POWER_LIMIT_GATE_W:g} W: check the Armoury Crate mode (Performance is expected)")
     return problems
 
 

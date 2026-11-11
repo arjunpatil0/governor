@@ -34,7 +34,7 @@ class FakeTimeSrc:
 class FakeClockReader:
     """sm_clock() gives idle_sm until the fake load has started, then load_sm. enforced_power_limit_w / reasons / pstate are information."""
 
-    def __init__(self, load_sm=2100, idle_sm=1980, fail_sm=False, limit_w=92.77, reasons=0x4):
+    def __init__(self, load_sm=2100, idle_sm=1980, fail_sm=False, limit_w=95.0, reasons=0x4):
         self.load_sm, self.idle_sm, self.fail_sm, self.limit_w, self.reasons = load_sm, idle_sm, fail_sm, limit_w, reasons
         self.loaded = threading.Event()
         self.loads = 0
@@ -113,9 +113,9 @@ def test_idle_samples_are_information_only():
 
 
 def test_info_block_records_pstate_power_limit_and_reasons_mask_during_load():
-    (problems, state), _ = check(FakeClockReader(limit_w=92.77, reasons=0x4))
+    (problems, state), _ = check(FakeClockReader(limit_w=95.0, reasons=0x4))
     info = state["load_test"]["info"]
-    assert info["power_limit_w"] == 92.77 and info["clock_reasons_mask_or"] & 0x4 and info["pstate_load"] == [0]
+    assert info["power_limit_w"] == 95.0 and info["clock_reasons_mask_or"] & 0x4 and info["pstate_load"] == [0]
     assert problems == []                                                 # a power limit of 92.77 is information here (the cell rule is amendment 19)
 
 
@@ -171,12 +171,12 @@ def test_default_load_fn_cleans_up_even_if_a_kernel_fails():
 
 # ----- the cell-level and run.py wiring of the load test
 def test_clock_state_check_applies_verdict_to_probe_results():
-    p = ClockProbes(game=False, load={"max_sm_mhz": 1980, "load_error": None, "info": {}})
+    p = ClockProbes(game=False, load={"max_sm_mhz": 1980, "load_error": None, "power_limit_max_w": 95.0, "info": {}})
     problems, state = c.clock_state_check(p, "game.exe", run_load=True)
     assert problems and state["max_sm_mhz"] == 1980 and p.load_calls == 1
     p = ClockProbes(game=False, load={"max_sm_mhz": None, "load_error": "RuntimeError: no cuda", "info": {}})
     assert any("no cuda" in x for x in c.clock_state_check(p, "game.exe", run_load=True)[0])
-    p = ClockProbes(game=False, helper=["pipe"], load={"max_sm_mhz": 2500, "load_error": None, "info": {}})
+    p = ClockProbes(game=False, helper=["pipe"], load={"max_sm_mhz": 2500, "load_error": None, "power_limit_max_w": 95.0, "info": {}})
     assert len(c.clock_state_check(p, "game.exe", run_load=True)[0]) == 1
     p = ClockProbes(game=False)
     problems, state = c.clock_state_check(p, "game.exe")                # no load: helper only
@@ -185,17 +185,17 @@ def test_clock_state_check_applies_verdict_to_probe_results():
 
 def test_check_clocks_file_carries_the_documented_fields(tmp_path):
     run = tmp_path / "run"
-    load = {"max_sm_mhz": 2010, "load_error": None, "n_load_samples": 100, "info": {"idle_sm_mhz": [210], "power_limit_w": 92.77, "clock_reasons_mask_or": 4, "pstate_idle": [8]}}
+    load = {"max_sm_mhz": 2010, "load_error": None, "n_load_samples": 100, "power_limit_max_w": 95.0, "info": {"idle_sm_mhz": [210], "power_limit_w": 95.0, "clock_reasons_mask_or": 4, "pstate_idle": [8]}}
     assert r.main(main_args(tmp_path, "--check-clocks", "--run-dir", str(run)), probes=ClockProbes(game=False, load=load)) == 0
     doc = json.loads((run / "clock_check.json").read_text())
     for k in ("status", "timestamp", "max_sm_mhz", "thresholds", "info", "problems"):
         assert k in doc, k
-    assert doc["status"] == "passed" and doc["max_sm_mhz"] == 2010 and doc["info"]["power_limit_w"] == 92.77 and doc["thresholds"]["max_sm_mhz_above"] == 1980
+    assert doc["status"] == "passed" and doc["max_sm_mhz"] == 2010 and doc["info"]["power_limit_w"] == 95.0 and doc["thresholds"]["max_sm_mhz_above"] == 1980
 
 
 def test_check_clocks_refused_file_lists_problem(tmp_path):
     run = tmp_path / "run"
-    load = {"max_sm_mhz": 1700, "load_error": None, "info": {}}
+    load = {"max_sm_mhz": 1700, "load_error": None, "power_limit_max_w": 95.0, "info": {}}
     assert r.main(main_args(tmp_path, "--check-clocks", "--run-dir", str(run)), probes=ClockProbes(game=False, load=load)) == 2
     doc = json.loads((run / "clock_check.json").read_text())
     assert doc["status"] == "refused" and doc["max_sm_mhz"] == 1700 and doc["problems"]
@@ -207,134 +207,6 @@ def test_high_idle_clock_does_not_fail_the_cell_flow(tmp_path):
     d, _ = make_deps(cfg, clock)
     d.probes = ClockProbes(game=False)
     assert c.run_cell("LLM_ALONE", 0, tmp_path / "cell", cfg, d)["arm"] == "LLM_ALONE"
-
-
-# ================================================================= 19. power cap
-def reader_of(v):
-    def f():
-        if isinstance(v, Exception):
-            raise v
-        return v
-    return f
-
-
-@pytest.mark.parametrize("v", [94.0, 95.0, 96.0])
-def test_power_limit_inside_tolerance_passes(v):
-    value, problem = c.check_power_limit(reader_of(v), 95.0, 1.0)
-    assert value == v and problem is None
-
-
-@pytest.mark.parametrize("v", [93.99, 96.01, 92.77])
-def test_power_limit_outside_tolerance_refuses_and_shows_value_and_target(v):
-    value, problem = c.check_power_limit(reader_of(v), 95.0, 1.0)
-    assert value == v and problem and str(v) in problem and "95.0" in problem
-
-
-def test_power_limit_reader_error_refuses():
-    value, problem = c.check_power_limit(reader_of(RuntimeError("nvml dead")), 95.0, 1.0)
-    assert value is None and problem and "nvml dead" in problem
-
-
-class FakeNv:
-    def __init__(self, enforced=None, mgmt=None):
-        self.enforced, self.mgmt = enforced, mgmt
-
-    def nvmlDeviceGetEnforcedPowerLimit(self, h):
-        if self.enforced is None:
-            raise RuntimeError("not supported")
-        return self.enforced
-
-    def nvmlDeviceGetPowerManagementLimit(self, h):
-        if self.mgmt is None:
-            raise RuntimeError("not supported")
-        return self.mgmt
-
-
-def test_nvml_power_limit_prefers_enforced_then_management_else_raises():
-    assert c.nvml_power_limit_w(FakeNv(enforced=92770, mgmt=80000), 0) == pytest.approx(92.77)
-    assert c.nvml_power_limit_w(FakeNv(mgmt=95000), 0) == 95.0
-    with pytest.raises(RuntimeError, match="(?i)power limit"):
-        c.nvml_power_limit_w(FakeNv(), 0)
-
-
-def test_config_defaults_and_cli_flags(tmp_path):
-    cfg = make_cfg(tmp_path)
-    assert cfg.power_limit_w == 95.0 and cfg.power_limit_tol_w == 1.0
-    seen = {}
-    rg_synth.write_fresh_clock_check(tmp_path / "run")
-    runner = lambda *x: None
-    import tools.realgame.run as rr
-    orig = rr.run_sweep
-    rr.run_sweep = lambda cfg, *a, **k: seen.update(cfg=cfg)
-    try:
-        assert r.main(main_args(tmp_path, "--igpu-vk-index", "1", "--run-dir", str(tmp_path / "run"), "--power-limit-w", "90", "--power-limit-tol-w", "2.5"), probes=_P(90.0), runner=runner) == 0
-    finally:
-        rr.run_sweep = orig
-    assert seen["cfg"].power_limit_w == 90.0 and seen["cfg"].power_limit_tol_w == 2.5
-
-
-class _P(FakeProbes):
-    def __init__(self, w=95.0, **kw):
-        super().__init__(**kw)
-        self.w = w
-
-    def power_limit_w(self):
-        if isinstance(self.w, Exception):
-            raise self.w
-        return self.w
-
-
-def test_preflight_refuses_power_limit_outside_tolerance_and_shows_read_and_target(tmp_path):
-    with pytest.raises(c.PreflightError) as e:
-        c.preflight(make_cfg(tmp_path), _P(92.77))
-    msg = str(e.value)
-    assert "92.77" in msg and "95.0" in msg and "power limit" in msg.lower()
-    assert c.preflight(make_cfg(tmp_path), _P(94.0)) is None and c.preflight(make_cfg(tmp_path), _P(96.0)) is None
-    with pytest.raises(c.PreflightError, match="(?i)power limit"):
-        c.preflight(make_cfg(tmp_path), _P(RuntimeError("no nvml")))
-
-
-def test_dry_run_refuses_at_the_observed_92_77(tmp_path, capsys):
-    assert r.main(main_args(tmp_path, "--dry-run", "--igpu-vk-index", "1"), probes=_P(92.77)) == 2
-    assert "92.77" in capsys.readouterr().err
-
-
-class LimitNvml:
-    """FakeNvml whose limit changes between the start and the end reading."""
-
-    def __init__(self, base, values):
-        self.base, self.values = base, list(values)
-
-    def __getattr__(self, k):
-        return getattr(self.base, k)
-
-    def power_limit_w(self):
-        v = self.values.pop(0) if len(self.values) > 1 else self.values[0]
-        if isinstance(v, Exception):
-            raise v
-        return v
-
-
-def test_run_cell_records_limit_at_start_and_end_in_result_and_meta(tmp_path):
-    clock = Clock()
-    cfg = make_cfg(tmp_path)
-    d, _ = make_deps(cfg, clock)
-    d.nvml = LimitNvml(d.nvml, [95.0, 94.5])
-    res = c.run_cell("SOLO", 0, tmp_path / "cell", cfg, d)
-    meta = json.loads((tmp_path / "cell" / "meta.json").read_text())
-    for doc in (res, json.loads((tmp_path / "cell" / "result.json").read_text()), meta):
-        assert doc["power_limit_w_start"] == 95.0 and doc["power_limit_w_end"] == 94.5 and doc["power_limit_target_w"] == 95.0 and doc["power_limit_tol_w"] == 1.0
-
-
-@pytest.mark.parametrize("v", [92.77, 96.01, RuntimeError("nvml dead")])
-def test_run_cell_refuses_before_launching_anything_when_limit_is_off(tmp_path, v):
-    clock, order = Clock(), []
-    cfg = make_cfg(tmp_path)
-    d, _ = make_deps(cfg, clock, order=order)
-    d.nvml = LimitNvml(d.nvml, [v])
-    with pytest.raises(RuntimeError, match="(?i)power limit"):
-        c.run_cell("UNGATED", 0, tmp_path / "cell", cfg, d)
-    assert order == [] and not (tmp_path / "cell" / "result.json").exists()
 
 
 # ================================================================= 20. power audit
