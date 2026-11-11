@@ -7,6 +7,7 @@ value whose unit is not documented: Frame.t_cpu_start keeps it raw and seconds =
 import csv
 import io
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -232,10 +233,15 @@ class Capture:
         return self.proc.poll()
 
 
+VERSION_RE = re.compile(r"^PresentMon\s+(\d+\.\d+\.\d+\S*)\s*$", re.MULTILINE)
+
+
 def version(exe, run=subprocess.run):
-    """First line printed by `<exe> --version` (UNVERIFIED that 2.6.0 supports this flag: the smoke cell checks it). Raises RuntimeError if the call fails or prints nothing."""
-    r = run([str(exe), "--version"], capture_output=True, text=True, timeout=30)
-    out = ((r.stdout or "") + (r.stderr or "")).strip()
-    if r.returncode != 0 or not out:
-        raise RuntimeError(f"{exe} --version failed (rc={r.returncode}): {out!r}")
-    return out.splitlines()[0].strip()
+    """The version line `PresentMon X.Y.Z` of the console build. PresentMon 2.6.0 has no `--version` flag (verified on this machine: it answers 'unrecognized option' and exits 1, but still prints
+    the version line first); `--help` prints the same first line, so the version is taken from the `--help` output by pattern and the return code is not used. Raises RuntimeError if no version line is found."""
+    r = run([str(exe), "--help"], capture_output=True, text=True, timeout=30)
+    out = ((r.stdout or "") + "\n" + (r.stderr or "")).strip()
+    m = VERSION_RE.search(out)
+    if not m:
+        raise RuntimeError(f"{exe} --help printed no 'PresentMon X.Y.Z' line (rc={r.returncode}): {out[:200]!r}")
+    return f"PresentMon {m.group(1)}"

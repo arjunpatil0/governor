@@ -159,3 +159,30 @@ def test_version_parses_and_fails_loudly():
     assert pm.version("pm.exe", run=lambda *a, **k: R(0, "PresentMon 2.6.0\n")) == "PresentMon 2.6.0"
     with pytest.raises(RuntimeError):
         pm.version("pm.exe", run=lambda *a, **k: R(1, ""))
+
+
+def test_version_uses_help_and_not_the_missing_version_flag():
+    """PresentMon 2.6.0 rejects --version (verified on hardware: 'unrecognized option', exit code 1, but the version line is printed first)."""
+    seen = []
+
+    class R:
+        returncode, stdout, stderr = 1, "error: unrecognized option '--version'.\nPresentMon 2.6.0\n\nCapture Target Options:\n  --process_name name  Only record\n", ""
+
+    def run(cmd, **k):
+        seen.append(list(cmd))
+        return R()
+    assert pm.version("pm.exe", run=run) == "PresentMon 2.6.0"
+    assert seen == [["pm.exe", "--help"]] and "--version" not in seen[0]
+
+
+def test_version_in_stderr_nonzero_exit_and_real_help_text():
+    class R:
+        returncode, stdout, stderr = 1, "", "PresentMon 2.6.0\n\nCapture Target Options:\n"
+    assert pm.version("pm.exe", run=lambda *a, **k: R()) == "PresentMon 2.6.0"
+
+
+def test_version_without_a_version_line_fails_loudly():
+    class R:
+        returncode, stdout, stderr = 0, "usage: something else\n", ""
+    with pytest.raises(RuntimeError, match="printed no"):
+        pm.version("pm.exe", run=lambda *a, **k: R())
