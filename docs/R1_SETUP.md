@@ -11,7 +11,9 @@ Committed before the first cell, as `docs/R1_PREREG.md` requires. A change to an
 | HAGS (hardware-accelerated GPU scheduling) | on |
 | GPU mode | Standard (hybrid): frames rendered by the RTX 4070 Laptop are presented through the Radeon 780M |
 | Frame cap | NVIDIA Control Panel, Max Frame Rate 60, set for Superposition (the cap is a driver limiter, not vsync) |
-| GPU clocks | unlocked; the owner runs `nvidia-smi -rgc` first, the clock helper is not running, and the harness refuses to start a cell if the SM clock is locked |
+| GPU clocks | unlocked; fresh restart, the clock helper is not started, and the harness refuses to start a cell if the helper's pipe is present or if the clock check (a load test, see the prereg) has not passed |
+| NVIDIA power cap | 95 W as stated by the owner; the harness refuses to start a cell if the enforced power limit read from NVML is not within 1 W of 95 W (see the observed values below) |
+| NVIDIA Control Panel | Power management mode: Normal; Superposition Max Frame Rate: 60 |
 | Shell | the sweep runs from an elevated PowerShell (PresentMon needs ETW rights); the LLM process is therefore elevated too, in every arm |
 | Background | Chrome and tray apps closed |
 | Display | no external monitor; laptop panel; hybrid. The display state (nvidia-smi Disp.A), the idle VRAM and the nvidia-smi process list are recorded per cell or at sweep start |
