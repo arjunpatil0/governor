@@ -1,0 +1,23 @@
+smoke summary (information only; it decides nothing by itself)
+arm: SOLO
+warm-up 5.0 s, window 20.0 s
+frames in window: 1200
+achieved fps (frames / window_s): 60.00
+frame time ms p50 / p99 / max: 16.67 / 16.73 / 17.07
+1% low fps: 59.18
+hitch share (> 25.0 ms): 0.00 %
+GPU busy per frame ms median / p95: 6.49 / 6.94
+idle per frame ms (frame - GPU busy) median: 10.18
+PresentMode seen: ['Composed: Copy with GPU GDI']
+dominant swapchain: 0x2678160D240
+any frame dropped: no (n_dropped=0)
+PresentMon CSV header: Application,ProcessID,SwapChainAddress,PresentRuntime,SyncInterval,PresentFlags,AllowsTearing,PresentMode,CPUStartQPC,FrameTime,CPUBusy,CPUWait,GPULatency,GPUTime,GPUBusy,GPUWait,DisplayLatency,DisplayedTime,AnimationError,AnimationTime,MsFlipDelay,AllInputToPhotonLatency,ClickToPhotonLatency
+VRAM MiB start / end: 1835.14453125 / 1835.14453125
+idle VRAM MiB: 1835.14453125
+temperature C start / end: 56.0 / 62.0
+enforced power limit W start / end / min / max: 93.602 / 93.3 / 86.419 / 95.0
+SM clock median MHz: 2250
+throttle masks: or=1 flag_mask_or=0
+power W (energy counter): 46.62  energy J: 932.59
+power_rejected: 0
+preset acceptance (prereg): GPU busy median in 6 to 10 ms: yes; hitch share below 1%: yes; fps >= 59: yes  [INFORMATION ONLY, decides nothing by itself]

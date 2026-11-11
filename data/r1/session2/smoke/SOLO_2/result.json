@@ -1,0 +1,84 @@
+{
+ "arm": "SOLO",
+ "rep": 0,
+ "elevated": true,
+ "smoke": true,
+ "game_pid": 3300,
+ "power_static_cell_start": {
+  "default_power_limit_w": 80.0,
+  "min_power_limit_w": 5.0,
+  "max_power_limit_w": 140.0,
+  "current_power_limit_w": 93.6,
+  "raw_lines": [
+   "Current Power Limit                        : 93.60 W",
+   "Default Power Limit                        : 80.00 W",
+   "Min Power Limit                                : 5.00 W",
+   "Max Power Limit                                : 140.00 W",
+   "Current Power Limit                            : N/A",
+   "Default Power Limit                            : N/A",
+   "Min Power Limit                                : N/A",
+   "Max Power Limit                                : N/A"
+  ]
+ },
+ "enforced_limit_w_start": 93.602,
+ "idle_vram_mib": 1835.14453125,
+ "prio_readbacks": [],
+ "temp_c": {
+  "start": 56.0,
+  "end": 62.0,
+  "sampler_max": 62.0
+ },
+ "vram_mb": {
+  "start": 1835.14453125,
+  "end": 1835.14453125
+ },
+ "t_open": 5493.3706961,
+ "t_close": 5513.3706961,
+ "qpc_hz": 10000000.0,
+ "warmup_s": 5.0,
+ "window_s": 20.0,
+ "enforced_limit_w_end": 93.3,
+ "energy_j": 932.587,
+ "energy_read_t": [
+  5493.372137,
+  5513.377991
+ ],
+ "power_w": 46.61570558297586,
+ "shared_gpu_mem_bytes": {
+  "start": 40550400,
+  "end": 40550400
+ },
+ "duty_achieved": null,
+ "enforced_limit_w_min": 86.419,
+ "enforced_limit_w_max": 95.0,
+ "sampler_n": 319,
+ "sampled_power_n": 319,
+ "sampled_power_mean_w": 44.72958307210031,
+ "power_rejected": 0,
+ "sm_clock_mhz_median": 2250,
+ "throttle_mask_or": 1,
+ "throttle_flag_mask_or": 0,
+ "throttle_swpowercap": false,
+ "throttle_flag": false,
+ "throttle_nonzero_frac": 1.0,
+ "frame": {
+  "p50": 16.666,
+  "p99": 16.72511,
+  "low1_fps": 59.18400059184001,
+  "hitch_share": 0.0,
+  "n": 1200,
+  "hitch_threshold_ms": 25.0,
+  "percentile_method": "linear"
+ },
+ "gpu_busy_ms_median": 6.4874,
+ "n_dropped": 0,
+ "swapchain": "0x2678160D240",
+ "present_modes": [
+  "Composed: Copy with GPU GDI"
+ ],
+ "n_tokens": null,
+ "tok_s": null,
+ "flags": {
+  "throttling": false
+ }
+}

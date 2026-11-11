@@ -1,0 +1,52 @@
+{
+ "status": "passed",
+ "timestamp": 1794410371.6403975,
+ "timestamp_iso": "2026-11-11T20:49:31+0530",
+ "max_sm_mhz": 2325,
+ "thresholds": {
+  "max_sm_mhz_above": 1980,
+  "power_limit_gate_w": 94.0,
+  "load_s": 5.0,
+  "sample_interval_s": 0.05,
+  "idle_info_s": 3.0,
+  "constant_min_samples": 200
+ },
+ "power_limit_max_w": 95.0,
+ "info": {
+  "idle_sm_mhz": [
+   210,
+   210,
+   210,
+   210,
+   210,
+   210,
+   210,
+   210,
+   210,
+   210,
+   210,
+   210,
+   210
+  ],
+  "pstate_idle": [
+   8
+  ],
+  "idle_error": null,
+  "pstate_load": [
+   8,
+   0
+  ],
+  "clock_reasons_mask_or": 5,
+  "power_limit_w": 95.0,
+  "power_limit_error": null,
+  "enforced_limit_w_min": 94.168,
+  "enforced_limit_w_max": 95.0,
+  "enforced_limit_w_n": 100,
+  "enforced_limit_error": null,
+  "clock_reasons_hex": "0x5"
+ },
+ "helper_present": [],
+ "n_load_samples": 100,
+ "load_error": null,
+ "problems": []
+}

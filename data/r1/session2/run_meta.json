@@ -1,0 +1,129 @@
+{
+ "seed": 89770043,
+ "reps": 5,
+ "arms": [
+  "UNGATED",
+  "PRIO_IDLE",
+  "DUTY50",
+  "IGPU"
+ ],
+ "order": [
+  [
+   "SOLO",
+   "PRIO_IDLE",
+   "UNGATED",
+   "IGPU",
+   "DUTY50",
+   "SOLO"
+  ],
+  [
+   "SOLO",
+   "IGPU",
+   "UNGATED",
+   "DUTY50",
+   "PRIO_IDLE",
+   "SOLO"
+  ],
+  [
+   "SOLO",
+   "UNGATED",
+   "PRIO_IDLE",
+   "IGPU",
+   "DUTY50",
+   "SOLO"
+  ],
+  [
+   "SOLO",
+   "DUTY50",
+   "PRIO_IDLE",
+   "UNGATED",
+   "IGPU",
+   "SOLO"
+  ],
+  [
+   "SOLO",
+   "DUTY50",
+   "PRIO_IDLE",
+   "UNGATED",
+   "IGPU",
+   "SOLO"
+  ]
+ ],
+ "igpu_dropped_reason": null,
+ "clock_check": {
+  "status": "passed",
+  "timestamp": 1794410371.6403975,
+  "timestamp_iso": "2026-11-11T20:49:31+0530",
+  "max_sm_mhz": 2325,
+  "thresholds": {
+   "max_sm_mhz_above": 1980,
+   "power_limit_gate_w": 94.0,
+   "load_s": 5.0,
+   "sample_interval_s": 0.05,
+   "idle_info_s": 3.0,
+   "constant_min_samples": 200
+  },
+  "power_limit_max_w": 95.0,
+  "info": {
+   "idle_sm_mhz": [
+    210,
+    210,
+    210,
+    210,
+    210,
+    210,
+    210,
+    210,
+    210,
+    210,
+    210,
+    210,
+    210
+   ],
+   "pstate_idle": [
+    8
+   ],
+   "idle_error": null,
+   "pstate_load": [
+    8,
+    0
+   ],
+   "clock_reasons_mask_or": 5,
+   "power_limit_w": 95.0,
+   "power_limit_error": null,
+   "enforced_limit_w_min": 94.168,
+   "enforced_limit_w_max": 95.0,
+   "enforced_limit_w_n": 100,
+   "enforced_limit_error": null,
+   "clock_reasons_hex": "0x5"
+  },
+  "helper_present": [],
+  "n_load_samples": 100,
+  "load_error": null,
+  "problems": []
+ },
+ "nvidia_smi_processes": "Wed Nov 11 20:49:41 2026       \n+-----------------------------------------------------------------------------------------+\n| NVIDIA-SMI 616.92                 KMD Version: 616.92        CUDA UMD Version: 13.4     |\n+-----------------------------------------+------------------------+----------------------+\n| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n|                                         |                        |               MIG M. |\n|=========================================+========================+======================|\n|   0  NVIDIA GeForce RTX 4070 ...  WDDM  |   00000000:01:00.0 Off |                  N/A |\n| N/A   49C    P8              2W /   95W |     220MiB /   8188MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n\n+-----------------------------------------------------------------------------------------+\n| Processes:                                                                              |\n|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\n|        ID   ID                                                               Usage      |\n|=========================================================================================|\n|    0   N/A  N/A            2156    C+G   C:\\Windows\\System32\\dwm.exe           N/A      |\n|    0   N/A  N/A            7560    C+G   C:\\Windows\\explorer.exe               N/A      |\n|    0   N/A  N/A           10184    C+G   ..._pzs8sxrjxfjjc\\app\\claude.exe      N/A      |\n|    0   N/A  N/A           22060    C+G   ..._pzs8sxrjxfjjc\\app\\claude.exe      N/A      |\n+-----------------------------------------------------------------------------------------+\n",
+ "power_static": {
+  "default_power_limit_w": 80.0,
+  "min_power_limit_w": 5.0,
+  "max_power_limit_w": 140.0,
+  "current_power_limit_w": 95.0,
+  "raw_lines": [
+   "Current Power Limit                        : 95.00 W",
+   "Default Power Limit                        : 80.00 W",
+   "Min Power Limit                                : 5.00 W",
+   "Max Power Limit                                : 140.00 W",
+   "Current Power Limit                            : N/A",
+   "Default Power Limit                            : N/A",
+   "Min Power Limit                                : N/A",
+   "Max Power Limit                                : N/A"
+  ]
+ },
+ "elevated": true,
+ "display_active": "Disabled",
+ "display_mode": "[Requested functionality has been deprecated]",
+ "nvml_name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+ "nvml_driver_version": "616.92",
+ "vram_total_mib": 8188.0,
+ "records_mode": "llm_alone"
+}

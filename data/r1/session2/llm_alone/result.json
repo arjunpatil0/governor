@@ -1,0 +1,75 @@
+{
+ "arm": "LLM_ALONE",
+ "rep": 0,
+ "elevated": true,
+ "game_absent": true,
+ "game_pid": null,
+ "power_static_cell_start": {
+  "default_power_limit_w": 80.0,
+  "min_power_limit_w": 5.0,
+  "max_power_limit_w": 140.0,
+  "current_power_limit_w": 95.0,
+  "raw_lines": [
+   "Current Power Limit                        : 95.00 W",
+   "Default Power Limit                        : 80.00 W",
+   "Min Power Limit                                : 5.00 W",
+   "Max Power Limit                                : 140.00 W",
+   "Current Power Limit                            : N/A",
+   "Default Power Limit                            : N/A",
+   "Min Power Limit                                : N/A",
+   "Max Power Limit                                : N/A"
+  ]
+ },
+ "enforced_limit_w_start": 95.0,
+ "idle_vram_mib": 459.64453125,
+ "llm_dll_dir": "C:\\Users\\arjun\\governor\\third_party\\llama.cpp\\build\\bin",
+ "rg_nctx": 12288,
+ "exec_mode": "EXEC_MODE cuda device=NVIDIA GeForce RTX 4070 Laptop GPU offloaded=29/29 n_layer=28 duty=0",
+ "prio_readbacks": [],
+ "temp_c": {
+  "start": 50.0,
+  "end": 84.0,
+  "sampler_max": 84.0
+ },
+ "vram_mb": {
+  "start": 4146.359375,
+  "end": 4150.359375
+ },
+ "t_open": 4685.6861747,
+ "t_close": 4745.6861747,
+ "qpc_hz": 10000000.0,
+ "warmup_s": 20.0,
+ "window_s": 60.0,
+ "enforced_limit_w_end": 94.216,
+ "energy_j": 5720.071,
+ "energy_read_t": [
+  4685.6875816,
+  4745.6909229
+ ],
+ "power_w": 95.32920794195823,
+ "shared_gpu_mem_bytes": null,
+ "driver_done": "DONE tokens=6984 resets=0",
+ "duty_achieved": null,
+ "enforced_limit_w_min": 84.416,
+ "enforced_limit_w_max": 95.0,
+ "sampler_n": 1166,
+ "sampled_power_n": 1166,
+ "sampled_power_mean_w": 93.38095626072042,
+ "power_rejected": 0,
+ "sm_clock_mhz_median": 2385.0,
+ "throttle_mask_or": 1028,
+ "throttle_flag_mask_or": 0,
+ "throttle_swpowercap": true,
+ "throttle_flag": false,
+ "throttle_nonzero_frac": 1.0,
+ "frame": null,
+ "gpu_busy_ms_median": null,
+ "n_dropped": null,
+ "swapchain": null,
+ "present_modes": null,
+ "n_tokens": 5031,
+ "tok_s": 83.85,
+ "flags": {
+  "throttling": false
+ }
+}
