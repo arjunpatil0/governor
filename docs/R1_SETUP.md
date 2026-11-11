@@ -12,7 +12,7 @@ Committed before the first cell, as `docs/R1_PREREG.md` requires. A change to an
 | GPU mode | Standard (hybrid): frames rendered by the RTX 4070 Laptop are presented through the Radeon 780M |
 | Frame cap | NVIDIA Control Panel, Max Frame Rate 60, set for Superposition (the cap is a driver limiter, not vsync) |
 | GPU clocks | unlocked; fresh restart, the clock helper is not started, and the harness refuses to start a cell if the helper's pipe is present or if the clock check (a load test, see the prereg) has not passed |
-| NVIDIA power cap | 95 W as stated by the owner; the harness refuses to start a cell if the enforced power limit read from NVML is not within 1 W of 95 W (see the observed values below) |
+| NVIDIA power cap | the owner states 95 W. The enforced limit is dynamic on this laptop (74.7 to 95.0 W observed within minutes), so it is a recorded covariate, not a per-cell gate: the sweep is refused only if the maximum enforced limit during the clock-check load is below 94 W (check the Armoury Crate mode); see amendments 23 and 24 of the prereg |
 | NVIDIA Control Panel | Power management mode: Normal; Superposition Max Frame Rate: 60 |
 | Shell | the sweep runs from an elevated PowerShell (PresentMon needs ETW rights); the LLM process is therefore elevated too, in every arm |
 | Background | Chrome and tray apps closed |
@@ -45,7 +45,8 @@ The owner's description of the display and of the power cap does not match these
 | Idle state | P8, SM 210 MHz, 2.6 W, 47 C, 257 MiB used |
 | nvidia-smi display | Disp.A: Off; display_active: Disabled; no `dwm.exe` in the nvidia-smi process list (only explorer.exe and claude.exe, type C+G) |
 | nvidia-smi power cap | 90 W in the table, `power.limit` reads N/A, `power.max_limit` 140 W |
-| NVML enforced power limit | 92.77 W (default limit 80 W; constraints 5 to 140 W); the owner stated 95 W, so a cell started now would be refused by the power-cap rule |
+| NVML enforced power limit | 92.77 W at first reading (default limit 80 W; constraints 5 to 140 W); readings over the next minutes: 83.7 W idle, 74.7 W in the first second of a load, 95.0 W after about 4 s of load, 93.8 W idle a few minutes after a load |
+| `nvidia-smi -q -d POWER` (20:18) | Current Power Limit 92.82 W (dynamic); Default 80.00 W, Min 5.00 W, Max 140.00 W (static fields; whether they change with the Armoury mode is not known) |
 | NVML clocks event reasons at idle | 0x1 (GPU idle) |
 
 ## IGPU arm build record (2026-11-11)
