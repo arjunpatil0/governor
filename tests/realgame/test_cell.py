@@ -168,9 +168,24 @@ def test_rest_waits_until_within_3c():
     assert 68.0 <= r["rest_s"] < 70.0 and r["reached"] and r["final_temp"] <= 63.0
 
 
-def test_rest_capped_at_180s_and_logged():
-    r, _ = rest(lambda t: 90.0)
-    assert r["rest_s"] == 180.0 and r["reached"] is False and r["final_temp"] == 90.0 and r["start_temp"] == 60.0
+def test_rest_cap_constant_is_300s():
+    assert c.REST_MAX_S == 300.0 and c.REST_MIN_S == 30.0 and c.REST_TOL_C == 3.0
+
+
+def test_rest_capped_at_300s_and_logged():
+    r, ft = rest(lambda t: 90.0)
+    assert r["rest_s"] == 300.0 and ft.t == 300.0 and r["reached"] is False and r["hit_max"] is True and r["max_s"] == 300.0
+    assert r["final_temp"] == 90.0 and r["start_temp"] == 60.0
+
+
+def test_rest_299s_of_cooling_returns_early():
+    r, _ = rest(lambda t: 90.0 if t < 299 else 60.0)
+    assert 299.0 <= r["rest_s"] < 300.0 and r["reached"] is True and r["hit_max"] is False
+
+
+def test_rest_cools_exactly_at_cap_boundary():
+    r, _ = rest(lambda t: 90.0 if t < 300 else 60.0)
+    assert r["rest_s"] == 300.0 and r["reached"] is True and r["hit_max"] is False
 
 
 def test_rest_boundary_exactly_3c():

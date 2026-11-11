@@ -176,7 +176,7 @@ def test_c_pdh_overrunning_warmup_fails_the_cell(tmp_path):
         c.run_cell("UNGATED", 0, tmp_path / "x", cfg, dp)
 
 
-def test_c_rg_nctx_default_16384_but_env_respected(tmp_path, monkeypatch):
+def test_c_rg_nctx_default_12288_but_env_respected(tmp_path, monkeypatch):
     seen = []
     clock = Clock()
     cfg = make_cfg(tmp_path)
@@ -186,7 +186,12 @@ def test_c_rg_nctx_default_16384_but_env_respected(tmp_path, monkeypatch):
     c.run_cell("UNGATED", 0, tmp_path / "a", cfg, dp)
     monkeypatch.setenv("RG_NCTX", "4096")
     c.run_cell("UNGATED", 0, tmp_path / "b", cfg, dp)
-    assert seen == ["16384", "4096"]
+    assert c.DEFAULT_NCTX == 12288
+    assert seen == [str(c.DEFAULT_NCTX), "4096"]
+    ra = json.loads((tmp_path / "a" / "result.json").read_text()); rb = json.loads((tmp_path / "b" / "result.json").read_text())
+    assert ra["rg_nctx"] == 12288 and rb["rg_nctx"] == 4096
+    assert json.loads((tmp_path / "a" / "meta.json").read_text())["rg_nctx"] == 12288
+    assert json.loads((tmp_path / "b" / "meta.json").read_text())["rg_nctx"] == 4096
 
 
 class ResetLlm(FakeLlm):
@@ -531,7 +536,7 @@ def test_i_driver_source_uses_high_resolution_waitable_timer():
     src = (ROOT / "workloads" / "background" / "llama_realgame_bench.cpp").read_text()
     assert "CreateWaitableTimerExW" in src and "CREATE_WAITABLE_TIMER_HIGH_RESOLUTION" in src and "Sleep(1)" in src    # Sleep(1) stays as the fallback
     assert "timeBeginPeriod" not in src.replace("no timeBeginPeriod", "")
-    assert "16384" in src
+    assert "12288" in src and "16384" not in src
 
 
 # ================================================================= J. paging: exact PDH instance, end-of-window reading

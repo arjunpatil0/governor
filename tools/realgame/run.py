@@ -9,7 +9,7 @@ The normal sweep never runs LLM_ALONE. A failed cell (any exception except Keybo
 the same order (same seed); every attempt stays on disk. After max_attempts failed attempts of one rep the sweep stops with an error. Resuming after an interruption: cells that already
 have result.json are not rerun within a complete attempt, but an UNFINISHED attempt is never continued: it is marked failed (FAILED.json, "interrupted") and a NEW attempt of that rep
 starts. Rest rule: before every cell of the sweep except the very first one (this includes the opening SOLO of reps 2 to 5), until the GPU is within 3 C of the rep's starting temperature
-(30 s to 180 s); the rest before an opening SOLO uses the temperature at the start of the sweep's first rep as reference (the new rep's own start temperature is read after that rest)."""
+(30 s to 300 s); the rest before an opening SOLO uses the temperature at the start of the sweep's first rep as reference (the new rep's own start temperature is read after that rest)."""
 import argparse
 import json
 import random

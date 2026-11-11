@@ -461,7 +461,13 @@ def build_meta(cfg, probes=None):
 
 
 # ------------------------------------------------------------------ rest rule
-def rest_until_cool(read_temp, start_temp, tol_c=3.0, min_s=30.0, max_s=180.0, poll_s=1.0, clock=time.monotonic, sleep=time.sleep):
+REST_TOL_C = 3.0
+REST_MIN_S = 30.0
+REST_MAX_S = 300.0                                                                  # amendment 27 (was 180 s)
+DEFAULT_NCTX = 12288                                                                # amendment 26 (was 16384)
+
+
+def rest_until_cool(read_temp, start_temp, tol_c=REST_TOL_C, min_s=REST_MIN_S, max_s=REST_MAX_S, poll_s=1.0, clock=time.monotonic, sleep=time.sleep):
     """Prereg rest rule: wait until the GPU temperature is within tol_c (above) of the rep's starting temperature, for at least min_s and at most max_s seconds.
     Cooler than the start counts as within (one-sided reading of 'within 3 C'). -> dict(rest_s, reached, hit_max, start_temp, final_temp, min_s, max_s); the caller logs it."""
     t0 = clock()
@@ -767,7 +773,12 @@ def run_cell(arm, rep, out_dir, cfg, deps=None):
             env["PATH"] = dll_dir + os.pathsep + os.environ.get("PATH", "")
             res["llm_dll_dir"] = meta["llm_dll_dir"] = dll_dir
             (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
-            env.setdefault("RG_NCTX", "16384")
+            env.setdefault("RG_NCTX", str(DEFAULT_NCTX))
+            try:
+                res["rg_nctx"] = meta["rg_nctx"] = int(env["RG_NCTX"])          # the n_ctx actually passed to the child
+            except ValueError:
+                res["rg_nctx"] = meta["rg_nctx"] = env["RG_NCTX"]
+            (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
             env.pop("GGML_VK_VISIBLE_DEVICES", None)                  # never inherited: only the IGPU arm selects a Vulkan device
             exe = cfg.llm_exe
             if arm == "IGPU":

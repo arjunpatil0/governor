@@ -1,6 +1,6 @@
 // Greedy decode driver for sprint R1 (real-game co-location). Runs STOCK llama.cpp (third_party/llama.cpp, unpatched) on the CUDA or the Vulkan backend.
 // usage: llama_realgame_bench <model.gguf> <prompt.txt> <out_prefix> <n_prompt>
-// env:   RG_BACKEND=cuda|vulkan (default cuda), RG_DUTY=0|1 (1: after each token sleep for that token's own measured decode time), RG_NCTX (default 16384)
+// env:   RG_BACKEND=cuda|vulkan (default cuda), RG_DUTY=0|1 (1: after each token sleep for that token's own measured decode time), RG_NCTX (default 12288)
 // Flow:  load model (every layer offloaded, right backend in the load log, else abort), prefill n_prompt tokens, print EXEC_MODE and READY, read "GO <t_stop_qpc_s>" on stdin
 //        (QPC seconds = time.perf_counter on Windows), decode greedily until t_stop. When the context is full: llama_memory_clear, re-prefill n_prompt tokens, continue;
 //        every reset is a row of kind=reset (time, duration) and its time is not decode time. Writes <out_prefix>_tokens.csv: t_tok_end_s,dur_ms,kind.
@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
     const bool vk = backend == "vulkan";
     const int duty = ed ? atoi(ed) : 0;
     if (duty != 0 && duty != 1) return die("RG_DUTY must be 0 or 1");
-    const int n_ctx = en ? atoi(en) : 16384;
+    const int n_ctx = en ? atoi(en) : 12288;
     if (n_prompt <= 0 || n_ctx <= n_prompt + 2) return die("need 0 < n_prompt and n_ctx > n_prompt + 2");
 
     llama_log_set(log_cb, nullptr);
