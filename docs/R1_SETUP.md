@@ -59,3 +59,15 @@ The owner's description of the display and of the power cap does not match these
 | Devices (`llama-cli --list-devices`) | Vulkan0: AMD Radeon 780M Graphics (8049 MiB); Vulkan1: NVIDIA GeForce RTX 4070 Laptop GPU |
 | IGPU selection | `GGML_VK_VISIBLE_DEVICES=0`, passed as `--igpu-vk-index 0` |
 | Driver check (load only, no decoding) | `EXEC_MODE vulkan device=AMD Radeon 780M Graphics offloaded=29/29 n_layer=28 duty=0` |
+
+## Rehearsal readings (2026-11-11, my non-elevated shell, throwaway directory, not data)
+
+One LLM-alone cell run from the assistant's shell only to find crashes in the harness. These readings informed amendments 26 and 27 and are not results.
+
+| Observation | Value |
+|---|---|
+| VRAM of the LLM alone, used after READY minus the 454 MiB baseline | 4139 MiB at n_ctx 16384; 3687 MiB at 12288; 3235 MiB at 8192 |
+| Temperature over the 80 s LLM cell | 45 C at start, 81 C at the end; about 48 C 2.5 minutes later |
+| Throttle reasons | SwPowerCap and a software thermal slowdown (0x20) flagged |
+| Throughput and power in the 60 s window | 83.7 tok/s; 93.67 W from the energy counter; `power_rejected` 0 |
+| Enforced power limit during the cell | minimum 72.7 W, maximum 95.0 W |
