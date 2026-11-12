@@ -40,11 +40,20 @@ REHEARSAL = "rehearsal.json"
 DEFAULT_MAX_REHEARSAL_AGE_S = 21600
 LLM_ARMS = ("UNGATED", "PRIO_IDLE", "DUTY50", "IGPU")
 BELL = "\a"
-MAX_NOISE_REPS = 2         # amendment 14: more than 2 distinct reps failing the noise check at any attempt stops the sweep (never loosened)
+
+
+def noise_stop_limit(reps):
+    """Amendment 14, scaled to the number of reps (the ONE place): the sweep stops when MORE THAN this many distinct reps failed the per-rep noise check at any attempt
+    (5 reps: 2, 3 reps: 1). The noise limits themselves are never loosened."""
+    return max(1, reps // 2)
+
+
+def _noise_stop_text(bad_reps, reps):
+    return f"sweep stopped: reps {sorted(bad_reps)} failed the per-rep noise check (more than {noise_stop_limit(reps)} of {reps} reps failed the noise check); the limits are not loosened"
 
 
 class NoiseStop(RuntimeError):
-    """More than MAX_NOISE_REPS distinct reps failed the per-rep noise check: the sweep stops and is reported."""
+    """More than noise_stop_limit(reps) distinct reps failed the per-rep noise check: the sweep stops and is reported."""
 
 
 class SweepStop(RuntimeError):
@@ -171,7 +180,7 @@ def rep_noise_from_results(run_dir, rep, attempt, order_rep):
 
 def _noise_gate(run_dir, rep, attempt, order_rep, noise_check, log, n_reps):
     """Run the per-rep noise check of a finished attempt. Pass (or noise_check None: plumbing tests) -> NOISE_OK.json is written, True. Fail -> FAILED.json (reason 'noise') in the
-    closing cell, False (NoiseStop when more than MAX_NOISE_REPS reps failed). An exception from noise_check propagates and no marker is written."""
+    closing cell, False (NoiseStop when more than noise_stop_limit(reps) reps failed). An exception from noise_check propagates and no marker is written."""
     if noise_check is None:
         ok, why = True, []
     else:
@@ -183,8 +192,8 @@ def _noise_gate(run_dir, rep, attempt, order_rep, noise_check, log, n_reps):
     _write_failed(cell_dir(run_dir, rep, attempt, len(order_rep) - 1, order_rep[-1]), order_rep[-1], rep, attempt, msg, reason="noise")
     log(f"rep {rep} attempt {attempt} FAILED the noise check ({msg}); the whole rep will be rerun with the same order")
     bad_reps = noise_failed_reps(run_dir)
-    if len(bad_reps) > MAX_NOISE_REPS:
-        raise NoiseStop(f"sweep stopped: reps {sorted(bad_reps)} failed the per-rep noise check (more than {MAX_NOISE_REPS} of {n_reps}); the limits are not loosened")
+    if len(bad_reps) > noise_stop_limit(n_reps):
+        raise NoiseStop(_noise_stop_text(bad_reps, n_reps))
     return False
 
 
@@ -241,7 +250,7 @@ def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, re
     """runner(arm, rep, out_dir, cfg) must write out_dir/result.json (cell.run_cell does). rest(read_temp, start_temp) -> dict; see cell.rest_until_cool.
     LLM_ALONE is not part of the sweep (see run_llm_alone). noise_check(run_dir, rep, attempt, order_rep) -> (ok, reasons) runs after the closing SOLO of each attempt (amendment 14;
     run.main always passes rep_noise_from_results; None disables it for unit tests of the plumbing). A failing rep is rerun as a new attempt and written to FAILED.json with
-    reason 'noise'; when more than MAX_NOISE_REPS distinct reps have failed it at any attempt, NoiseStop is raised.
+    reason 'noise'; when more than noise_stop_limit(reps) distinct reps have failed it at any attempt, NoiseStop is raised.
     max_attempts: attempts started in THIS invocation per rep. cell.CellRefused, or the same error text twice in a row for the same cell, raises SweepStop at once.
     stop_after_reps N > 0: returns 'chunk' after N reps completed in this invocation; otherwise returns 'complete'."""
     from tools.realgame import cell as cell_mod
@@ -260,8 +269,8 @@ def run_sweep(cfg, run_dir, order, runner, seed=DEFAULT_SEED, read_temp=None, re
         started_here = 0                                                  # attempts started in this invocation for this rep (the per-invocation budget)
         worked = False
         while True:
-            if len(noise_failed_reps(run_dir)) > MAX_NOISE_REPS:
-                raise NoiseStop(f"sweep stopped: reps {sorted(noise_failed_reps(run_dir))} failed the per-rep noise check (more than {MAX_NOISE_REPS} of {len(order)}); the limits are not loosened")
+            if len(noise_failed_reps(run_dir)) > noise_stop_limit(len(order)):
+                raise NoiseStop(_noise_stop_text(noise_failed_reps(run_dir), len(order)))
             attempts = _attempts(run_dir, rep)
             for a in attempts:                                            # an unfinished attempt is never continued: it counts as a failed attempt
                 if _attempt_state(run_dir, rep, a, order_rep) == "partial":
@@ -360,7 +369,7 @@ def run_llm_alone(cfg, run_dir, runner, log=print):
     return True
 
 
-def write_clock_check(run_dir, status, state, problems, now=None):
+def write_clock_check(run_dir, status, state, problems, now=None, game_running=None):
     """--check-clocks result: run_dir/clock_check.json (status passed/refused, epoch + ISO timestamp, max_sm_mhz under load, thresholds, the information block (idle SM samples, pstate,
     enforced power limit, clocks-event reasons mask), helper_present, load error, problems)."""
     now = time.time() if now is None else now
@@ -368,7 +377,7 @@ def write_clock_check(run_dir, status, state, problems, now=None):
     load = state.get("load_test") or {}
     doc = {"status": status, "timestamp": now, "timestamp_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(now)), "max_sm_mhz": state.get("max_sm_mhz"),
            "thresholds": state.get("thresholds"), "power_limit_max_w": load.get("power_limit_max_w"), "info": load.get("info"), "helper_present": list(state.get("helper_present") or []), "n_load_samples": load.get("n_load_samples"),
-           "load_error": load.get("load_error"), "problems": list(problems)}
+           "load_error": load.get("load_error"), "game_running": game_running, "problems": list(problems)}
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / CLOCK_CHECK).write_text(json.dumps(doc, indent=1, default=str))
@@ -379,7 +388,7 @@ def load_clock_check(run_dir, max_age_s, now=None):
     """-> (doc, None) when run_dir/clock_check.json exists, has status 'passed' and is no older than max_age_s; else (None, refusal text)."""
     f = Path(run_dir) / CLOCK_CHECK
     if not f.exists():
-        return None, f"{f} does not exist: run `--check-clocks --run-dir {run_dir}` (game absent) first"
+        return None, f"{f} does not exist: run `--check-clocks --run-dir {run_dir}` first"
     try:
         doc = json.loads(f.read_text())
         ts = float(doc["timestamp"])
@@ -556,6 +565,17 @@ def rehearsal_binding_problem(doc, cfg, probes):
     return None
 
 
+def _arms_arg(text):
+    names = text.split(",")
+    bad = [n for n in names if n not in DEFAULT_ARMS]
+    if bad:
+        raise argparse.ArgumentTypeError(f"unknown arm(s) {bad}; choose from {','.join(DEFAULT_ARMS)}")
+    dup = sorted({n for n in names if names.count(n) > 1})
+    if dup:
+        raise argparse.ArgumentTypeError(f"duplicate arm(s) {dup}")
+    return tuple(names)
+
+
 def _parser():
     p = argparse.ArgumentParser(description="R1 sweep: game + LLM co-location on one GPU, unlocked clocks")
     p.add_argument("--run-dir")
@@ -577,9 +597,11 @@ def _parser():
     p.add_argument("--prompt")
     p.add_argument("--n-prompt", type=int)
     p.add_argument("--presentmon")
-    p.add_argument("--check-clocks", action="store_true", help="clock check (amendment 18): admin clock helper absent and max SM clock above 1980 MHz in a ~5 s CUDA load test; the game process must be ABSENT")
+    p.add_argument("--check-clocks", action="store_true", help="clock check (amendment 18): admin clock helper absent and max SM clock above 1980 MHz in a ~5 s CUDA load test; information only: game_running is recorded in clock_check.json")
     p.add_argument("--allow-pm-hash-mismatch", action="store_true", help="explicit override of the PresentMon sha256 check (recorded in meta)")
     p.add_argument("--game-process", required=True, help="executable name, must end with .exe")
+    p.add_argument("--arms", type=_arms_arg, default=DEFAULT_ARMS, metavar="LIST",
+                   help="comma-separated subset of UNGATED,PRIO_IDLE,DUTY50,IGPU (default all four); used for the order, the rehearsal, its gate, the IGPU requirements and run_meta.json")
     p.add_argument("--drop-igpu", metavar="REASON", help="drop the IGPU arm and record the reason")
     p.add_argument("--max-attempts", type=int, default=3, help="attempts per rep in THIS invocation (attempts on disk from earlier invocations do not count)")
     p.add_argument("--rehearse", action="store_true", help="run ONE short cell (5 s warm-up, 8 s window) of every LLM arm into run-dir/rehearsal/<ARM>/ without the game and PresentMon; writes rehearsal.json; the sweep requires a fresh all-PASS one")
@@ -606,15 +628,11 @@ def main(argv=None, probes=None, runner=None, deps=None):
         return 2
     if args.check_clocks:
         probes = probes or cell.SystemProbes()
-        if probes.process_running(args.game_process):
-            print(f"--check-clocks: game process {args.game_process} is running; the load test needs the game absent", file=sys.stderr)
-            if args.run_dir:
-                write_clock_check(args.run_dir, "refused", None, [f"game process {args.game_process} is running; the load test needs the game absent"])
-            return 2
+        game_running = bool(probes.process_running(args.game_process))      # information only, never a refusal
         problems, state = cell.clock_state_check(probes, args.game_process, run_load=True)
         print(json.dumps(state, indent=1, default=str))
         if args.run_dir:
-            write_clock_check(args.run_dir, "refused" if problems else "passed", state, problems)
+            write_clock_check(args.run_dir, "refused" if problems else "passed", state, problems, game_running=game_running)
         else:
             print("note: no --run-dir, so no clock_check.json was written; the sweep will refuse without it", file=sys.stderr)
         if problems:
@@ -625,8 +643,7 @@ def main(argv=None, probes=None, runner=None, deps=None):
     if args.smoke and args.llm_alone:
         parser.error("--smoke cannot be combined with --llm-alone")
     root = Path(args.repo_root)
-    arms = tuple(a for a in DEFAULT_ARMS if not (args.drop_igpu and a == "IGPU"))
-    use_igpu = "IGPU" in arms and not args.llm_alone and not args.smoke
+    arms = tuple(a for a in args.arms if not (args.drop_igpu and a == "IGPU"))
     use_igpu = "IGPU" in arms and not args.llm_alone and not args.smoke
     cfg = cell.Config(repo_root=root, llm_exe=Path(args.llm_exe or root / "workloads" / "background" / "llama_realgame_bench.exe"),
                       model=Path(args.model or root / "data" / "llama" / "Llama-3.2-3B-Instruct-Q4_K_M.gguf"), prompt=Path(args.prompt or root / "data" / "llama" / "prompt.txt"),

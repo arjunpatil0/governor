@@ -231,8 +231,7 @@ def test_check_clocks_mode(tmp_path, capsys):
     assert "1980" in capsys.readouterr().err
     assert r.main(argv, probes=ClockProbes(game=False, helper=["pipe"])) == 2
     capsys.readouterr()
-    assert r.main(argv, probes=ClockProbes(game=True)) == 2          # the load test needs the game absent
-    assert "absent" in capsys.readouterr().err
+    assert r.main(argv, probes=ClockProbes(game=True)) == 0          # the game may be running (information only; see test_subset)
 
 
 def test_check_clocks_needs_no_presentmon_or_nprompt(tmp_path):
