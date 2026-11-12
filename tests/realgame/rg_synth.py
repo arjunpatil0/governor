@@ -12,11 +12,23 @@ WINDOW_S = 10.0
 ARM_PARAMS = {"SOLO": (0.0, 0, 0.0), "UNGATED": (0.15, 31.0, 45.0), "PRIO_IDLE": (0.12, 31.0, 40.0), "DUTY50": (0.06, 28.0, 25.0), "IGPU": (0.002, 26.0, 16.0)}
 
 
-def write_fresh_clock_check(run_dir):
-    """A passed, fresh clock_check.json (what `run.py --check-clocks --run-dir` writes) so that main() will start a sweep / LLM-alone run."""
+def write_fresh_rehearsal(run_dir, arms=("UNGATED", "PRIO_IDLE", "DUTY50", "IGPU"), status="PASS", timestamp=None):
+    """A fresh rehearsal.json (what `run.py --rehearse --run-dir` writes) with every arm PASS, so that main() will start a sweep."""
     import time
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "rehearsal.json").write_text(json.dumps({"timestamp": time.time() if timestamp is None else timestamp, "rehearsal": True, "exe_sha256": {},
+                                                        "arms": {a: {"status": status, "reasons": []} for a in arms}}))
+
+
+def write_fresh_clock_check(run_dir, rehearsal=True):
+    """A passed, fresh clock_check.json (what `run.py --check-clocks --run-dir` writes) so that main() will start a sweep / LLM-alone run. Also a fresh all-PASS rehearsal.json
+    (the sweep refuses without one) unless rehearsal=False."""
+    import time
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    if rehearsal:
+        write_fresh_rehearsal(run_dir)
     (run_dir / "clock_check.json").write_text(json.dumps({"status": "passed", "timestamp": time.time(), "helper_present": [], "max_sm_mhz": 2100, "info": {}, "thresholds": {}, "problems": []}))
 
 

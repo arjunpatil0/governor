@@ -14,7 +14,7 @@ def make_cfg(tmp_path, **kw):
     base = dict(repo_root=tmp_path, llm_exe=tmp_path / "llm.exe", model=tmp_path / "m.gguf", prompt=tmp_path / "p.txt", presentmon_exe=tmp_path / "pm.exe",
                 game_process="game.exe", armoury_mode="Turbo", llama_dir=tmp_path / "llama.cpp", n_prompt=64, warmup_s=2.0, window_s=6.0, pm_settle_s=0.0,
                 ready_timeout_s=5.0,
-                llm_exe_vk=tmp_path / "llm_vk.exe", igpu_vk_index=1)
+                llm_exe_vk=tmp_path / "llm_vk.exe")
     base.update(kw)
     return c.Config(**base)
 
@@ -212,7 +212,7 @@ class Clock:
 class FakeLlm:
     pid = 555
 
-    def __init__(self, clock, out_prefix, backend_line="EXEC_MODE cuda device=FAKE offloaded=29/29 n_layer=28 duty=0"):
+    def __init__(self, clock, out_prefix, backend_line="EXEC_MODE cuda device=NVIDIA GeForce RTX 4070 Laptop GPU offloaded=29/29 n_layer=28 duty=0"):
         self.clock, self.prefix, self.sent, self.killed = clock, out_prefix, [], False
         self.lines = [backend_line, "READY"]
         if "duty=1" in backend_line:
@@ -296,7 +296,7 @@ class FakeSampler:
 
 
 def exec_line(env):
-    dev = "AMD Radeon(TM) 780M Graphics" if env["RG_BACKEND"] == "vulkan" else "FAKE"
+    dev = "AMD Radeon(TM) 780M Graphics" if env["RG_BACKEND"] == "vulkan" else "NVIDIA GeForce RTX 4070 Laptop GPU"
     return f"EXEC_MODE {env['RG_BACKEND']} device={dev} offloaded=29/29 n_layer=28 duty={env['RG_DUTY']}"
 
 
@@ -402,7 +402,7 @@ def test_run_cell_prio_failed_status_fails_the_cell(tmp_path):
     def bad(pid, cls):
         raise PriorityError("status", set_status=-1073741790, readback=None)
     d, box = make_deps(cfg, clock, prio=bad)
-    with pytest.raises(PriorityError):
+    with pytest.raises(c.CellRefused):          # a failing priority CALL is deterministic: refused (the sweep stops at once)
         c.run_cell("PRIO_IDLE", 0, tmp_path / "p", cfg, d)
     assert box["l"].killed and not (tmp_path / "p" / "result.json").exists()
 
@@ -469,7 +469,7 @@ def test_prio_end_readback_one_second_before_close(tmp_path, window_s):
 def test_prio_end_readback_error_fails_cell(tmp_path):
     def boom(pid):
         raise PriorityError("OpenProcess failed", set_status=0, readback=None)
-    with pytest.raises(PriorityError):
+    with pytest.raises(c.CellRefused):
         _prio_trace(tmp_path, get_prio=boom)
 
 

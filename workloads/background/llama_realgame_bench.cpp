@@ -1,6 +1,8 @@
 // Greedy decode driver for sprint R1 (real-game co-location). Runs STOCK llama.cpp (third_party/llama.cpp, unpatched) on the CUDA or the Vulkan backend.
 // usage: llama_realgame_bench <model.gguf> <prompt.txt> <out_prefix> <n_prompt>
-// env:   RG_BACKEND=cuda|vulkan (default cuda), RG_DUTY=0|1 (1: after each token sleep for that token's own measured decode time), RG_NCTX (default 12288)
+// env:   RG_BACKEND=cuda|vulkan (default cuda), RG_DUTY=0|1 (1: after each token sleep for that token's own measured decode time), RG_NCTX (default 12288),
+//        RG_DEVICE_MATCH=<substring> (case-insensitive): load the model on the first GPU/IGPU device of the backend whose ggml description contains it (device ORDER is not stable
+//        across shells/processes, so an index is never used); FATAL naming the available descriptions if nothing matches. EXEC_MODE prints the device actually used.
 // Flow:  load model (every layer offloaded, right backend in the load log, else abort), prefill n_prompt tokens, print EXEC_MODE and READY, read "GO <t_stop_qpc_s>" on stdin
 //        (QPC seconds = time.perf_counter on Windows), decode greedily until t_stop. When the context is full: llama_memory_clear, re-prefill n_prompt tokens, continue;
 //        every reset is a row of kind=reset (time, duration) and its time is not decode time. Writes <out_prefix>_tokens.csv: t_tok_end_s,dur_ms,kind.
@@ -9,6 +11,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -48,6 +51,20 @@ static void sleep_until_qpc(double until) {
 
 static int die(const char *msg) { fprintf(stderr, "FATAL %s\n", msg); return 2; }
 
+static std::string lower(std::string s) { for (char &ch : s) ch = (char)tolower((unsigned char)ch); return s; }
+
+// GPU / IGPU devices of the registry whose registry name starts with the backend's prefix ("Vulkan" or "CUDA"), in registry order
+static std::vector<ggml_backend_dev_t> backend_gpu_devices(bool vk) {
+    std::vector<ggml_backend_dev_t> out;
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        ggml_backend_dev_t d = ggml_backend_dev_get(i);
+        enum ggml_backend_dev_type ty = ggml_backend_dev_type(d);
+        if (ty != GGML_BACKEND_DEVICE_TYPE_GPU && ty != GGML_BACKEND_DEVICE_TYPE_IGPU) continue;
+        if (std::string(ggml_backend_dev_name(d)).rfind(vk ? "Vulkan" : "CUDA", 0) == 0) out.push_back(d);
+    }
+    return out;
+}
+
 // prefill the tokens in chunks of at most n_batch; returns false on failure
 static bool prefill(llama_context *ctx, std::vector<llama_token> &toks, int n_batch) {
     for (int i = 0; i < (int)toks.size(); i += n_batch) {
@@ -76,6 +93,26 @@ int main(int argc, char **argv) {
     if (!llama_supports_gpu_offload()) return die("this llama.cpp build has no GPU offload (CPU build)");
     llama_model_params mp = llama_model_default_params();
     mp.n_gpu_layers = 999;
+    const char *edm = getenv("RG_DEVICE_MATCH");
+    const std::string match = edm ? lower(edm) : "";
+    ggml_backend_dev_t chosen = nullptr;
+    ggml_backend_dev_t dev_list[2] = {nullptr, nullptr};          // NULL-terminated list for llama_model_params.devices
+    if (!match.empty()) {
+        std::string avail;
+        for (ggml_backend_dev_t d : backend_gpu_devices(vk)) {
+            std::string desc = ggml_backend_dev_description(d);
+            avail += (avail.empty() ? "'" : ", '") + desc + "'";
+            if (!chosen && lower(desc).find(match) != std::string::npos) chosen = d;
+        }
+        if (!chosen) {
+            std::string msg = std::string("RG_DEVICE_MATCH '") + edm + "' matches no " + backend + " device; available: " + (avail.empty() ? "(none)" : avail);
+            return die(msg.c_str());
+        }
+        dev_list[0] = chosen;
+        mp.devices = dev_list;
+        mp.split_mode = LLAMA_SPLIT_MODE_NONE;
+        mp.main_gpu = 0;
+    }
     llama_model *model = llama_model_load_from_file(model_path, mp);
     if (!model) return die("model load failed");
     const int n_layer = llama_model_n_layer(model);
@@ -85,14 +122,10 @@ int main(int argc, char **argv) {
     if (g_log.find(vk ? "Vulkan" : "CUDA") == std::string::npos) return die(vk ? "no Vulkan device in the load log" : "no CUDA device in the load log");
     if (off < 0 || off != tot) return die("not all layers offloaded to the GPU");
     // device name from the ggml device registry: first GPU device whose registry name starts with the requested backend
+    // with RG_DEVICE_MATCH: the selected device (the one the model was loaded on); without it the old behaviour (the first registry device of the backend)
     std::string devname;
-    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
-        ggml_backend_dev_t d = ggml_backend_dev_get(i);
-        enum ggml_backend_dev_type ty = ggml_backend_dev_type(d);
-        if (ty != GGML_BACKEND_DEVICE_TYPE_GPU && ty != GGML_BACKEND_DEVICE_TYPE_IGPU) continue;
-        std::string nm = ggml_backend_dev_name(d);
-        if (nm.rfind(vk ? "Vulkan" : "CUDA", 0) == 0) { devname = ggml_backend_dev_description(d); break; }
-    }
+    if (chosen) devname = ggml_backend_dev_description(chosen);
+    else { std::vector<ggml_backend_dev_t> all = backend_gpu_devices(vk); if (!all.empty()) devname = ggml_backend_dev_description(all[0]); }
     if (devname.empty()) return die("no GPU device of the requested backend in the ggml device registry");
     printf("EXEC_MODE %s device=%s offloaded=%d/%d n_layer=%d duty=%d\n", backend.c_str(), devname.c_str(), off, tot, n_layer, duty);
 

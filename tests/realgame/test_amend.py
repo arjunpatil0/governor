@@ -65,7 +65,7 @@ def test_same_rep_failing_twice_counts_once_but_respects_max_attempts(tmp_path):
     sweep(tmp_path, NoiseRunner(bad={(1, 1), (1, 2)}))
     assert r.noise_failed_reps(tmp_path / "run") == {1}
     with pytest.raises(RuntimeError, match="attempts"):
-        sweep(tmp_path / "x", NoiseRunner(bad={(1, 1), (1, 2), (1, 3)}))
+        sweep(tmp_path / "x", NoiseRunner(bad={(1, 1), (1, 2), (1, 3)}), max_attempts=2)
 
 
 def test_noise_stop_persists_across_resume(tmp_path):

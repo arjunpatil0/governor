@@ -88,23 +88,23 @@ def test_a_analyze_refuses_llm_alone_not_run_with_game_absent(tmp_path):
 
 
 # ================================================================= B. IGPU
-def test_b_igpu_uses_vk_exe_and_vulkan_device_env(tmp_path, monkeypatch):
+def test_b_igpu_uses_vk_exe_and_device_match_env(tmp_path, monkeypatch):
     monkeypatch.setenv("GGML_VK_VISIBLE_DEVICES", "9")
+    monkeypatch.setenv("RG_DEVICE_MATCH", "inherited-junk")
     seen = []
     clock = Clock()
-    cfg = make_cfg(tmp_path, igpu_vk_index=2)
+    cfg = make_cfg(tmp_path, igpu_device_match="Radeon")
     dp, _ = make_deps(cfg, clock)
     dp.spawn_llm = lambda cmd, env, p: (seen.append((cmd, dict(env))), FakeLlm(clock, p, exec_line(env)))[1]
     c.run_cell("IGPU", 0, tmp_path / "i", cfg, dp)
     c.run_cell("UNGATED", 0, tmp_path / "u", cfg, dp)
-    assert seen[0][0][0] == str(cfg.llm_exe_vk) and seen[0][1]["GGML_VK_VISIBLE_DEVICES"] == "2"
-    assert seen[1][0][0] == str(cfg.llm_exe) and "GGML_VK_VISIBLE_DEVICES" not in seen[1][1]       # never leaks into the other arms
+    assert seen[0][0][0] == str(cfg.llm_exe_vk) and "GGML_VK_VISIBLE_DEVICES" not in seen[0][1] and seen[0][1]["RG_DEVICE_MATCH"] == "Radeon"
+    assert seen[1][0][0] == str(cfg.llm_exe) and "GGML_VK_VISIBLE_DEVICES" not in seen[1][1] and seen[1][1]["RG_DEVICE_MATCH"] == "RTX"      # the IGPU match never leaks into the other arms
 
 
-def test_b_igpu_needs_index_and_vk_exe(tmp_path):
-    for kw in (dict(igpu_vk_index=None), dict(llm_exe_vk=None)):
-        with pytest.raises(RuntimeError, match="(?i)igpu"):
-            run_ok(tmp_path, "IGPU", cfg_kw=kw, out="x" + str(len(kw)))
+def test_b_igpu_needs_vk_exe(tmp_path):
+    with pytest.raises(RuntimeError, match="(?i)igpu"):
+        run_ok(tmp_path, "IGPU", cfg_kw=dict(llm_exe_vk=None), out="x")
 
 
 @pytest.mark.parametrize("device,ok", [("AMD Radeon(TM) 780M Graphics", True), ("Radeon something", True), ("AMD 780M", True), ("NVIDIA GeForce RTX 4060 Laptop GPU", False)])
@@ -127,15 +127,13 @@ def test_b_vk_exe_hashed_into_meta(tmp_path):
     assert meta["llm_exe_vk_sha256"] == "sha-llm_vk.exe"
 
 
-def test_b_main_requires_igpu_vk_index_unless_igpu_dropped(tmp_path, capsys):
+def test_b_main_no_longer_requires_an_igpu_index(tmp_path, capsys):
     argv = [*BASE_ARGS, "--dry-run", "--llama-dir", str(tmp_path / "llama.cpp"), "--repo-root", str(tmp_path)]
-    try:
-        code = r.main(argv, probes=FakeProbes())
-    except SystemExit as e:
-        code = e.code
-    assert code not in (0, None) and "igpu-vk-index" in capsys.readouterr().err
+    assert r.main(argv, probes=FakeProbes()) == 0
     assert r.main([*argv, "--drop-igpu", "build failed"], probes=FakeProbes()) == 0
-    assert r.main([*argv, "--igpu-vk-index", "1"], probes=FakeProbes()) == 0
+    capsys.readouterr()
+    assert r.main([*argv, "--igpu-vk-index", "1"], probes=FakeProbes()) == 0          # deprecated, accepted, ignored
+    assert "deprecated" in capsys.readouterr().err.lower()
 
 
 # ================================================================= C. window start
@@ -329,7 +327,7 @@ def test_e_priority_error_on_end_readback_fails_the_cell(tmp_path):
     def bad_get(pid):
         raise PriorityError("get failed", set_status=None, readback=None)
     dp, box = make_deps(cfg, clock, get_prio=bad_get)
-    with pytest.raises(PriorityError):
+    with pytest.raises(c.CellRefused):
         c.run_cell("PRIO_IDLE", 0, tmp_path / "p", cfg, dp)
     assert box["l"].killed and not (tmp_path / "p" / "result.json").exists()
 
@@ -375,12 +373,12 @@ def test_g_unfinished_attempt_is_failed_and_new_attempt_starts(tmp_path):
     assert r.failed_attempts(tmp_path / "run", order)[0] == [1]
 
 
-def test_g_interrupted_attempts_count_against_max_attempts(tmp_path):
+def test_g_interrupted_attempts_do_not_count_against_max_attempts_of_a_new_invocation(tmp_path):
     from test_run import Runner, sweep
     with pytest.raises(KeyboardInterrupt):
         sweep(tmp_path, Runner(interrupt_at=2))
-    with pytest.raises(RuntimeError, match="attempts"):
-        sweep(tmp_path, Runner(), max_attempts=1)
+    sweep(tmp_path, Runner(), max_attempts=1)           # attempts of earlier invocations are not part of this invocation's budget
+    assert r.final_attempts(tmp_path / "run", r.make_order(3, 2)) == {0: 2, 1: 1}
 
 
 # ================================================================= H. security

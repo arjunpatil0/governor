@@ -37,6 +37,10 @@ THROTTLE_FLAG_MASK = 0x8 | 0x20 | 0x40 | 0x80
 QPC_TOLERANCE_S = 0.001
 
 
+class CellRefused(RuntimeError):
+    """A deterministic refusal inside a cell (wrong device, power-static changed, DLL dir missing, a failing priority call, ...): repeating the cell cannot help, so the sweep stops at once."""
+
+
 class PreflightError(RuntimeError):
     def __init__(self, failures):
         self.failures = list(failures)
@@ -64,7 +68,9 @@ class Config:
     sampler_interval_s: float = 0.05
     llama_commit: str = EXPECTED_LLAMA_COMMIT
     llm_exe_vk: "Path | None" = None           # the Vulkan build of the driver, used only for the IGPU arm
-    igpu_vk_index: "int | None" = None         # Vulkan device index of the Radeon 780M (GGML_VK_VISIBLE_DEVICES), required for IGPU
+    igpu_vk_index: "int | None" = None         # DEPRECATED and ignored: Vulkan device order is not stable; the IGPU arm selects its device by description (igpu_device_match)
+    igpu_device_match: str = "780M"            # RG_DEVICE_MATCH passed to the IGPU child (substring of the ggml device description, case-insensitive)
+    cuda_device_match: str = "RTX"             # RG_DEVICE_MATCH passed to the CUDA arms
     allow_pm_hash_mismatch: bool = False       # explicit override of the PresentMon sha256 check; recorded in meta.json
     power_static_ref: "dict | None" = None     # amendment 19 (replaced): the sweep-start nvidia-smi static power fields; every cell start must match them (set by run.py)
 
@@ -443,7 +449,7 @@ def format_rc(rc):
     return str(rc)
 
 
-def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False):
+def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False, need_presentmon=True):
     """Raises PreflightError listing every refusal; returns None when the rig may run. game_absent: the game process must NOT be running (LLM_ALONE invocation)."""
     probes = probes or SystemProbes()
     bad = []
@@ -470,13 +476,13 @@ def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False
     ac = probes.on_ac()
     if ac is not True:
         bad.append("not on AC power" if ac is False else "AC power state unknown: cannot confirm the laptop is on AC")
-    for label, p in (("LLM executable", cfg.llm_exe), ("model", cfg.model), ("prompt", cfg.prompt), ("PresentMon", cfg.presentmon_exe)) + ((("Vulkan LLM executable", cfg.llm_exe_vk),) if need_vk else ()):
+    for label, p in (("LLM executable", cfg.llm_exe), ("model", cfg.model), ("prompt", cfg.prompt)) + ((("PresentMon", cfg.presentmon_exe),) if need_presentmon else ()) + ((("Vulkan LLM executable", cfg.llm_exe_vk),) if need_vk else ()):
         if p is None or not probes.exists(p):
             bad.append(f"{label} not found: {p}")
     bad += dll_dir_problems(cfg, probes, "cuda")
     if need_vk:
         bad += dll_dir_problems(cfg, probes, "vulkan")
-    if probes.exists(cfg.presentmon_exe):
+    if need_presentmon and probes.exists(cfg.presentmon_exe):
         why = pm_hash_problem(cfg, probes)
         if why:
             bad.append(why)
@@ -498,19 +504,21 @@ def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False
     print("note: this process is " + {True: "ELEVATED (administrator)", False: "not elevated", None: "of unknown elevation"}[el] + " (recorded in meta.json; not a refusal)")
 
 
-def build_meta(cfg, probes=None):
+def build_meta(cfg, probes=None, capture=True):
+    """capture=False (rehearsal): PresentMon is neither hashed nor run; its meta fields are None."""
     probes = probes or SystemProbes()
-    why = pm_hash_problem(cfg, probes)              # BEFORE any execution of PresentMon (the --version call below)
-    if why:
-        raise PreflightError([why])
-    pm_sha = probes.sha256(cfg.presentmon_exe)
+    if capture:
+        why = pm_hash_problem(cfg, probes)          # BEFORE any execution of PresentMon (the --version call below)
+        if why:
+            raise PreflightError([why])
+        pm_sha = probes.sha256(cfg.presentmon_exe)
     meta = {"git_head": probes.git_head(cfg.repo_root), "llama_head": probes.git_head(cfg.llama_dir), "hags_hwschmode": probes.hags(),
             "driver_version": probes.driver_version(), "llm_exe_sha256": probes.sha256(cfg.llm_exe), "model_sha256": probes.sha256(cfg.model),
-            "presentmon_version": probes.presentmon_version(cfg.presentmon_exe), "presentmon_sha256": pm_sha,
-            "presentmon_sha256_matches_prereg": pm_sha == PRESENTMON_SHA256_PREREG, "seed": cfg.seed, "armoury_mode": cfg.armoury_mode,
+            "presentmon_version": probes.presentmon_version(cfg.presentmon_exe) if capture else None, "presentmon_sha256": pm_sha if capture else None,
+            "presentmon_sha256_matches_prereg": (pm_sha == PRESENTMON_SHA256_PREREG) if capture else None, "seed": cfg.seed, "armoury_mode": cfg.armoury_mode,
             "game_process": cfg.game_process, "process_snapshot": probes.process_snapshot(), "warmup_s": cfg.warmup_s, "window_s": cfg.window_s,
             "n_prompt": cfg.n_prompt, "python": sys.version.split()[0], "allow_pm_hash_mismatch": bool(cfg.allow_pm_hash_mismatch), "elevated": probes.is_elevated(),
-            "igpu_vk_index": cfg.igpu_vk_index}
+            "igpu_device_match": cfg.igpu_device_match, "cuda_device_match": cfg.cuda_device_match}
     if cfg.llm_exe_vk is not None:
         meta["llm_exe_vk_sha256"] = probes.sha256(cfg.llm_exe_vk)
     return meta
@@ -768,9 +776,15 @@ def _parse_duty_achieved(lines):
     return None
 
 
-def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, smoke=False):
-    """Run one cell into out_dir and return the result dict (also written to result.json). Raises on any failure (no result.json is then written).
-    warmup_s / window_s (the --smoke mode) override cfg explicitly; the gap, frame-count and window rules scale with the window. smoke=True marks meta.json and result.json."""
+def _device_of(exec_line):
+    return exec_line.split("device=", 1)[1].split(" offloaded=", 1)[0] if "device=" in exec_line else ""
+
+
+def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, smoke=False, capture=True, rehearsal=False):
+    """Run one cell into out_dir and return the result dict (also written to result.json). Raises on any failure (no result.json is then written); deterministic refusals raise CellRefused.
+    warmup_s / window_s (the --smoke mode) override cfg explicitly; the gap, frame-count and window rules scale with the window. smoke=True marks meta.json and result.json.
+    rehearsal=True (run.py --rehearse; implies capture=False) marks meta/result 'rehearsal': the game process need not exist and PresentMon is neither started nor hash-checked; the capture,
+    frame metrics, gap checks and the PDH game-memory read are skipped, everything else (LLM spawn, device checks, power-static check, priority, energy, sampler, tokens) runs."""
     if arm not in ARMS:
         raise ValueError(f"unknown arm {arm!r}; arms are {ARMS}")
     if warmup_s is not None or window_s is not None:
@@ -781,7 +795,8 @@ def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, sm
     skew = abs(deps.clock() - deps.qpc_counter() / deps.qpc_hz)
     if skew > QPC_TOLERANCE_S:
         raise RuntimeError(f"time.perf_counter() and QueryPerformanceCounter/Frequency disagree by {skew * 1000:.3f} ms (limit {QPC_TOLERANCE_S * 1000:.0f} ms): window times would not match PresentMon's QPC")
-    uses_llm, uses_game = arm != "SOLO", arm != "LLM_ALONE"
+    capture = capture and not rehearsal
+    uses_llm, uses_game = arm != "SOLO", arm != "LLM_ALONE" and capture
     backend, duty = ("vulkan" if arm == "IGPU" else "cuda"), (1 if arm == "DUTY50" else 0)
     events = []
 
@@ -792,46 +807,56 @@ def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, sm
     res = {"arm": arm, "rep": rep, "elevated": None}
     if smoke:
         res["smoke"] = True
+    if rehearsal:
+        res["rehearsal"] = True
     try:
-        if arm == "IGPU" and (cfg.llm_exe_vk is None or cfg.igpu_vk_index is None):
-            raise RuntimeError("IGPU needs cfg.llm_exe_vk and cfg.igpu_vk_index (the Vulkan device index of the Radeon 780M, --igpu-vk-index)")
-        meta = build_meta(cfg, deps.probes)
+        if arm == "IGPU" and cfg.llm_exe_vk is None:
+            raise CellRefused("IGPU needs cfg.llm_exe_vk (the Vulkan build of the driver)")
+        try:
+            meta = build_meta(cfg, deps.probes, capture=capture)
+        except PreflightError as e:
+            raise CellRefused(str(e)) from e
         res["elevated"] = meta["elevated"]
         meta.update(arm=arm, rep=rep, backend=backend if uses_llm else None, duty=duty if uses_llm else None)
         if smoke:
             meta["smoke"] = True
+        if rehearsal:
+            meta["rehearsal"] = True
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         game_pid = None
         if uses_game:
             game_pid = deps.probes.find_pid(cfg.game_process)
             if game_pid is None:
-                raise RuntimeError(f"game process {cfg.game_process} not running")
-        else:
+                raise CellRefused(f"game process {cfg.game_process} not running")
+        elif arm == "LLM_ALONE":
             if deps.probes.find_pid(cfg.game_process) is not None:
-                raise RuntimeError(f"game process {cfg.game_process} is running: LLM_ALONE must be measured with the game absent")
+                raise CellRefused(f"game process {cfg.game_process} is running: LLM_ALONE must be measured with the game absent")
             res["game_absent"] = True
         res["game_pid"] = game_pid
         clock_problems, clock_state = clock_state_check(deps.probes, cfg.game_process)
         meta["clock_state"] = clock_state
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         if clock_problems:
-            raise RuntimeError("clock state refused: " + "; ".join(clock_problems))
+            raise CellRefused("clock state refused: " + "; ".join(clock_problems))
         try:
             ps = read_power_static(deps.probes)
         except PowerStaticError as e:
-            raise RuntimeError("power refused: " + str(e)) from e
+            raise CellRefused("power refused: " + str(e)) from e
         res["power_static_cell_start"] = meta["power_static_cell_start"] = ps
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         if cfg.power_static_ref is not None:
             why = power_static_problems(cfg.power_static_ref, ps)
             if why:
-                raise RuntimeError("power refused: " + "; ".join(why))
+                raise CellRefused("power refused: " + "; ".join(why))
         try:
             res["enforced_limit_w_start"] = float(deps.nvml.power_limit_w())             # covariate, before the LLM spawn; never a refusal
         except Exception:                                                                 # noqa: BLE001
             res["enforced_limit_w_start"] = None
         res["idle_vram_mib"] = meta["idle_vram_mib"] = deps.nvml.vram_used_mb()          # amendment 21: BEFORE the LLM process is launched
         if uses_llm:
+            dll_bad = dll_dir_problems(cfg, deps.probes, backend)
+            if dll_bad:
+                raise CellRefused("; ".join(dll_bad))
             env = dict(os.environ, RG_BACKEND=backend, RG_DUTY=str(duty))
             dll_dir = str(llm_dll_dir(cfg, backend))
             env["PATH"] = dll_dir + os.pathsep + os.environ.get("PATH", "")
@@ -843,24 +868,35 @@ def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, sm
             except ValueError:
                 res["rg_nctx"] = meta["rg_nctx"] = env["RG_NCTX"]
             (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
-            env.pop("GGML_VK_VISIBLE_DEVICES", None)                  # never inherited: only the IGPU arm selects a Vulkan device
+            env.pop("GGML_VK_VISIBLE_DEVICES", None)                  # never set (Vulkan device order is not stable) and never inherited
+            env.pop("RG_DEVICE_MATCH", None)                          # never inherited: every LLM arm gets its own
             exe = cfg.llm_exe
+            env["RG_DEVICE_MATCH"] = cfg.cuda_device_match
             if arm == "IGPU":
                 exe = cfg.llm_exe_vk
-                env["GGML_VK_VISIBLE_DEVICES"] = str(cfg.igpu_vk_index)
+                env["RG_DEVICE_MATCH"] = cfg.igpu_device_match
+            meta["rg_device_match"] = res["rg_device_match"] = env["RG_DEVICE_MATCH"]
+            (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
             prefix = str(out_dir / "llm")
             cmd = [str(exe), str(cfg.model), str(cfg.prompt), prefix, str(cfg.n_prompt)]
-            log(f"spawn {cmd} RG_BACKEND={backend} RG_DUTY={duty} RG_NCTX={env['RG_NCTX']} GGML_VK_VISIBLE_DEVICES={env.get('GGML_VK_VISIBLE_DEVICES')}")
+            log(f"spawn {cmd} RG_BACKEND={backend} RG_DUTY={duty} RG_NCTX={env['RG_NCTX']} RG_DEVICE_MATCH={env['RG_DEVICE_MATCH']}")
             llm = deps.spawn_llm(cmd, env, prefix)
-            llm.wait_for("READY", cfg.ready_timeout_s)
+            try:
+                llm.wait_for("READY", cfg.ready_timeout_s)
+            except RuntimeError as e:
+                if "FATAL" in str(e) and "RG_DEVICE_MATCH" in str(e):
+                    raise CellRefused(str(e)) from e                  # the driver found no device matching: deterministic
+                raise
             log("LLM READY")
             exec_line = next((x for x in llm.lines if x.startswith("EXEC_MODE")), None)
             if exec_line is None or exec_line.split()[1:2] != [backend] or f"duty={duty}" not in exec_line.split():
-                raise RuntimeError(f"EXEC_MODE line does not confirm backend={backend} duty={duty}: {exec_line!r}")
+                raise CellRefused(f"EXEC_MODE line does not confirm backend={backend} duty={duty}: {exec_line!r}")
+            device = _device_of(exec_line)
             if arm == "IGPU":
-                device = exec_line.split("device=", 1)[1].split(" offloaded=", 1)[0] if "device=" in exec_line else ""
                 if "780M" not in device and "Radeon" not in device:
-                    raise RuntimeError(f"IGPU cell refused: the driver's EXEC_MODE device {device!r} does not contain '780M' or 'Radeon' (check --igpu-vk-index)")
+                    raise CellRefused(f"IGPU cell refused: the driver's EXEC_MODE device {device!r} does not contain '780M' or 'Radeon' (RG_DEVICE_MATCH={cfg.igpu_device_match!r}; check --igpu-device-match)")
+            elif "RTX" not in device and "NVIDIA" not in device:
+                raise CellRefused(f"{arm} cell refused: the driver's EXEC_MODE device {device!r} does not contain 'RTX' or 'NVIDIA' (RG_DEVICE_MATCH={cfg.cuda_device_match!r})")
             res["exec_mode"] = exec_line
         res["prio_readbacks"] = []
         if arm == "PRIO_IDLE":
@@ -870,7 +906,7 @@ def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, sm
                 res["prio_readbacks"].append(r["readback"])
             except gpu_priority.PriorityError as e:
                 if e.set_status != 0 or e.readback is None:
-                    raise                                           # a failed priority call fails the cell (the rep is rerun)
+                    raise CellRefused(f"PRIO_IDLE priority call failed (deterministic): {e}") from e          # a failing priority CALL is a refusal; a wrong class is not
                 res["prio_start"] = {"set_status": e.set_status, "readback": e.readback, "ok": False, "error": str(e)}
                 res["prio_readbacks"].append(e.readback)           # a mismatching read-back voids PRIO_IDLE, the cell still completes
             log(f"PRIO_IDLE start {res['prio_start']}")
@@ -897,9 +933,12 @@ def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, sm
         te0 = deps.clock()
         if arm == "PRIO_IDLE":
             # the driver stops decoding and exits at t_close, so read the class back while it is certainly alive (microseconds, the energy window is unaffected).
-            # a PriorityError here propagates: the cell fails and the rep is rerun. Only a SUCCESSFUL read-back of the wrong class voids PRIO_IDLE.
+            # a PriorityError here is a CellRefused (the call failed: deterministic). Only a SUCCESSFUL read-back of the wrong class voids PRIO_IDLE.
             _sleep_until(deps, max(t_open, t_close - PRIO_END_READBACK_BEFORE_CLOSE_S))
-            res["prio_readbacks"].append(deps.get_priority(llm.pid))
+            try:
+                res["prio_readbacks"].append(deps.get_priority(llm.pid))
+            except gpu_priority.PriorityError as e:
+                raise CellRefused(f"PRIO_IDLE end read-back call failed (deterministic): {e}") from e
         _sleep_until(deps, t_close)
         e1 = deps.nvml.energy_mj()                                    # second read immediately at t_close: the energy window is [t_open, t_close)
         te1 = deps.clock()

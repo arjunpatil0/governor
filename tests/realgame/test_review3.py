@@ -28,6 +28,7 @@ def write_check(tmp_path, status="passed", age_s=10.0, **kw):
     run.mkdir(parents=True, exist_ok=True)
     doc = {"status": status, "timestamp": time.time() - age_s, "helper_present": [], "max_sm_mhz": 2100, "info": {"idle_sm_mhz": [210]}, "thresholds": {"max_sm_mhz_above": 1980}, **kw}
     (run / "clock_check.json").write_text(json.dumps(doc))
+    rg_synth.write_fresh_rehearsal(run)
     return doc
 
 

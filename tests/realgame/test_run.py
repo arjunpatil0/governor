@@ -122,9 +122,9 @@ def test_failure_exhausts_attempts_and_raises(tmp_path):
     cfg = make_cfg(tmp_path)
     order = r.make_order(3, 1)
     run = Runner(fail_at={("SOLO", 0, f"attempt{n}") for n in (1, 2, 3)})
-    with pytest.raises(RuntimeError, match="attempts"):
+    with pytest.raises(RuntimeError, match="(?i)twice|attempts"):       # the identical error twice in a row is deterministic: stops after attempt 2
         r.run_sweep(cfg, tmp_path / "run", order, run, seed=3, max_attempts=3)
-    assert len(list((tmp_path / "run" / "rep0").iterdir())) == 3
+    assert len(list((tmp_path / "rep0" if False else tmp_path / "run" / "rep0").iterdir())) == 2
 
 
 def test_rest_between_cells_with_rep_start_temperature(tmp_path):
