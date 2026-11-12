@@ -78,6 +78,22 @@ class FakeProbes:
     def nvml_identity(self):
         return {"nvml_name": "FAKE RTX 4070 Laptop GPU", "nvml_driver_version": "999.99", "vram_total_mib": 8188.0}
 
+    scheme = ("64a64f24-65b9-4b56-befd-5ec1eaced9b3", "Silent")
+    changed = ()
+
+    def power_scheme(self):
+        if isinstance(self.scheme, Exception):
+            raise self.scheme
+        if isinstance(self.scheme, list):                 # successive readings (the last one repeats)
+            return self.scheme.pop(0) if len(self.scheme) > 1 else self.scheme[0]
+        return self.scheme
+
+    def file_stat(self, path):
+        return (1000, 1.0)
+
+    def git_changed(self, root, head, paths):
+        return list(self.changed)
+
     def presentmon_version(self, exe):
         return "PresentMon 2.6.0"
 

@@ -72,6 +72,7 @@ class Config:
     igpu_device_match: str = "780M"            # RG_DEVICE_MATCH passed to the IGPU child (substring of the ggml device description, case-insensitive)
     cuda_device_match: str = "RTX"             # RG_DEVICE_MATCH passed to the CUDA arms
     allow_pm_hash_mismatch: bool = False       # explicit override of the PresentMon sha256 check; recorded in meta.json
+    expect_power_scheme: "str | None" = None   # --expect-power-scheme NAME_OR_GUID: preflight and every cell start refuse when the active Windows power scheme differs
     power_static_ref: "dict | None" = None     # amendment 19 (replaced): the sweep-start nvidia-smi static power fields; every cell start must match them (set by run.py)
 
 
@@ -137,6 +138,62 @@ def _git(path, *args):
         return subprocess.run([tool_paths()["git"], "-C", str(path), *args], capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_S).stdout
     except subprocess.TimeoutExpired as e:
         raise RuntimeError(f"git {' '.join(args[:2])} in {path} timed out after {GIT_TIMEOUT_S} s: refusing") from e
+
+
+class PowerSchemeError(RuntimeError):
+    """The active Windows power scheme cannot be read or parsed."""
+
+
+_SCHEME_RE = re.compile(r"Power Scheme GUID:\s*([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\s*(?:\((.*)\))?")
+
+
+def parse_power_scheme(text):
+    """`powercfg /getactivescheme` text -> (guid lower case, name). Anything else -> PowerSchemeError."""
+    m = _SCHEME_RE.search(text) if isinstance(text, str) else None
+    if not m:
+        raise PowerSchemeError(f"cannot parse the powercfg /getactivescheme output: {str(text)[:120]!r}")
+    return m.group(1).lower(), (m.group(2) or "").strip()
+
+
+def read_active_power_scheme(run=None, system_root=None):
+    """Read only: %SystemRoot%/System32/powercfg.exe /getactivescheme (full path, fixed argv, no shell, 20 s timeout) -> (guid, name). run and system_root are injectable."""
+    run = run or subprocess.run
+    root = system_root or os.environ.get("SystemRoot") or r"C:\Windows"
+    try:
+        out = run([str(Path(root) / "System32" / "powercfg.exe"), "/getactivescheme"], capture_output=True, text=True, timeout=SMI_INFO_TIMEOUT_S, check=True, shell=False).stdout
+    except Exception as e:                                                                # noqa: BLE001
+        raise PowerSchemeError(f"cannot read the active power scheme ({type(e).__name__}: {e})") from e
+    return parse_power_scheme(out)
+
+
+def power_scheme_matches(expect, guid, name):
+    """expect is the exact guid or a case-insensitive substring of the scheme name."""
+    e = str(expect).strip().lower()
+    return bool(e) and (e == str(guid).lower() or e in str(name).lower())
+
+
+def read_power_scheme(probes):
+    """-> (guid, name) through probes.power_scheme(); any failure -> PowerSchemeError."""
+    try:
+        guid, name = probes.power_scheme()
+        return guid, name
+    except PowerSchemeError:
+        raise
+    except Exception as e:                                                                # noqa: BLE001
+        raise PowerSchemeError(f"cannot read the active power scheme ({type(e).__name__}: {e})") from e
+
+
+def power_scheme_problem(cfg, probes):
+    """None when --expect-power-scheme is not given or the active scheme matches; else the refusal text (an unreadable scheme refuses only when the flag is given)."""
+    if not cfg.expect_power_scheme:
+        return None
+    try:
+        guid, name = read_power_scheme(probes)
+    except PowerSchemeError as e:
+        return f"power scheme unreadable ({e}); --expect-power-scheme {cfg.expect_power_scheme!r} cannot be confirmed"
+    if not power_scheme_matches(cfg.expect_power_scheme, guid, name):
+        return f"power scheme mismatch: active scheme is {name!r} ({guid}), --expect-power-scheme is {cfg.expect_power_scheme!r}"
+    return None
 
 
 def info_timeout_text(e):
@@ -291,6 +348,10 @@ def sweep_start_records(probes):
         rec["elevated"] = probes.is_elevated()
     except Exception:                                                                     # noqa: BLE001
         rec["elevated"] = None
+    try:
+        rec["power_scheme_guid"], rec["power_scheme_name"] = read_power_scheme(probes)
+    except Exception as e:                                                                # noqa: BLE001
+        rec["power_scheme_guid"] = rec["power_scheme_name"] = info_timeout_text(e)
     rec.update(get(probes.nvidia_smi_display, ("display_active", "display_mode")))
     rec.update(get(probes.nvml_identity, ("nvml_name", "nvml_driver_version", "vram_total_mib")))
     return rec
@@ -369,6 +430,19 @@ class SystemProbes:
     def nvml_power_static(self):
         """Default, min, max power limit (W) from NVML; no process is spawned (used at sweep start and at every cell start)."""
         return NvmlPowerStaticReader().read()
+
+    def power_scheme(self):
+        """(guid, name) of the active Windows power scheme (read only powercfg, see read_active_power_scheme)."""
+        return read_active_power_scheme()
+
+    def file_stat(self, path):
+        """(size, mtime) of a file."""
+        st = Path(path).stat()
+        return st.st_size, st.st_mtime
+
+    def git_changed(self, root, head, paths):
+        """Names of files that differ between `head` and HEAD under `paths` (git diff --name-only head HEAD -- paths)."""
+        return _git(root, "diff", "--name-only", head, "HEAD", "--", *paths).split()
 
     def nvidia_smi_power_text(self):
         """INFORMATION ONLY, sweep start only: the text of the nvidia-smi POWER query (-q -d POWER) (read only; full path, fixed argv, no shell; 20 s timeout)."""
@@ -491,6 +565,9 @@ def preflight(cfg, probes=None, need_game=True, game_absent=False, need_vk=False
     except ValueError as e:
         bad.append(str(e))
     bad += clock_state_check(probes, cfg.game_process)[0]
+    why = power_scheme_problem(cfg, probes)
+    if why:
+        bad.append(why)
     try:
         ps = read_power_static(probes)
         if cfg.power_static_ref is not None:
@@ -843,6 +920,17 @@ def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, sm
         except PowerStaticError as e:
             raise CellRefused("power refused: " + str(e)) from e
         res["power_static_cell_start"] = meta["power_static_cell_start"] = ps
+        try:
+            scheme0 = read_power_scheme(deps.probes)
+        except PowerSchemeError as e:
+            scheme0 = None
+            if cfg.expect_power_scheme:
+                raise CellRefused(f"power scheme refused: unreadable ({e}); --expect-power-scheme {cfg.expect_power_scheme!r}") from e
+        res["power_scheme_guid"], res["power_scheme_name"] = scheme0 if scheme0 else (None, None)
+        meta["power_scheme_guid"], meta["power_scheme_name"] = res["power_scheme_guid"], res["power_scheme_name"]
+        (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
+        if scheme0 and cfg.expect_power_scheme and not power_scheme_matches(cfg.expect_power_scheme, *scheme0):
+            raise CellRefused(f"power scheme refused: active scheme is {scheme0[1]!r} ({scheme0[0]}), --expect-power-scheme is {cfg.expect_power_scheme!r}")
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
         if cfg.power_static_ref is not None:
             why = power_static_problems(cfg.power_static_ref, ps)
@@ -949,6 +1037,15 @@ def run_cell(arm, rep, out_dir, cfg, deps=None, warmup_s=None, window_s=None, sm
             res["enforced_limit_w_end"] = float(deps.nvml.power_limit_w())
         except Exception:                                                                 # noqa: BLE001
             res["enforced_limit_w_end"] = None
+        try:
+            scheme1 = read_power_scheme(deps.probes)
+        except PowerSchemeError:
+            scheme1 = None
+        res["power_scheme_guid_end"], res["power_scheme_name_end"] = scheme1 if scheme1 else (None, None)
+        meta["power_scheme_guid_end"], meta["power_scheme_name_end"] = res["power_scheme_guid_end"], res["power_scheme_name_end"]
+        (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
+        if scheme1 != scheme0 and (scheme0 is not None or cfg.expect_power_scheme):
+            raise RuntimeError(f"power scheme changed during the cell: {scheme0} at the start, {scheme1} at the end (a mode switch mid-cell): the cell fails")
         res["energy_j"] = (e1 - e0) / 1000.0
         res["energy_read_t"] = [te0, te1]
         res["power_w"] = res["energy_j"] / (te1 - te0)

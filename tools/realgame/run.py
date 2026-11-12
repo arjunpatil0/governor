@@ -30,7 +30,7 @@ DEFAULT_ARMS = ("UNGATED", "PRIO_IDLE", "DUTY50", "IGPU")
 NOISE_OK = "NOISE_OK.json"  # marker in the attempt directory, written only after the per-rep noise check passed
 CLOCK_CHECK = "clock_check.json"
 DEFAULT_MAX_CLOCK_CHECK_AGE_S = 21600
-RECORD_KEYS = ("nvidia_smi_processes", "display_active", "display_mode", "nvml_name", "nvml_driver_version", "vram_total_mib", "records_mode", "power_static", "nvidia_smi_power", "elevated")
+RECORD_KEYS = ("nvidia_smi_processes", "display_active", "display_mode", "nvml_name", "nvml_driver_version", "vram_total_mib", "records_mode", "power_static", "nvidia_smi_power", "elevated", "power_scheme_guid", "power_scheme_name")
 SMOKE_ARMS = ("SOLO", "UNGATED")
 SMOKE_WARM_S = 5.0         # Step-5 smoke: one short cell (5 s warm-up, 20 s window), not part of the sweep
 SMOKE_WINDOW_S = 20.0
@@ -443,7 +443,7 @@ def evaluate_rehearsal(arm, res):
     return why
 
 
-def run_rehearsal(cfg, run_dir, arms, runner, log=print, now=None, exe_sha256=None):
+def run_rehearsal(cfg, run_dir, arms, runner, log=print, now=None, exe_sha256=None, binding=None):
     """One short cell (REHEARSE_WARM_S warm-up, REHEARSE_WINDOW_S window) per LLM arm through the normal run_cell (via runner) into <run_dir>/rehearsal/<ARM>/. Prints
     `REHEARSAL <ARM>: PASS|FAIL (reasons)` per arm, writes <run_dir>/rehearsal.json and returns (all_passed, doc). Touches no sweep directory (rep*/attempt*, run_meta.json)."""
     run_dir = Path(run_dir)
@@ -475,7 +475,7 @@ def run_rehearsal(cfg, run_dir, arms, runner, log=print, now=None, exe_sha256=No
             log(f"REHEARSAL {arm}: FAIL ({'; '.join(reasons)})")
     ts = time.time() if now is None else now
     doc = {"rehearsal": True, "timestamp": ts, "timestamp_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(ts)), "exe_sha256": dict(exe_sha256 or {}),
-           "warmup_s": REHEARSE_WARM_S, "window_s": REHEARSE_WINDOW_S, "arms": out}
+           "warmup_s": REHEARSE_WARM_S, "window_s": REHEARSE_WINDOW_S, "arms": out, **(binding or {})}
     (run_dir / REHEARSAL).write_text(json.dumps(doc, indent=1, default=str))
     return all(v["status"] == "PASS" for v in out.values()), doc
 
@@ -506,6 +506,56 @@ def load_rehearsal(run_dir, arms, max_age_s, now=None):
     return doc, None
 
 
+BOUND_GIT_PATHS = ("tools/realgame", "workloads/background")
+
+
+def rehearsal_binding(cfg, probes):
+    """The evidence rehearsal.json binds to: PresentMon sha256 (None when no PresentMon exe was given), the model file's size and mtime, and the git HEAD of the repo."""
+    pm = None
+    if cfg.presentmon_exe and probes.exists(cfg.presentmon_exe):
+        pm = probes.sha256(cfg.presentmon_exe)
+    size, mtime = probes.file_stat(cfg.model)
+    return {"presentmon_sha256": pm, "model": {"size": size, "mtime": mtime}, "git_head": probes.git_head(cfg.repo_root)}
+
+
+def rehearsal_binding_problem(doc, cfg, probes):
+    """None when the rehearsal evidence still describes the CURRENT executables, model, PresentMon and sources; else the text naming the FIRST mismatch (rerun --rehearse)."""
+    tail = ": rerun --rehearse"
+    rec = doc.get("exe_sha256")
+    if not isinstance(rec, dict) or not rec:
+        return "rehearsal.json records no executable sha256" + tail
+    for label, exe in (("llm_exe", cfg.llm_exe), ("llm_exe_vk", cfg.llm_exe_vk)):
+        if exe is None:
+            continue
+        if label not in rec:
+            return f"rehearsal.json records no sha256 for {label}" + tail
+        now = probes.sha256(exe)
+        if now != rec[label]:
+            return f"{label} sha256 changed since the rehearsal ({rec[label]} then, {now} now; {exe})" + tail
+    model = doc.get("model")
+    if not isinstance(model, dict) or "size" not in model or "mtime" not in model:
+        return "rehearsal.json records no model size/mtime" + tail
+    size, mtime = probes.file_stat(cfg.model)
+    if size != model["size"]:
+        return f"model file size changed since the rehearsal ({model['size']} then, {size} now; {cfg.model})" + tail
+    if mtime != model["mtime"]:
+        return f"model file mtime changed since the rehearsal ({model['mtime']} then, {mtime} now; {cfg.model})" + tail
+    pm_rec = doc.get("presentmon_sha256")
+    if not pm_rec:
+        return "rehearsal.json records no PresentMon sha256 (pass --presentmon to --rehearse)" + tail
+    pm_now = probes.sha256(cfg.presentmon_exe)
+    if pm_now != pm_rec:
+        return f"PresentMon sha256 changed since the rehearsal ({pm_rec} then, {pm_now} now)" + tail
+    head = doc.get("git_head")
+    if not head:
+        return "rehearsal.json records no git HEAD" + tail
+    if head != probes.git_head(cfg.repo_root):
+        changed = probes.git_changed(cfg.repo_root, head, BOUND_GIT_PATHS)
+        if changed:
+            return f"{', '.join(changed[:5])} changed since the rehearsal (git HEAD {head[:12]}, tools/realgame and workloads/background must be unchanged)" + tail
+    return None
+
+
 def _parser():
     p = argparse.ArgumentParser(description="R1 sweep: game + LLM co-location on one GPU, unlocked clocks")
     p.add_argument("--run-dir")
@@ -515,6 +565,8 @@ def _parser():
     p.add_argument("--dry-run", action="store_true", help="print the order and run preflight only")
     p.add_argument("--llm-alone", action="store_true", help="measure only the LLM-alone reference; the game process must be ABSENT (refused if it is running)")
     p.add_argument("--armoury-mode", help="Armoury Crate mode in force (required)")
+    p.add_argument("--expect-power-scheme", metavar="NAME_OR_GUID", help="refuse (preflight and every cell start) unless the active Windows power scheme matches: exact guid or case-insensitive substring of the name; "
+                   "a scheme change during a cell fails the cell. Without it the scheme is only recorded")
     p.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[2]))
     p.add_argument("--llama-dir")
     p.add_argument("--llm-exe")
@@ -581,7 +633,8 @@ def main(argv=None, probes=None, runner=None, deps=None):
                       presentmon_exe=Path(args.presentmon or "PresentMon-not-used-in-rehearsal.exe"), game_process=args.game_process, armoury_mode=args.armoury_mode,
                       llama_dir=Path(args.llama_dir or root / "third_party" / "llama.cpp"), n_prompt=args.n_prompt, seed=args.seed,
                       llm_exe_vk=Path(args.llm_exe_vk or root / "workloads" / "background" / "llama_realgame_bench_vk.exe") if use_igpu else None,
-                      igpu_vk_index=None, igpu_device_match=args.igpu_device_match, allow_pm_hash_mismatch=args.allow_pm_hash_mismatch)
+                      igpu_vk_index=None, igpu_device_match=args.igpu_device_match, allow_pm_hash_mismatch=args.allow_pm_hash_mismatch,
+                      expect_power_scheme=args.expect_power_scheme)
     order = make_order(args.seed, args.reps, arms)
     if args.rehearse:
         print(f"mode: REHEARSAL (one cell per LLM arm {list(arms)}, warm-up {REHEARSE_WARM_S} s, window {REHEARSE_WINDOW_S} s; no game, no PresentMon; not part of the sweep)")
@@ -633,6 +686,10 @@ def main(argv=None, probes=None, runner=None, deps=None):
     if rehearsal is None:
         print(f"rehearsal refused: {why}", file=sys.stderr)
         return 2
+    why = rehearsal_binding_problem(rehearsal, cfg, probes)
+    if why:
+        print(f"rehearsal refused: {why}", file=sys.stderr)
+        return 2
     read_temp = deps.nvml.temp_c if deps is not None else None
     rerun_cmd = "python -m tools.realgame.run " + shlex.join(list(sys.argv[1:] if argv is None else argv))
     try:
@@ -660,7 +717,7 @@ def _main_rehearse(args, cfg, arms, probes, runner, deps):
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "rehearsal_start_records.json").write_text(json.dumps(records, indent=1, default=str))
     hashes = {label: probes.sha256(exe) for label, exe in (("llm_exe", cfg.llm_exe), ("llm_exe_vk", cfg.llm_exe_vk)) if exe is not None}
-    ok, doc = run_rehearsal(cfg, run_dir, arms, runner, exe_sha256=hashes)
+    ok, doc = run_rehearsal(cfg, run_dir, arms, runner, exe_sha256=hashes, binding=rehearsal_binding(cfg, probes))
     print(f"rehearsal {'PASSED' if ok else 'FAILED'}: {run_dir / REHEARSAL}")
     return 0 if ok else 1
 

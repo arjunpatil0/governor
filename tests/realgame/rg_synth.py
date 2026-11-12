@@ -3,6 +3,7 @@ import json
 import random
 from pathlib import Path
 
+from tools.realgame import cell as rg_cell
 from tools.realgame import run as rg_run
 
 HZ = 10_000_000
@@ -12,13 +13,16 @@ WINDOW_S = 10.0
 ARM_PARAMS = {"SOLO": (0.0, 0, 0.0), "UNGATED": (0.15, 31.0, 45.0), "PRIO_IDLE": (0.12, 31.0, 40.0), "DUTY50": (0.06, 28.0, 25.0), "IGPU": (0.002, 26.0, 16.0)}
 
 
-def write_fresh_rehearsal(run_dir, arms=("UNGATED", "PRIO_IDLE", "DUTY50", "IGPU"), status="PASS", timestamp=None):
+def write_fresh_rehearsal(run_dir, arms=("UNGATED", "PRIO_IDLE", "DUTY50", "IGPU"), status="PASS", timestamp=None, **doc_update):
     """A fresh rehearsal.json (what `run.py --rehearse --run-dir` writes) with every arm PASS, so that main() will start a sweep."""
     import time
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "rehearsal.json").write_text(json.dumps({"timestamp": time.time() if timestamp is None else timestamp, "rehearsal": True, "exe_sha256": {},
-                                                        "arms": {a: {"status": status, "reasons": []} for a in arms}}))
+    (run_dir / "rehearsal.json").write_text(json.dumps({"timestamp": time.time() if timestamp is None else timestamp, "rehearsal": True,
+                                                        "exe_sha256": {"llm_exe": "sha-a", "llm_exe_vk": "sha-llama_realgame_bench_vk.exe"},
+                                                        "presentmon_sha256": rg_cell.PRESENTMON_SHA256_PREREG,
+                                                        "model": {"size": 1000, "mtime": 1.0}, "git_head": "abc123",
+                                                        "arms": {a: {"status": status, "reasons": []} for a in arms}, **doc_update}))
 
 
 def write_fresh_clock_check(run_dir, rehearsal=True):
