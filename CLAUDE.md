@@ -1,6 +1,6 @@
 # CLAUDE.md - SLO-aware resource governor (governor/)
 
-Owner: Arjun, final-year B.Tech AI/ML, targeting NVIDIA graduate roles. Predecessor: `../variance_gpu_project`
+Owner: Arjun, final-year B.E. AI & ML student. Predecessor: `../variance_gpu_project`
 (archived; see its ARCHIVE_NOTE.md).
 
 ## Working style
