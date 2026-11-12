@@ -116,4 +116,4 @@ DOCUMENTATION
    Holm, equivalence test, time-slicing, construct validity, ...), linked to the journal entry where it came up. Written for Arjun to study.
 4. End of every session: `/export` to `docs/transcripts/YYYY-MM-DD_session-N.md` and commit.
 5. At each phase end, add `docs/PAPER_MAP.md` entries: claim -> evidence (results file, journal, commit).
-6. Private GitHub repo for governor; push after every session (Arjun sets up the remote; see STATUS.md).
+6. GitHub repo for governor; push after every session (Arjun sets up the remote; see STATUS.md).
