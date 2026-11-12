@@ -2,6 +2,13 @@
 
 Newest first. The v2 sprint entries (pausable decode, branch v2-foreground, merged into master for v2.0.0) are one entry per sprint: what changed, benchmark numbers, next step. v2 is a lightweight engineering track, not a pre-registered study; the v1 registered results, constants and the v1 driver exe are not touched.
 
+## [Unreleased] public-ready
+
+Preparation of the repository for external readers (branch public-ready). Documentation and housekeeping only; no code, data or measurement changed.
+
+- README rewrite for external readers, privacy scrub, related work (cited in the v2 report, see v2.0.1).
+- Housekeeping: version declared as 2.0.1 in `pyproject.toml` and `python/governor/__init__.py`; research journal entries 0070 to 0075 (v1.0.0 packaging, the 590 W audit, v2 sprints 1 to 4) written after the fact on 2026-11-12; `workloads/background/pause_patch/THIRD_PARTY_NOTICE.md` with the llama.cpp MIT notice for the patch; STATUS and TIMELINE updated.
+
 ## v2.0.1 (docs) (2026-11-08)
 
 Related work section, novelty hedged. Documentation only; no code, data or measurement changed, and v2.0.0 stays tagged where it was.

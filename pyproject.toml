@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gpu-governor"
-version = "1.0.0"
+version = "2.0.1"
 description = "Frame-slack hint and deadline gate for sharing one GPU between a deadline-bound app and a background worker (Windows)."
 readme = "README.md"
 license = { text = "MIT" }

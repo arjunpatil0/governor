@@ -8,7 +8,7 @@ All times are seconds on one clock shared by both sides (time.perf_counter() on 
 import slackhint as _sh
 from slackhint import INF, STALE_S, now_s  # noqa: F401  (re-exported)
 
-__version__ = "1.0.0"
+__version__ = "2.0.1"
 __all__ = ["FrameHintWriter", "FrameHintReader", "DeadlineGate", "now_s", "INF", "STALE_S"]
 
 
