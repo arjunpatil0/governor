@@ -14,12 +14,12 @@ RESTART the laptop (the tools refuse an uptime above 2 h). Windows Update and NV
 ## 1. Administrator PowerShell: start the helper (leave it open)
 ```powershell
 nvidia-smi -rgc; nvidia-smi -rmc
-cd C:\Users\arjun\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
+cd %USERPROFILE%\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
 ```
 
 ## 2. Normal PowerShell: the chain (one command)
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\w5b_t3c_chain.ps1
 ```
 The whole output is also written to data\w5b\chain_t3c_transcript.txt. The last lines are the summary; "RESULT: ALL STEPS PASSED. Evaluation block 1 was NOT started." means success; "RESULT: STOPPED ON A FAILURE" names the failed step and nothing after it was run.

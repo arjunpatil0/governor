@@ -22,11 +22,11 @@ c0 7 ms; g'B 60 W = 1800_a_g0_d1, 35 W = 1500_a_g0_d1; c'B-T3b (PRIMARY) target 
 2. Administrator PowerShell, leave it open:
 ```powershell
 nvidia-smi -rgc; nvidia-smi -rmc
-cd C:\Users\arjun\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
+cd %USERPROFILE%\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
 ```
 3. Normal PowerShell (the trial, then its automatic check only if the trial ran):
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 python experiments/w5b/evaluate.py --trial --blocks 4 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9 --out data/w5b/eval_trial2 --armoury-mode Performance; if ($LASTEXITCODE -eq 0) { python experiments/w5b/evaluate.py --check-trial --out data/w5b/eval_trial2 }
 ```
 Expect `TRIAL CHECK: PASS (7 cells)`. The first trial (data/w5b/eval_trial, 6 cells, headroom 2.64 W, one c'B cell) stays as a record. If the check fails, stop and paste the output.
@@ -34,14 +34,14 @@ Expect `TRIAL CHECK: PASS (7 cells)`. The first trial (data/w5b/eval_trial, 6 ce
 ## Step B: evaluation session 1 = blocks 4 and 9 (85 cells; the runner's own estimate 2.4 h, limit 3 h)
 Only after Step A printed PASS. It may follow Step A in the SAME boot (the uptime rule is checked when the command starts: it must be <= 2 h then). The working tree must be clean (the constants and docs are committed; untracked files under data/ are fine). The helper window stays open.
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 python experiments/w5b/evaluate.py --blocks 4 9 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9 --out data/w5b/eval --armoury-mode Performance
 ```
 Each block is whole or discarded; an incident stops the session with exit code 2, the incomplete block is discarded at the next call and rerun under the next free number with `--as-block` (I give the literal command then). Do not use the laptop during the session. At the end: Ctrl+C in the helper window once, then paste the last 20 lines of the session output and the helper-log lines (docs/W5B_T3C_SITTING.md section 3). Later sessions use the same command with the block numbers `5 10`, `6 11`, `7 12`, `8 13`.
 
 ## After every session: integrity check (no outcome analysis until all 10 blocks are done)
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 python experiments/w5b/eval_integrity.py --out data/w5b/eval --blocks 4 9 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9
 ```
 (constants hash incl. every session meta, block completeness, incidents, gov_reads = 0, counter vs sampled within 15%, full offload, per-tick log and power trace; it reads no miss or throughput). Session 1 (blocks 4 and 9): INTEGRITY PASS, 85 cells, 0 problems, 0 flags; Step A trial (eval_trial2): TRIAL CHECK PASS (7 cells).
@@ -49,7 +49,7 @@ python experiments/w5b/eval_integrity.py --out data/w5b/eval --blocks 4 9 --cons
 ## Session 3 = block 6 rerun as block 14, and block 11 (85 cells, about 2.4 h) - written 2026-10-27
 Block 6 was never measured (session attempts of 2026-10-26 20:53-20:55 UTC: no cell ran; the empty folder was discarded whole to data/w5b/eval/discarded/). It is rerun under the next free number, 14, with the seed list of block 6 (so its 55 cells, ids ev14_..., incl. the 35 W family); block 11 runs under its own number. The integrity check reads the seed list from block.json, so it expects the right cells for block 14. After this session the complete blocks are 4 5 9 10 11 14 (=6) and then 7 12 / 8 13: 10 blocks. Restart first (uptime limit 2 h at the start; a restart is recommended after the unexplained abort), start the helper as in Step A, then in a normal PowerShell:
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 python experiments/w5b/evaluate.py --blocks 6 11 --as-block 14 11 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9 --out data/w5b/eval --armoury-mode Performance; if ($LASTEXITCODE -eq 0) { python experiments/w5b/eval_integrity.py --out data/w5b/eval --blocks 14 11 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9; if ($LASTEXITCODE -eq 0) { git add data/w5b; git commit -m "Session 3 data (block 6 rerun as block 14, block 11), integrity PASS" } }
 ```
 If the session stops (exit code 2 or an abort), nothing is committed; paste the console output and the file `incident.json` it names (an abort now writes one).
@@ -57,7 +57,7 @@ If the session stops (exit code 2 or an abort), nothing is committed; paste the 
 ## Session 2 = blocks 5 and 10 (85 cells, about 2.4 h)
 Restart, helper (Step A, items 1 and 2), then the command below; the Step A trial need not be repeated (same code and constants). The working tree must be clean: this commit holds the session 1 data and the integrity tool.
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 python experiments/w5b/evaluate.py --blocks 5 10 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9 --out data/w5b/eval --armoury-mode Performance
 ```
 Afterwards run the integrity command above with `--blocks 5 10`.
@@ -65,7 +65,7 @@ Afterwards run the integrity command above with `--blocks 5 10`.
 ## Session 4 = block 7 rerun as block 15, and block 12 (85 cells, about 2.4 h) - written 2026-10-28
 The first attempt (session 20261027T113024Z) was stopped with Ctrl+C after 31 measured cells of block 7 (incident.json of the cell in progress: KeyboardInterrupt); block 7 was discarded whole to data/w5b/eval/discarded/block07_20261027T195815Z (journal 0065). It is rerun under the next free number, 15, with the seed list of block 7 (55 cells, ids ev15_...); block 12 runs under its own number. Estimate 2.36 h (limit 3 h). Restart first (uptime limit 2 h at the start), helper as in Step A, then:
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 python experiments/w5b/evaluate.py --blocks 7 12 --as-block 15 12 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9 --out data/w5b/eval --armoury-mode Performance; if ($LASTEXITCODE -eq 0) { python experiments/w5b/eval_integrity.py --out data/w5b/eval --blocks 15 12 --constants data/w5b/constants.json --constants-sha256 f7b99650efe7fea9d392a1aee2e49a18a84a00fe69d56fb4e41bf562cc6fb4a9; if ($LASTEXITCODE -eq 0) { git add data/w5b; git commit -m "Session 4 data (block 7 rerun as block 15, block 12), integrity PASS" } }
 ```
 After this: session 5 = blocks 8 13. Complete blocks then: 4 5 9 10 11 14 15 12 8 13.

@@ -9,19 +9,19 @@ Optional (about 2 h; skip if you stay at the laptop): `powercfg /change standby-
 ## 1. Administrator PowerShell: start the helper (leave it open)
 ```powershell
 nvidia-smi -rgc; nvidia-smi -rmc
-cd C:\Users\arjun\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
+cd %USERPROFILE%\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
 ```
 
 ## 2. Normal PowerShell: T3b (67 cells, about 1.9 h at 100 s per cell; resumable)
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 for ($i = 1; $i -le 3; $i++) { python experiments/w5b/tune.py --out data/w5b/t3b --plan t3b --c0 7 --power-source sampled --armoury-mode Performance --max-hours 4; if ((Test-Path data/w5b/t3b/decisions.json) -or ($LASTEXITCODE -eq 1) -or ($LASTEXITCODE -eq 3)) { break }; Start-Sleep -Seconds 60 }
 ```
 What it does: a discarded cell, the d'B margin grid (5 margins x 3 workloads x {S0, S1} = 30 cells) and the c'B constants grid re-run under the final controller (36 cells), all at c0 = 7, 60 W. Every governed cell takes its power from the mean of the NVML power samples and reads the energy counter ZERO times in its loop (the executor rejects a cell where it did not; meta.json records power_source = sampled). The retry loop resumes only after a plain stop (exit code 2); exit code 1 (an abort or a refusal) and 3 (the time limit) end it. A refusal message that mentions addendum O-5 means the explicit source was not accepted: paste it.
 
 ## 3. After the run
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 python experiments/w5b/morning.py --out data/w5b/t3b
 nvidia-smi --query-gpu=temperature.gpu,clocks.sm,power.draw --format=csv
 ```

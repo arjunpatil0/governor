@@ -11,12 +11,12 @@ AC power; Armoury Crate mode Performance; Chrome closed; tray apps quit.
 nvidia-smi -rgc; nvidia-smi -rmc
 
 # Start the helper from the repository
-cd C:\Users\arjun\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
+cd %USERPROFILE%\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
 ```
 
 ## 2. Second (normal) PowerShell: warm the REBUILT exe once, then run the smoke
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 python experiments/w4_smoke/smoke.py warm --run data/w45_smoke/smoke3 --armoury-mode Performance
 python experiments/w4_smoke/smoke.py gate --run data/w45_smoke/smoke3 --armoury-mode Performance
 ```

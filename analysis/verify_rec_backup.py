@@ -1,6 +1,6 @@
 """Verify every file listed in a REC_MANIFEST.sha256 against a backup copy of the run folder (SHA-256, streamed).
-Usage (PowerShell, from C:\\Users\\arjun\\governor):
-  python analysis/verify_rec_backup.py --backup C:\\Users\\arjun\\OneDrive\\governor_backup\\w2_G\\20261022T062433Z
+Usage (PowerShell, from the repository root):
+  python analysis/verify_rec_backup.py --backup <backup folder>\\w2_G\\20261022T062433Z
 Exit code 0 only if every manifest entry exists in the backup with the same hash."""
 import argparse
 import hashlib

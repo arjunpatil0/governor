@@ -3,7 +3,7 @@
 # It does NOT start evaluation block 1. Run from a normal PowerShell, with the admin clock helper already running in its own window and the laptop freshly restarted:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\w5b_t3c_chain.ps1
 $ErrorActionPreference = "Continue"
-Set-Location C:\Users\arjun\governor
+Set-Location (Split-Path -Parent $PSScriptRoot)
 New-Item -ItemType Directory -Force data\w5b | Out-Null
 Start-Transcript -Path data\w5b\chain_t3c_transcript.txt -Force | Out-Null
 $start = Get-Date

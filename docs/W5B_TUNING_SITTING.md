@@ -13,20 +13,20 @@ powercfg /change hibernate-timeout-ac 0
 ## 1. Administrator PowerShell: start the helper (leave the window open)
 ```powershell
 nvidia-smi -rgc; nvidia-smi -rmc
-cd C:\Users\arjun\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
+cd %USERPROFILE%\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
 ```
 (The Ctrl+C fix passed its elevated check on 2026-10-23: prompt back, "shutting down... clock reset done". Nothing more to check at the start.)
 
 ## 3. Normal PowerShell: supervised trial (about 10 min; six cells, one per executor path; not data)
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 python experiments/w5b/tune.py --out data/w5b/trial2 --armoury-mode Performance --trial
 ```
 Paste back the six TRIAL lines. Changes since the first trial (addenda O-1, O-2): c'B and d'B both switch pacing mode inside the cell; the fg-alone cell now runs twice (about 40 s): c0m at a LOCKED 1800 MHz (expected about 7 ms = nominal; the morning check flags a ratio outside 0.85-1.15) and c0m_unlocked with the SM clock logged for both (we expect about 6.7 ms and an SM median clearly below 2460 if the GPU does not hold boost when 40% busy). The new fields clamp_events and final_pacing_mode are in the cell.json files. Other expected shape (hardware numbers will differ): bg-alone about 97 tok/s for the 3B; arm a misses a lot; the static cell at 1500 MHz gives 0 tok/s (frame 8.5 ms, no slack: expected, not a bug); c'B and d'B print miss, tok/s, power and clock_changes; no exception. If anything raises, stop and paste the traceback. Also paste `Get-Content data/w5b/trial2/cells/trial_fgalone/cell.json | Select-String "c0m|sm_"`.
 
 ## 4. The overnight sitting (T1 -> T2 -> T3 chained; resumable; one command)
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 for ($i = 1; $i -le 3; $i++) { python experiments/w5b/tune.py --out data/w5b/tuning --armoury-mode Performance --max-hours 11; if ((Test-Path data/w5b/tuning/decisions.json) -or ($LASTEXITCODE -eq 1) -or ($LASTEXITCODE -eq 3)) { break }; Start-Sleep -Seconds 60 }
 ```
 What it does: refuses to start unless uptime <= 2 h, AC, Armoury mode given, clean tree, Chrome closed; writes meta.json (Armoury mode, battery mode, boot time, uptime, git head, exe hash, yaml and addendum hashes); runs the discarded cell, the three background-alone references, the c0 search 7..11 (each tried c0 with a foreground-alone cell and arm a in S1; the 70-static sweep only where arm a misses more than 5%), stage 2, g'B/eB and the c'B grid (36 cells); stores every cell as it finishes; recomputes all decisions from the stored cells; writes decisions.json and manifest.json. Each cell: 5 s warm-up + 60 s measured, 20 s minimum cool-down and below 55 C. A failure on two consecutive cells, a clock lock that is not released, a temperature above 85 C or a HwThermalSlowdown / HwPowerBrake event stops the sitting (finished cells are kept); the retry loop resumes only after a plain stop (exit code 2 without decisions.json), never after an abort (exit code 1) or the time limit (exit code 3). --max-hours 11 stops starting new cells after 11 h.
@@ -35,7 +35,7 @@ Size (ESTIMATE): the simulator dry run of this exact plan produced 127 cells, ab
 ## 5. Morning / end-of-run checks
 Normal PowerShell:
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 python experiments/w5b/morning.py --out data/w5b/tuning
 nvidia-smi --query-gpu=temperature.gpu,clocks.sm,power.draw --format=csv
 ```

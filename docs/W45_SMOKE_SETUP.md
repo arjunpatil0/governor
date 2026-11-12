@@ -21,7 +21,7 @@ Set-Content -Encoding ascii C:\ProgramData\governor\clock_helper.json '{"allowed
 nvidia-smi -rgc; nvidia-smi -rmc
 
 # Start the helper from the repository (leave this window open; Ctrl+C must stop it and release the clock lock)
-cd C:\Users\arjun\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
+cd %USERPROFILE%\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
 ```
 
 Expected: the helper prints `clock helper listening on \\.\pipe\governor_clock; allowed [900, 1050, 1200, 1350, 1500, 1800] MHz`. Refusals are explicit (`SystemExit` with the reason: not elevated, untrusted directory, untrusted config, failed first reset).

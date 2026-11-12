@@ -5,12 +5,12 @@ The working tree must be clean and committed (the runner refuses otherwise; new 
 ## 1. Administrator PowerShell: restart the helper (leave the window open)
 ```powershell
 nvidia-smi -rgc; nvidia-smi -rmc
-cd C:\Users\arjun\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
+cd %USERPROFILE%\governor; python actuators/clock_helper.py --config C:\ProgramData\governor\clock_helper.json --log C:\ProgramData\governor\clock_helper.log
 ```
 
 ## 2. Normal PowerShell, in this order (paste back the output of steps a and b BEFORE c)
 ```powershell
-cd C:\Users\arjun\governor
+cd %USERPROFILE%\governor
 # a) context-shift check: the background alone for 40 s must run well past the old 1534-token limit (about 1 min)
 python experiments/w4_smoke/smoke.py shift --run data/w5a/shift_check --armoury-mode Performance
 # b) ONE trial cell of session 1 (about 1.5 min): proves the runner end to end
