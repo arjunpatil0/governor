@@ -109,16 +109,22 @@ DERIVED = [
     ("abstract", "1.4% to 2.2% slower per token", "8B 14 groups +1.4%, 3B 14 groups +2.2% in token time", "Sprint 1 and 2 tables"),
 ]
 
-EXTERNAL = [  # (cited as, URL, what the report says about it, from the abstract read on 2026-11-08)
+EXTERNAL = [  # (cited as, URL, what the report says about it and where in the source; rows marked [12 Nov] were read on 2026-11-12)
     ("ConServe, arXiv 2410.01228", "https://arxiv.org/abs/2410.01228", "co-serves online and offline LLM requests; sub-iteration, layer-wise preemption lets offline work yield on online load spikes"),
     ("QLLM, arXiv 2503.09304", "https://arxiv.org/abs/2503.09304", "preempts best-effort MoE inference at expert granularity to cut time to first token of latency-sensitive requests; drops iteration-level scheduling so it can preempt at any layer"),
     ("LayerLoom, arXiv 2611.00652", "https://arxiv.org/abs/2611.00652", "schedules LoRA backward work at layer rather than iteration granularity, within the latency slack of in-flight inference requests"),
     ("Ripple, arXiv 2611.01067", "https://arxiv.org/abs/2611.01067", "unified-memory edge device; splits inference into pausable layer-based units, converts CPU job deadline slack into a GPU-byte budget; SGLang engine hooks and a central scheduler; evaluated on DGX Spark"),
+    ("Ripple margin and guard [12 Nov]", "https://arxiv.org/html/2611.01067", "margin that adapts after every job; tight-deadline guard withholds probe and floor f. Method text (section 4, margin; rank endpoints and the tight-deadline guard): \"The margin is a rank among the retained residuals whose level alpha adapts after every job\"; \"At the tightest deadlines Ripple adds one rule: if the predicted delay from GPU volume f exceeds a job's remaining slack ... then that job gets neither the probe nor the floor f nor a crossing into its release\""),
     ("REEF, OSDI 2022", "https://www.usenix.org/conference/osdi22/presentation/han", "microsecond-scale preemption by resetting idempotent kernels; evaluated on an AMD GPU with a restricted NVIDIA port"),
     ("Hummingbird, arXiv 2601.04071", "https://arxiv.org/abs/2601.04071", "microsecond-granularity preemption on closed-source GPUs"),
     ("GCAPS, arXiv 2406.05221", "https://arxiv.org/abs/2406.05221", "GPU context scheduling at the driver level for real-time tasks; response-time analysis; Jetson results"),
     ("FIKIT, arXiv 2311.10359", "https://arxiv.org/abs/2311.10359", "lets low-priority tasks run in the idle gaps between kernels of high-priority tasks"),
-    ("VUDA, arXiv 2605.01352", "https://arxiv.org/abs/2605.01352", "controlled spatial sharing of CUDA compute and Vulkan graphics on NVIDIA GPUs without modifying drivers; 60 FPS rendering kept in a driving-perception scenario"),
+    ("VUDA, arXiv 2605.01352", "https://arxiv.org/abs/2605.01352", "controlled spatial sharing of CUDA compute and Vulkan graphics on NVIDIA GPUs without modifying drivers (abstract)"),
+    ("VUDA section 7.5 [12 Nov]", "https://arxiv.org/html/2605.01352", "section 7.5 (Figure 15, AI gaming): \"a 4K, nine-pass offscreen Vulkan renderer paced at 60 Hz and Qwen2.5 inference through unmodified llama.cpp. The inference workload continuously prefills 2,048-token prompts\"; RTX 4090 1.5B and 7B Q4_K_M, A800 7B and 14B FP16; \"Partitioning lowers GPU-time p99 to 13.44-14.98 ms on RTX 4090 and completion-latency p99 to 15.32-15.67 ms on A800\"; \"VUDA-full retains 39-64% of baseline prefill throughput\"; section 7 platforms: \"under Linux\"; \"inter-SM partitioning with a compute quota q, measured in TPCs\""),
+    ("EdgePace, arXiv 2610.37307 [12 Nov]", "https://arxiv.org/abs/2610.37307", "abstract: \"creates safe suspension points across prefill and decode, monitors foreground memory demand and stalls at low cost, and schedules inference according to contention risk, deadline slack, and output freshness\"; OnePlus 13 and three Jetson platforms; \"reduces foreground deadline misses by 24.1%--96.1% while retaining 64.9%--98.5% of LLM throughput\""),
+    ("Nixie, arXiv 2601.11743 [12 Nov]", "https://arxiv.org/abs/2601.11743", "abstract: \"efficient and transparent temporal multiplexing on consumer GPUs without requiring any application or driver changes\"; \"coordinates GPU memory allocation and kernel launch behavior\"; \"MLFQ-inspired techniques\"; \"improves latency of real interactive code-completion tasks by up to 3.8x\""),
+    ("NVIGI, GPU Scheduling for AI, SDK 1.7.0 [12 Nov]", "https://docs.nvidia.com/nvigi-sdk/1.7.0/docs/nvigi_core/docs/GpuSchedulingForAI.html", "whole page read. \"NVIGI's GPU scheduling uses D3D async compute for D3D plugins and CUDA in Graphics (CIG) for CUDA plugins. It also takes advantage of a driver interface for setting relative priorities of CUDA vs D3D graphics workloads\" (Supported Graphics APIs); modes kPrioritizeGraphics, kPrioritizeCompute, kBalance, \"these modes are hints to the GPU scheduling hardware\" (How to Set the Relative Priority); GPT plugin `nvigi::plugin::gpt::ggml::cuda` (Supported Plugins); \"fill in a D3D12Parameters struct\" with the graphics queue (How to Use); \"CUDA requires that Hardware scheduling be enabled in Windows 11\" (table note)"),
+    ("Kang, arXiv 2606.16106 [12 Nov]", "https://arxiv.org/abs/2606.16106", "title \"Edge-Inference Governors Need Memory-Clock State\" (Jaehoon Kang, cs.PF, v3 of 8 Jul 2026); abstract: \"an EMC-blind GPU-only fit misses 25-28% of cycles at tight deadlines, whereas an EMC-aware two-cell refit holds misses to <=0.9%\"; \"a dispersion-banded guard, validated on held-out trials\"; Jetson Orin"),
 ]
 
 
@@ -147,7 +153,7 @@ def main():
     out += [f"| {s} | {c} | {f} | {n} |" for s, c, f, n in rows]
     out += ["", "## Derived numbers (arithmetic on sourced numbers; the inputs are in the rows above)", "", "| Section | Number | Arithmetic | Inputs from |", "|---|---|---|---|"]
     out += [f"| {s} | {a} | {b} | {c} |" for s, a, b, c in DERIVED]
-    out += ["", "## Related work (section 8): abstracts read on 2026-11-08, not the full papers", "", "| Cited as | URL | What section 8 says, from the abstract |", "|---|---|---|"]
+    out += ["", "## Related work (section 8): abstracts read on 2026-11-08; rows marked [12 Nov] read on 2026-11-12 (extracted passages or the full page, not the full papers)", "", "| Cited as | URL | What section 8 says, and where in the source |", "|---|---|---|"]
     out += [f"| {a} | {b} | {c} |" for a, b, c in EXTERNAL]
     (HERE / "SOURCES_V2.md").write_text("\n".join(out) + "\n", encoding="utf-8")
     if bad:
